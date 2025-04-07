@@ -1,0 +1,7 @@
+*.sqlite3-journal
+*.swp
+*~
+.DS_Store
+.aider*
+.direnv/
+.ipynb_checkpoints/

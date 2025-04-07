@@ -1,0 +1,15 @@
+cleanshot
+db-browser-for-sqlite
+dbeaver-enterprise
+element
+firefox
+font-ibm-plex-mono
+font-ibm-plex-sans
+font-spleen
+ghostty
+google-chrome
+logseq
+orbstack
+orion
+rectangle
+visual-studio-code

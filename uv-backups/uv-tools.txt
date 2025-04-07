@@ -1,0 +1,4 @@
+aider-chat
+basedpyright
+diceware
+ruff

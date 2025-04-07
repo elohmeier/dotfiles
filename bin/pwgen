@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+
+# Set locale to C for predictable tr behavior
+export LC_ALL=C
+
+# --- Default values ---
+DEFAULT_LENGTH=8
+DEFAULT_NUM_PASSWORDS=1
+
+# Initialize variables with defaults
+pw_length="${DEFAULT_LENGTH}"
+num_passwords="${DEFAULT_NUM_PASSWORDS}"
+
+# --- Functions ---
+usage() {
+  cat << EOF
+Usage: $(basename "$0") [-h] [-N num] [length]
+
+Generate random passwords using /dev/urandom.
+
+Options:
+  -N num    Number of passwords to generate (default: ${DEFAULT_NUM_PASSWORDS})
+  -h        Display this help message
+
+Arguments:
+  length    Length of each password (default: ${DEFAULT_LENGTH})
+EOF
+  exit 1
+}
+
+# --- Option Parsing ---
+while getopts ":N:h" opt; do
+  case ${opt} in
+    N )
+      # Validate if OPTARG is a positive integer
+      if [[ "$OPTARG" =~ ^[1-9][0-9]*$ ]]; then
+        num_passwords="$OPTARG"
+      else
+        echo "Error: -N requires a positive integer argument." >&2
+        usage
+      fi
+      ;;
+    h )
+      usage
+      ;;
+    \? )
+      echo "Invalid option: -$OPTARG" >&2
+      usage
+      ;;
+    : )
+      echo "Invalid option: -$OPTARG requires an argument." >&2
+      usage
+      ;;
+  esac
+done
+# Shift off the options and optional arguments that were processed by getopts
+shift $((OPTIND -1))
+
+# --- Positional Argument Parsing (Length) ---
+if [[ $# -gt 0 ]]; then
+  # Validate if the first positional argument is a positive integer
+  if [[ "$1" =~ ^[1-9][0-9]*$ ]]; then
+    pw_length="$1"
+    shift # Consume the length argument
+  else
+    # Allow length 0? For now, let's require positive.
+    echo "Error: Length must be a positive integer." >&2
+    usage
+  fi
+fi
+
+# Check for any remaining unexpected arguments
+if [[ $# -gt 0 ]]; then
+    echo "Error: Unexpected arguments: $*" >&2
+    usage
+fi
+
+# --- Password Generation ---
+for (( i=0; i<num_passwords; i++ )); do
+  # Read from /dev/urandom, filter characters, take the specified length
+  head /dev/urandom | tr -dc 'a-z0-9' | head -c "${pw_length}"
+  # Add a newline after each password
+  echo
+done
+
+exit 0

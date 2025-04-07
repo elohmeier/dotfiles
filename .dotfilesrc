@@ -1,0 +1,10 @@
+[dotfiles]
+ignore = [
+    'bin',
+    '*-backups',
+    '*.sh',
+    '.aider*',
+    '.git',
+    '.gitignore',
+    '*.swp']
+packages = ['config']

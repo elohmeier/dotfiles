@@ -1,0 +1,30 @@
+# vim: set syntax=bash
+
+# Hint: Reload the config using Cmd+Shift+,
+
+theme = light:tokyonight-day,dark:tokyonight
+unfocused-split-opacity = 0.8
+
+# Dell (Home)
+font-family = Spleen 8x16
+font-size = 16
+
+# Dell P2414H (Winsen)
+# font-family = Spleen 6x12
+# font-size = 12
+
+# enable this for Spleen fonts (disable e.g. bold style)
+font-synthetic-style = false
+
+# MacBook (mobile)
+#font-family = IBM Plex Mono
+#font-size = 12
+
+copy-on-select = true
+
+# Aerospace compat
+# resize-overlay = never
+
+keybind = global:cmd+grave_accent=toggle_quick_terminal
+
+scrollback-limit = 4294967295
