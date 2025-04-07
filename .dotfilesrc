@@ -1,6 +1,7 @@
 [dotfiles]
 ignore = [
     '*-backups',
+    '*.md',
     '*.sh',
     '.DS_Store',
     '.aider*',
