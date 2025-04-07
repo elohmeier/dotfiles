@@ -1,4 +1,8 @@
 aider-chat
 basedpyright
 diceware
+dotfiles
+huggingface-hub
+llm
 ruff
+uv8

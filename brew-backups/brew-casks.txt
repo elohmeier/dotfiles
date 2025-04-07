@@ -12,4 +12,6 @@ logseq
 orbstack
 orion
 rectangle
+spotify
+stats
 visual-studio-code
