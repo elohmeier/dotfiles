@@ -5,7 +5,7 @@ if status is-interactive
   source $__fish_config_dir/conf.d/fish-ssh-agent.fish
 
   function h
-       set _h_dir ($__fish_config_dir/bin/h --resolve "/Users/enno/repos" $argv)
+       set _h_dir ($__fish_config_dir/bin/h --resolve "/Users/$USER/repos" $argv)
        set _h_ret $status
        if test "$_h_dir" != "$PWD"
            cd "$_h_dir"
@@ -13,12 +13,19 @@ if status is-interactive
        return $_h_ret
   end
 
-  zoxide init fish | source
-
   fzf_configure_bindings --directory=\ct
 
-  atuin init fish | source
-  direnv hook fish | source
+  if command -q zoxide
+    zoxide init fish | source
+  end
+
+  if command -q atuin
+    atuin init fish | source
+  end
+
+  if command -q direnv
+    direnv hook fish | source
+  end
 end
 
 # Added by OrbStack: command-line tools and integration
