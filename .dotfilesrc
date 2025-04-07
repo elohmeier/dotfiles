@@ -1,10 +1,11 @@
 [dotfiles]
 ignore = [
-    'bin',
     '*-backups',
     '*.sh',
+    '.DS_Store',
     '.aider*',
     '.git',
     '.gitignore',
+    'bin',
     '*.swp']
 packages = ['config']
