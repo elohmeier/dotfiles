@@ -23,13 +23,14 @@ HOME_DIR="$HOME"
 DOTFILES_DIR="$HOME_DIR/Dotfiles"
 
 # Check if Fish is installed
-if ! command -v fish &> /dev/null; then
+FISH_PATH="/opt/homebrew/bin/fish"
+if [ ! -f "$FISH_PATH" ]; then
   echo -e "${RED}Fish shell is not installed. Please run the initial-setup.sh script first.${NC}"
   exit 1
 fi
 
 # Set Fish user paths
-fish -c "
+"$FISH_PATH" -c "
   # Clear existing paths to avoid duplicates
   set -U fish_user_paths
 
