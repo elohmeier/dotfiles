@@ -80,7 +80,7 @@ vim.lsp.enable("ruff_lsp")
 vim.lsp.enable("basedpyright")
 
 vim.diagnostic.config({ virtual_lines = {
-  current_line = false,
+  current_line = true,
 } })
 
 -- LSP keymaps
