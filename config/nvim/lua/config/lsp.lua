@@ -68,6 +68,7 @@ vim.lsp.config["basedpyright"] = {
         autoSearchPaths = true,
         useLibraryCodeForTypes = true,
       },
+      typeCheckingMode = "standard",
     },
   },
 }
