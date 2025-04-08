@@ -1,5 +1,7 @@
+*.log
+chawan/history.uri
 config/fish/fish_variables
 ssh/environment
 ssh/id_*
 ssh/known_hosts*
-chawan/history.uri
+config/k9s/clusters

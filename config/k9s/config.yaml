@@ -1,2 +1,3 @@
 k9s:
-  skin: gruvbox-light
+  ui:
+    skin: tokyonight_day
