@@ -2,6 +2,6 @@
 chawan/history.uri
 config/fish/fish_variables
 ssh/environment
-ssh/id_*
+ssh/*id_*
 ssh/known_hosts*
 config/k9s/clusters
