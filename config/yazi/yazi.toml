@@ -1,0 +1,31 @@
+[manager]
+ratio = [1, 4, 3]
+sort_by = "natural"
+sort_sensitive = false
+sort_dir_first = true
+show_hidden = false
+show_symlink = true
+
+[preview]
+tab_size = 2
+max_width = 1000
+max_height = 1000
+image_filter = "lanczos3"
+
+[opener]
+play_audio = [
+  { run = 'pkill afplay 2>/dev/null; afplay "$@"', desc = "Play audio", for = "macos" },
+]
+
+[open]
+rules = [
+  { mime = "audio/wav", use = "play_audio" },
+  { mime = "audio/*", use = "play_audio" },
+
+  # Default rules for common file types
+  { mime = "text/*", use = "edit" },
+  { mime = "image/*", use = "open" },
+  { mime = "video/*", use = "play" },
+  { mime = "application/pdf", use = "open" },
+  { name = "*", use = "open" },
+]
