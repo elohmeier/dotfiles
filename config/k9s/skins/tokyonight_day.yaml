@@ -5,28 +5,28 @@
 
 # Styles...
 # Tokyonight Day Palette
-bg: &bg "#e1e2e7"                  # Main background (light)
-bg_dark: &bg_dark "#d0d5e3"        # Slightly darker background
+bg: &bg "#e1e2e7" # Main background (light)
+bg_dark: &bg_dark "#d0d5e3" # Slightly darker background
 bg_highlight: &bg_highlight "#c4c8da" # Highlight background (for selection)
-fg: &fg "#3760bf"                  # Main foreground (dark blue)
-fg_dark: &fg_dark "#6172b0"        # Slightly lighter foreground
-fg_gutter: &fg_gutter "#a8aecb"    # Gutter foreground (borders)
-comment: &comment "#848cb5"        # Comments, subtle text
-blue: &blue "#2e7de9"              # Blue
-blue0: &blue0 "#7890dd"            # Lighter Blue
-blue5: &blue5 "#006a83"            # Dark Teal/Blue
-blue7: &blue7 "#92a6d5"            # Muted Blue/Gray
-cyan: &cyan "#007197"              # Cyan
-green: &green "#587539"            # Green
-green1: &green1 "#387068"          # Dark Teal/Green
-magenta: &magenta "#9854f1"        # Magenta
-magenta2: &magenta2 "#d20065"      # Bright Magenta
-orange: &orange "#b15c00"          # Orange
-purple: &purple "#7847bd"          # Purple
-red: &red "#f52a65"                # Bright Red
-red1: &red1 "#c64343"              # Darker Red (Error)
-yellow: &yellow "#8c6c3e"          # Yellow/Brown
-border: &border "#b4b5b9"          # Border color
+fg: &fg "#3760bf" # Main foreground (dark blue)
+fg_dark: &fg_dark "#6172b0" # Slightly lighter foreground
+fg_gutter: &fg_gutter "#a8aecb" # Gutter foreground (borders)
+comment: &comment "#848cb5" # Comments, subtle text
+blue: &blue "#2e7de9" # Blue
+blue0: &blue0 "#7890dd" # Lighter Blue
+blue5: &blue5 "#006a83" # Dark Teal/Blue
+blue7: &blue7 "#92a6d5" # Muted Blue/Gray
+cyan: &cyan "#007197" # Cyan
+green: &green "#587539" # Green
+green1: &green1 "#387068" # Dark Teal/Green
+magenta: &magenta "#9854f1" # Magenta
+magenta2: &magenta2 "#d20065" # Bright Magenta
+orange: &orange "#b15c00" # Orange
+purple: &purple "#7847bd" # Purple
+red: &red "#f52a65" # Bright Red
+red1: &red1 "#c64343" # Darker Red (Error)
+yellow: &yellow "#8c6c3e" # Yellow/Brown
+border: &border "#b4b5b9" # Border color
 
 # Git colors
 git_add: &git_add "#4197a4"
@@ -61,26 +61,26 @@ k9s:
   help:
     fgColor: *fg_dark # Use slightly lighter fg for better readability on dark bg
     bgColor: *bg_dark # Darker background for help overlay
-    keyColor: *green   # Keys like <Ctrl-A>
+    keyColor: *green # Keys like <Ctrl-A>
     numKeyColor: *green1 # Keys like :1
-    sectionColor: *blue  # Section titles like [General]
+    sectionColor: *blue # Section titles like [General]
 
   # Dialog styles.
   dialog:
-    fgColor: *yellow  # Dialog text color (using yellow for contrast)
+    fgColor: *yellow # Dialog text color (using yellow for contrast)
     bgColor: *bg_dark # Dialog background
     buttonFgColor: *fg # Button text
     buttonBgColor: *bg_highlight # Button background
     buttonFocusFgColor: *bg # Button text when focused (light on dark blue)
     buttonFocusBgColor: *blue # Button background when focused
     labelFgColor: *magenta # Label for input fields
-    fieldFgColor: *fg      # Input field text
+    fieldFgColor: *fg # Input field text
 
   frame:
     # Borders styles.
     border:
       fgColor: *fg_gutter # Default border color (light gray)
-      focusColor: *blue   # Border color when pane is focused (blue)
+      focusColor: *blue # Border color when pane is focused (blue)
 
     menu:
       fgColor: *fg
@@ -92,23 +92,23 @@ k9s:
     crumbs:
       fgColor: *yellow
       bgColor: *bg_highlight # Background for the breadcrumbs bar
-      activeColor: *magenta  # Color of the current breadcrumb
+      activeColor: *magenta # Color of the current breadcrumb
 
     # Resource status and update styles
     status:
-      newColor: *blue      # Newly created resources (transient)
+      newColor: *blue # Newly created resources (transient)
       modifyColor: *purple # Modified resources (transient)
-      addColor: *green     # Added resources (transient)
+      addColor: *green # Added resources (transient)
       pendingColor: *orange # Pending status
-      errorColor: *red1     # Error status (darker red)
+      errorColor: *red1 # Error status (darker red)
       highlightColor: *blue # Highlighted text (e.g., filter matches)
-      killColor: *red1      # Terminating status (darker red)
+      killColor: *red1 # Terminating status (darker red)
       completedColor: *blue7 # Completed status (e.g., Pods, Jobs - muted blue)
 
     # Border title styles.
     title:
-      fgColor: *blue   # Title text
-      bgColor: *bg     # Title background (same as main bg)
+      fgColor: *blue # Title text
+      bgColor: *bg # Title background (same as main bg)
       highlightColor: *yellow # Title text when pane is active/highlighted
       counterColor: *green # Resource counts in title
       filterColor: *orange # Filter indicator in title
@@ -161,8 +161,8 @@ k9s:
       keyColor: *blue # YAML keys
       colonColor: *magenta # Colons separating keys/values
       valueColor: *fg # YAML values (main foreground)
-      # String color could be green if desired, but basic is often clearer
-      # valueColor: *green
+    # String color could be green if desired, but basic is often clearer
+    # valueColor: *green
 
     # Logs styles.
     logs:
@@ -172,4 +172,4 @@ k9s:
         fgColor: *fg
         bgColor: *bg_dark
         toggleOnColor: *green # Color when toggle is ON
-        toggleOffColor: *red1  # Color when toggle is OFF (darker red)
+        toggleOffColor: *red1 # Color when toggle is OFF (darker red)
