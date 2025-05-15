@@ -1,0 +1,11 @@
+model: claude-3-7-sonnet-latest
+env-file: /Users/enno/.aider.env
+attribute-author: false
+check-update: false
+dirty-commits: false
+lint-cmd:
+  - "bash: shellcheck"
+  - "python: ruff check"
+  - "svelte: dprint fmt"
+suggest-shell-commands: false
+light-mode: true
