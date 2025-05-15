@@ -30,6 +30,10 @@ echo "Configuring global settings..."
 defaults write NSGlobalDomain InitialKeyRepeat -int 15
 defaults write NSGlobalDomain KeyRepeat -int 1
 
+# VS Code settings
+echo "Configuring VS Code settings..."
+defaults write com.microsoft.VSCode ApplePressAndHoldEnabled -bool false
+
 # Restart affected applications
 echo "Restarting affected applications..."
 killall Finder

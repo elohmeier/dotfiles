@@ -53,8 +53,14 @@ create_symlink "$HOME/Library/Application Support/process-compose" "$HOME/.confi
 # aerc: Link from ~/Library/Preferences/aerc to ~/.config/aerc
 create_symlink "$HOME/Library/Preferences/aerc" "$HOME/.config/aerc"
 
+# pnpm: Link from ~/Library/Preferences/pnpm/rc to ~/.config/pnpm/rc
+create_symlink "$HOME/Library/Preferences/pnpm/rc" "$HOME/.config/pnpm/rc"
+
 # Add more tool symlinks as needed below
 # Example:
 # create_symlink "$HOME/Library/Application Support/tool-name" "$HOME/.config/tool-name"
+
+# dvc: Link from ~/Library/Application Support/dvc/config to ~/.config/dvc/config
+create_symlink "$HOME/Library/Application Support/dvc/config" "$HOME/.config/dvc/config"
 
 echo -e "\n${GREEN}macOS symlinks setup complete!${NC}"
