@@ -1,6 +1,19 @@
 if status is-interactive
   set -U fish_greeting
 
+  # Set PNPM_HOME based on OS and add to PATH
+  if test (uname) = "Darwin"
+    # macOS path
+    set -gx PNPM_HOME "$HOME/Library/pnpm"
+  else
+    # Linux/other path
+    set -gx PNPM_HOME "$HOME/.local/share/pnpm"
+  end
+
+  if not contains "$PNPM_HOME" $PATH
+    set -gx PATH "$PNPM_HOME" $PATH
+  end
+
   source $__fish_config_dir/conf.d/shortcuts.fish
   source $__fish_config_dir/conf.d/fish-ssh-agent.fish
 

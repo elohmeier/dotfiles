@@ -35,3 +35,8 @@ alias nbconvert 'jupyter nbconvert --to script --stdout'
 alias tree 'eza --tree'
 alias vi nvim
 alias vim nvim
+
+# Only use orb for nix if nix is not directly available but orb is
+if not command -q nix; and command -q orb
+    alias nix 'orb nix --extra-experimental-features "nix-command flakes"'
+end
