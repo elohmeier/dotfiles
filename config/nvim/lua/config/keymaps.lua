@@ -13,8 +13,10 @@ vim.keymap.set("i", "<C-c>", "<Esc>")
 
 vim.keymap.set("n", "Q", "<nop>")
 
--- Map :W to :w (common typo) but only when it's the whole command
+-- Map :W to :w and :Q to :q (common typos) but only when they're the whole command
 vim.cmd([[cnoreabbrev <expr> W ((getcmdtype() == ':' && getcmdline() == 'W') ? 'w' : 'W')]])
+vim.cmd([[cnoreabbrev <expr> Q ((getcmdtype() == ':' && getcmdline() == 'Q') ? 'q' : 'Q')]])
+vim.cmd([[cnoreabbrev <expr> Qa ((getcmdtype() == ':' && getcmdline() == 'Qa') ? 'qa' : 'Qa')]])
 
 -- Option + Shift + w to insert „ (like in macOS)
 vim.keymap.set("i", "<M-S-w>", "„", { noremap = true, silent = true })

@@ -43,7 +43,7 @@ return {
       python = { "ruff_format", "ruff_fix" },
       svelte = { "dprint" },
       terraform = { "tofu_fmt" },
-      toml = { "taplo" },
+      toml = { "dprint" },
       typescript = { "dprint" },
       typst = { "typstyle" },
       xml = { "xmllint" },
