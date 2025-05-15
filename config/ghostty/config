@@ -25,6 +25,6 @@ copy-on-select = true
 # Aerospace compat
 # resize-overlay = never
 
-keybind = global:cmd+grave_accent=toggle_quick_terminal
+# keybind = global:cmd+grave_accent=toggle_quick_terminal
 
 scrollback-limit = 4294967295
