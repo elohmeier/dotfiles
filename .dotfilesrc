@@ -3,11 +3,13 @@ ignore = [
     '*-backups',
     '*.md',
     '*.sh',
+    '*.swp',
     '.DS_Store',
     '.aider*',
     '.git',
     '.gitignore',
+    '.pre-commit-config.yaml',
     '.ruff_cache',
     'bin',
-    '*.swp']
+    'dprint.json']
 packages = ['config']
