@@ -1,0 +1,13 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+  - repo: local
+    hooks:
+      - id: dprint
+        name: Format files with dprint
+        entry: dprint fmt --allow-no-files
+        language: system
+        pass_filenames: false
+        files: \.(json|md|toml|yaml|yml)$
