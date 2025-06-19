@@ -19,6 +19,10 @@ abbr --add -- nf 'nix flake'
 abbr --add -- nfl 'nix flake lock'
 abbr --add -- nfu 'nix flake update'
 abbr --add -- nr 'nix run'
+abbr --add -- rc 'ruff check .'
+abbr --add -- rcu 'ruff check . --unsafe-fixes'
+abbr --add -- rf 'ruff format .'
+abbr --add -- rff 'ruff format . && ruff check . --unsafe-fixes'
 abbr --add -- y yazi
 
 alias gaapf 'git add . && git commit --amend --no-edit && git push --force-with-lease'
