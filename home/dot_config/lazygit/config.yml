@@ -3,11 +3,11 @@
 customCommands:
   - key: <c-a>
     description: Pick AI commit
-    command: bunx aicommit2
+    command: aicommit2
     context: files
     output: terminal
   - key: <c-n>
     description: Pick AI commit (no verify)
-    command: bunx aicommit2 --no-verify
+    command: aicommit2 --no-verify
     context: files
     output: terminal
