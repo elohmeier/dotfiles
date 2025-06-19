@@ -29,6 +29,12 @@ vim.opt.splitright = true
 -- Enable mouse mode
 vim.opt.mouse = "a" -- Mouse
 
+-- Inverse mouse scroll direction (only for xterm-256color)
+if os.getenv("TERM") == "xterm-256color" then
+  vim.keymap.set({ "n", "v", "i" }, "<ScrollWheelUp>", "<ScrollWheelDown>", { noremap = true, silent = true })
+  vim.keymap.set({ "n", "v", "i" }, "<ScrollWheelDown>", "<ScrollWheelUp>", { noremap = true, silent = true })
+end
+
 -- Enable ignorecase + smartcase for better searching
 vim.opt.ignorecase = true
 vim.opt.smartcase = true -- Don't ignore case with capitals
