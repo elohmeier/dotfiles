@@ -1,0 +1,63 @@
+# model: anthropic/claude-sonnet-4-20250514
+attribute-author: false
+check-update: false
+dirty-commits: false
+lint-cmd:
+  - "bash: shellcheck"
+  - "python: ruff check"
+  - "svelte: dprint fmt"
+suggest-shell-commands: false
+light-mode: true
+anthropic-api-key: {{ (secret "-d" "secrets.yaml" | fromYaml).apikeys.anthropic }}
+openai-api-key: {{ (secret "-d" "secrets.yaml" | fromYaml).apikeys.openai }}
+api-key:
+  - gemini={{ (secret "-d" "secrets.yaml" | fromYaml).apikeys.gemini }}
+
+###############
+# Git settings:
+
+## Enable/disable adding .aider* to .gitignore (default: True)
+gitignore: false
+
+## Specify a custom prompt for generating commit messages
+commit-prompt: |
+    You are a helpful assistant specializing in writing clear and informative Git commit messages using the conventional style
+    Based on the given code changes or context, generate exactly 1 conventional Git commit message based on the following guidelines.
+    1. Message Language: en
+    2. Format: follow the conventional Commits format:
+    <type>(<optional scope>): <description>
+
+    [optional body]
+
+    [optional footer(s)]
+    3. Types: use one of the following types:
+      - docs: Documentation only changes
+      - style: Changes that do not affect the meaning of the code (white-space, formatting, missing semi-colons, etc)
+      - refactor: A code change that neither fixes a bug nor adds a feature
+      - perf: A code change that improves performance
+      - test: Adding missing tests or correcting existing tests
+      - build: Changes that affect the build system or external dependencies
+      - ci: Changes to CI configuration files, scripts
+      - chore: Other changes that don't modify src or test files
+      - revert: Reverts a previous commit
+      - feat: A new feature
+      - fix: A bug fix
+    4. Guidelines for writing commit messages:
+       - Be specific about what changes were made
+       - Use imperative mood ("add feature" not "added feature")
+       - Keep subject line under 50 characters
+       - Do not end the subject line with a period
+       - Use the body to explain what and why vs. how
+    5. Focus on:
+       - What problem this commit solves
+       - Why this change was necessary
+       - Any important technical details
+    6. Exclude anything unnecessary such as translation or implementation details.
+
+    Ensure the commit message:
+    - Starts with the appropriate prefix.
+    - Is in the imperative mood (e.g., "add feature" not "added feature" or "adding feature").
+    - Does not exceed 72 characters.
+
+    Reply only with the one-line commit message, without any additional text, explanations, or line breaks.
+
