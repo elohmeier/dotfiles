@@ -8,10 +8,10 @@ lint-cmd:
   - "svelte: dprint fmt"
 suggest-shell-commands: false
 light-mode: true
-anthropic-api-key: {{ (secret "-d" "secrets.yaml" | fromYaml).apikeys.anthropic }}
-openai-api-key: {{ (secret "-d" "secrets.yaml" | fromYaml).apikeys.openai }}
+anthropic-api-key: {{ secret ".apikeys.anthropic" }}
+openai-api-key: {{ secret ".apikeys.openai" }}
 api-key:
-  - gemini={{ (secret "-d" "secrets.yaml" | fromYaml).apikeys.gemini }}
+  - gemini={{ secret ".apikeys.gemini" }}
 
 ###############
 # Git settings:

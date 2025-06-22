@@ -8,4 +8,4 @@ encryption = "age"
     email = "enno@nerdworks.de"
 
 [secret]
-    command = "sops"
+    command = "{{ joinPath .chezmoi.sourceDir ".." "scripts" "chesops.sh" }}"
