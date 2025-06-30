@@ -5,20 +5,24 @@
 theme = light:tokyonight-day,dark:tokyonight
 unfocused-split-opacity = 0.8
 
+{{ if eq .profile "docked" }}
 # Dell (Home)
 font-family = Spleen 8x16
 font-size = 16
-
+{{ else if eq .profile "docked-lores" }}
 # Dell P2414H (Winsen)
-# font-family = Spleen 6x12
-# font-size = 12
+font-family = Spleen 6x12
+font-size = 12
+{{ else if eq .profile "mobile" }}
+# MacBook (mobile)
+font-family = IBM Plex Mono
+font-size = 12
+{{ end }}
 
+{{ if eq .profile "docked" "docked-lores" }}
 # enable this for Spleen fonts (disable e.g. bold style)
 font-synthetic-style = false
-
-# MacBook (mobile)
-#font-family = IBM Plex Mono
-#font-size = 12
+{{ end }}
 
 copy-on-select = true
 
