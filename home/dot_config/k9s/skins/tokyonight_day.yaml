@@ -98,12 +98,12 @@ k9s:
     status:
       newColor: *blue # Newly created resources (transient)
       modifyColor: *purple # Modified resources (transient)
-      addColor: *green # Added resources (transient)
+      addColor: *green1 # Added resources (darker green for better contrast)
       pendingColor: *orange # Pending status
-      errorColor: *red1 # Error status (darker red)
+      errorColor: *red # Error status (brighter red for better visibility)
       highlightColor: *blue # Highlighted text (e.g., filter matches)
-      killColor: *red1 # Terminating status (darker red)
-      completedColor: *blue7 # Completed status (e.g., Pods, Jobs - muted blue)
+      killColor: *red # Terminating status (brighter red for better visibility)
+      completedColor: *blue5 # Completed status (darker blue for better contrast)
 
     # Border title styles.
     title:
@@ -139,14 +139,14 @@ k9s:
     table:
       fgColor: *fg
       bgColor: *bg
-      cursorFgColor: *fg # Text color of the selected row
-      cursorBgColor: *bg_highlight # Background color of the selected row (light gray highlight)
+      cursorFgColor: *bg # Text color of the selected row (light text on dark background)
+      cursorBgColor: *blue # Background color of the selected row (blue highlight for better contrast)
       markColor: *red1 # Color for marked rows (Shift-Space)
       # Header row styles.
       header:
-        fgColor: *blue # Header text color
-        bgColor: *bg_dark # Header background color (slightly darker)
-        sorterColor: *orange # Sort indicator color
+        fgColor: *bg # Header text color (light text for contrast)
+        bgColor: *blue # Header background color (blue for better contrast)
+        sorterColor: *bg # Sort indicator color (yellow for better visibility)
 
     # Xray view attributes.
     xray:
