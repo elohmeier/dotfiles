@@ -16,12 +16,9 @@ fi
 # We redirect stderr to /dev/null to avoid printing errors if the command fails.
 display_json=$(system_profiler -json SPDisplaysDataType 2>/dev/null || echo "{}")
 
-# Extract names of displays that are not "Built-in" or "Retina" (case-insensitive)
-# and count them.
-# The 'test' function in yq performs regex matching.
-# We use '|| echo ""' to ensure yq doesn't fail if display_json is empty or invalid,
-# which would result in an empty string being piped to wc -l, yielding 0.
-external_displays_count=$(echo "${display_json}" | yq '.SPDisplaysDataType[].spdisplays_ndrvs[]._name | select(. | test("Built-in|Retina"; "i") | not)' 2>/dev/null || echo "" | wc -l)
+# Count displays where the connection type is not internal.
+# We use '|| echo -n ""' to ensure that we get a count of 0 if yq fails.
+external_displays_count=$( (echo "${display_json}" | yq '.SPDisplaysDataType[].spdisplays_ndrvs[] | select(.spdisplays_connection_type != "spdisplays_internal") | ._name' 2>/dev/null || echo -n "") | wc -l)
 
 if [ "${external_displays_count}" -gt 0 ]; then
   echo -n "docked"
