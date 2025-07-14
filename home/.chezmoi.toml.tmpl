@@ -6,7 +6,7 @@ encryption = "age"
 
 [data]
     email = "enno@nerdworks.de"
-    profile = {{ output (joinPath .chezmoi.sourceDir ".." "scripts" "get-profile.sh") | quote }}
+    displayConfig = {{ output (joinPath .chezmoi.sourceDir ".." "scripts" "get-display-config.sh") | quote }}
 
 [secret]
     command = "{{ joinPath .chezmoi.sourceDir ".." "scripts" "chesops.sh" }}"
