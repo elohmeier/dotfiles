@@ -88,7 +88,22 @@ set -eufo pipefail
     "rectangle"
     "stats" -}}
 
+# Extract taps from brew formulas
+{{ $taps := list -}}
+{{ range ($brews | sortAlpha | uniq) -}}
+{{   if contains "/" . -}}
+{{     $parts := splitList "/" . -}}
+{{     if eq (len $parts) 3 -}}
+{{       $tap := printf "%s/%s" (index $parts 0) (index $parts 1) -}}
+{{       $taps = append $taps $tap -}}
+{{     end -}}
+{{   end -}}
+{{ end -}}
+
 brew bundle --file=/dev/stdin <<EOF
+{{ range ($taps | sortAlpha | uniq) -}}
+tap "{{ . }}"
+{{ end -}}
 {{ range ($brews | sortAlpha | uniq) -}}
 brew "{{ . }}"
 {{ end -}}
