@@ -1,13 +1,20 @@
 encryption = "age"
 
 [age]
+    {{- if eq .chezmoi.os "darwin" }}
     identity = "{{ .chezmoi.homeDir }}/Library/Application Support/sops/age/keys.txt"
+    {{- else }}
+    identity = "{{ .chezmoi.homeDir }}/.config/sops/age/keys.txt"
+    {{- end }}
     recipient = "age1e6gdd6c0nf5p47jhcq8dvrcyu4vmrzvg2kd75thsgyl7pzqemunq9mfl7e"
 
 [data]
     email = "enno@nerdworks.de"
     name = "Enno Richter"
     displayConfig = {{ output (joinPath .chezmoi.sourceDir ".." "scripts" "get-display-config.sh") | quote }}
+
+    enableEmail = false
+    enableSecrets = false
 
     customCABundle = ""
     customPyPIIndex = ""

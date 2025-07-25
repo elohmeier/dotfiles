@@ -8,10 +8,12 @@ lint-cmd:
   - "svelte: dprint fmt"
 suggest-shell-commands: false
 light-mode: true
+{{- if .enableSecrets }}
 anthropic-api-key: {{ secret ".apikeys.anthropic" }}
 openai-api-key: {{ secret ".apikeys.openai" }}
 api-key:
   - gemini={{ secret ".apikeys.gemini" }}
+{{- end }}
 
 ###############
 # Git settings:
