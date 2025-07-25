@@ -40,6 +40,18 @@ if status is-interactive
   if command -q direnv
     direnv hook fish | source
   end
+
+{{- if .customCABundle }}
+set -gx REQUESTS_CA_BUNDLE "{{ .customCABundle }}"
+set -gx SSL_CERT_FILE "{{ .customCABundle }}"
+set -gx CURL_CA_BUNDLE "{{ .customCABundle }}"
+set -gx UV_NATIVE_TLS "1"
+{{- end }}
+
+{{- if .customPyPIIndex }}
+set -gx UV_INDEX_URL "{{ .customPyPIIndex }}"
+set -gx PIP_INDEX_URL "{{ .customPyPIIndex }}"
+{{- end }}
 end
 
 {{- if eq .chezmoi.os "darwin" }}

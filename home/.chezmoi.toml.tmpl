@@ -8,5 +8,8 @@ encryption = "age"
     email = "enno@nerdworks.de"
     displayConfig = {{ output (joinPath .chezmoi.sourceDir ".." "scripts" "get-display-config.sh") | quote }}
 
+    customCABundle = ""
+    customPyPIIndex = ""
+
 [secret]
     command = "{{ joinPath .chezmoi.sourceDir ".." "scripts" "chesops.sh" }}"
