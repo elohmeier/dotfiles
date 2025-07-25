@@ -30,6 +30,7 @@ return {
   opts = {
     formatters_by_ft = {
       astro = { "dprint" },
+      bash = { "shfmt" },
       cpp = { "clang-format" },
       css = { "dprint" },
       hcl = { "packer_fmt" },
@@ -41,6 +42,7 @@ return {
       lua = { "stylua" },
       nix = { "nixfmt" },
       python = { "ruff_format", "ruff_fix" },
+      sh = { "shfmt" },
       svelte = { "dprint" },
       terraform = { "tofu_fmt" },
       toml = { "dprint" },
@@ -48,9 +50,27 @@ return {
       typst = { "typstyle" },
       xml = { "xmllint" },
       yaml = { "dprint" },
+      zsh = { "shfmt" },
       ["_"] = { "trim_whitespace" },
     },
     formatters = {
+      dprint = {
+        prepend_args = function()
+          -- Check if dprint.json exists in cwd or parent directories
+          local cwd = vim.fn.getcwd()
+          local config_path = vim.fn.findfile("dprint.json", cwd .. ";")
+
+          -- If no local config found, use global config
+          if config_path == "" then
+            local global_config = vim.fn.expand("~/.config/dprint.json")
+            if vim.fn.filereadable(global_config) == 1 then
+              return { "--config", global_config }
+            end
+          end
+
+          return {}
+        end,
+      },
       djade = {
         meta = {
           url = "https://github.com/adamchainz/djade",
