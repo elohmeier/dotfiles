@@ -6,6 +6,13 @@
 
 set -euo pipefail
 
+# Check if running on macOS
+if [[ "$(uname)" != "Darwin" ]]; then
+    # On non-macOS systems, default to internal display
+    echo -n "internal"
+    exit 0
+fi
+
 # Check if yq (go-yq) is installed
 HAS_YQ=true
 if ! command -v yq &> /dev/null; then

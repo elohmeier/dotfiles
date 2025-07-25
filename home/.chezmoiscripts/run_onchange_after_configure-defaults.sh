@@ -2,6 +2,12 @@
 
 set -eufo pipefail
 
+# Check if running on macOS
+if [[ "$(uname)" != "Darwin" ]]; then
+    echo "Not running on macOS. Skipping macOS defaults configuration."
+    exit 0
+fi
+
 # defaults write -g AppleEnableSwipeNavigateWithScrolls -int 0
 # defaults write -g AppleMiniaturizeOnDoubleClick -int 0
 # defaults write -g ApplePressAndHoldEnabled -int 0
