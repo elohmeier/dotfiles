@@ -15,6 +15,11 @@ if status is-interactive
     set -gx PATH "$PNPM_HOME" $PATH
   end
 
+  # Add ~/.local/bin to PATH
+  if not contains "$HOME/.local/bin" $PATH
+    set -gx PATH "$HOME/.local/bin" $PATH
+  end
+
   source $__fish_config_dir/conf.d/shortcuts.fish
   source $__fish_config_dir/conf.d/fish-ssh-agent.fish
 
