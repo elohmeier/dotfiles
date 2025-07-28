@@ -1,0 +1,222 @@
+#!/usr/bin/env bash
+
+# ghq-migrate: Move repositories to the structure expected by ghq
+# Supports GitHub, GitLab, Bitbucket, and custom git hosts
+#
+# Usage: ghq-migrate [options] <repo_path1> [<repo_path2> ...]
+#
+# Options:
+#   -n, --dry-run    Show what would be moved without actually moving
+#   -y, --yes        Skip confirmation prompts
+#   -h, --help       Show this help message
+
+set -euo pipefail
+
+# Default base directory (can be overridden by ghq config)
+get_base_dir() {
+    local dir="${GHQ_ROOT:-$(git config --get ghq.root || echo "$HOME/repos")}"
+    # Expand tilde to home directory
+    echo "${dir/#\~/$HOME}"
+}
+BASE_DIR="$(get_base_dir)"
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Options
+DRY_RUN=false
+SKIP_CONFIRM=false
+
+# Function to print colored output
+print_color() {
+    local color=$1
+    shift
+    echo -e "${color}$*${NC}"
+}
+
+# Function to show help
+show_help() {
+    grep '^#' "$0" | grep -E '(Usage:|Options:)' -A 10 | sed 's/^# //' | sed 's/^#//'
+}
+
+# Function to get the preferred remote (upstream if it exists, otherwise origin)
+get_preferred_remote() {
+    local repo_path=$1
+    if git -C "$repo_path" remote | grep -q '^upstream$'; then
+        echo "upstream"
+    else
+        echo "origin"
+    fi
+}
+
+# Function to parse git URL and extract host, user, and repo
+parse_git_url() {
+    local url=$1
+    local host user repo
+
+    # Remove .git suffix if present
+    url="${url%.git}"
+
+    if [[ $url =~ ^git@([^:]+):(.+)$ ]]; then
+        # SSH format: git@host:user/repo
+        host="${BASH_REMATCH[1]}"
+        local path="${BASH_REMATCH[2]}"
+    elif [[ $url =~ ^https?://([^/]+)/(.+)$ ]]; then
+        # HTTPS format: https://host/user/repo
+        host="${BASH_REMATCH[1]}"
+        local path="${BASH_REMATCH[2]}"
+    elif [[ $url =~ ^ssh://git@([^/]+)/(.+)$ ]]; then
+        # SSH URL format: ssh://git@host/user/repo
+        host="${BASH_REMATCH[1]}"
+        local path="${BASH_REMATCH[2]}"
+    else
+        return 1
+    fi
+
+    # Strip port from host if present
+    host="${host%:*}"
+
+    # Extract user and repo from path
+    if [[ $path =~ ^([^/]+)/(.+)$ ]]; then
+        user="${BASH_REMATCH[1]}"
+        repo="${BASH_REMATCH[2]}"
+    else
+        return 1
+    fi
+
+    echo "$host" "$user" "$repo"
+}
+
+# Function to get repository info
+get_repo_info() {
+    local repo_path=$1
+    local remote
+    remote=$(get_preferred_remote "$repo_path")
+    local remote_url
+    remote_url=$(git -C "$repo_path" remote get-url "$remote" 2>/dev/null) || return 1
+
+    parse_git_url "$remote_url"
+}
+
+# Function to check if a path is a git repository
+is_git_repo() {
+    git -C "$1" rev-parse --git-dir &>/dev/null
+}
+
+# Function to move repository
+move_repo() {
+    local repo_path=$1
+    local new_path=$2
+
+    if [[ $DRY_RUN == true ]]; then
+        print_color "$BLUE" "[DRY RUN] Would move: $repo_path → $new_path"
+        return 0
+    fi
+
+    mkdir -p "$(dirname "$new_path")"
+    mv "$repo_path" "$new_path"
+    print_color "$GREEN" "✓ Moved: $repo_path → $new_path"
+}
+
+# Parse command line options
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -n|--dry-run)
+            DRY_RUN=true
+            shift
+            ;;
+        -y|--yes)
+            SKIP_CONFIRM=true
+            shift
+            ;;
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        -*)
+            echo "Unknown option: $1"
+            show_help
+            exit 1
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
+# Check if any repositories were specified
+if [[ $# -eq 0 ]]; then
+    print_color "$RED" "Error: No repository paths specified"
+    show_help
+    exit 1
+fi
+
+print_color "$BLUE" "Base directory: $BASE_DIR"
+if [[ $DRY_RUN == true ]]; then
+    print_color "$YELLOW" "Running in dry-run mode (no changes will be made)"
+fi
+echo
+
+# Process each repository
+for repo_path in "$@"; do
+    # Convert to absolute path
+    repo_path=$(realpath "$repo_path" 2>/dev/null) || {
+        print_color "$RED" "✗ Path not found: $repo_path"
+        continue
+    }
+
+    # Check if it's a git repository
+    if ! is_git_repo "$repo_path"; then
+        print_color "$RED" "✗ Not a git repository: $repo_path"
+        continue
+    fi
+
+    # Get repository info
+    if ! read -r host user repo_name < <(get_repo_info "$repo_path"); then
+        print_color "$RED" "✗ Could not parse remote URL for: $repo_path"
+        continue
+    fi
+
+    # Construct new path
+    new_path="$BASE_DIR/$host/$user/$repo_name"
+
+    # Check if already at correct location
+    if [[ $repo_path == "$new_path" ]]; then
+        print_color "$GREEN" "✓ Already at correct location: $new_path"
+        continue
+    fi
+
+    # Check if target exists
+    if [[ -e $new_path ]]; then
+        print_color "$RED" "✗ Target already exists: $new_path"
+        continue
+    fi
+
+    # Show what will be done
+    echo "Repository: $repo_name"
+    echo "  Host: $host"
+    echo "  User: $user"
+    echo "  From: $repo_path"
+    echo "  To:   $new_path"
+
+    # Confirm if needed
+    if [[ $SKIP_CONFIRM == false && $DRY_RUN == false ]]; then
+        read -r -n 1 -p "Move this repository? (y/n): " confirm
+        echo
+        if [[ ! $confirm =~ [Yy] ]]; then
+            print_color "$YELLOW" "⏭ Skipped"
+            echo
+            continue
+        fi
+    fi
+
+    # Move the repository
+    move_repo "$repo_path" "$new_path"
+    echo
+done
+
+print_color "$GREEN" "✓ All repositories processed"
