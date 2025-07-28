@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+
+# Enable error logging if DEBUG is set
+if [ -n "$WSL_CLIPBOARD_DEBUG" ]; then
+    exec 2>>"$HOME/.local/share/wl-paste.log"
+    set -x
+    echo "[$(date)] wl-paste called" >&2
+fi
+
+# Check if PowerShell exists
+POWERSHELL="/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
+if [ ! -x "$POWERSHELL" ]; then
+    echo "Error: PowerShell not found at $POWERSHELL" >&2
+    exit 1
+fi
+
+# Get clipboard content from PowerShell
+if ! content=$("$POWERSHELL" -command "Get-Clipboard" 2>&1); then
+    echo "Error: Failed to get clipboard" >&2
+    exit 1
+fi
+
+# Remove carriage returns and output
+echo "$content" | tr -d '\r'
+
+if [ -n "$WSL_CLIPBOARD_DEBUG" ]; then
+    echo "[$(date)] wl-paste completed successfully" >&2
+fi

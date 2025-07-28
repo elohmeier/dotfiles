@@ -19,5 +19,8 @@ encryption = "age"
     customCABundle = ""
     customPyPIIndex = ""
 
+    # Enable WSL-specific workarounds and tools
+    isWSL = false
+
 [secret]
     command = "{{ joinPath .chezmoi.sourceDir ".." "scripts" "chesops.sh" }}"

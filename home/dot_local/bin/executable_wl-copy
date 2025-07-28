@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+
+# Enable error logging if DEBUG is set
+if [ -n "$WSL_CLIPBOARD_DEBUG" ]; then
+    exec 2>>"$HOME/.local/share/wl-copy.log"
+    set -x
+    echo "[$(date)] wl-copy called with args: $*" >&2
+fi
+
+# Check if PowerShell exists
+POWERSHELL="/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
+if [ ! -x "$POWERSHELL" ]; then
+    echo "Error: PowerShell not found at $POWERSHELL" >&2
+    exit 1
+fi
+
+# Read input either from pipe or argument
+if [ -t 0 ]; then
+    # No pipe input, use arguments
+    input="$*"
+else
+    # Input from pipe
+    input=$(cat)
+fi
+
+# Handle empty input - PowerShell's Set-Clipboard doesn't accept null
+if [ -z "$input" ]; then
+    # Set a single space for empty clipboard
+    if ! "$POWERSHELL" -command "Set-Clipboard ' '" 2>&1; then
+        echo "Error: Failed to set clipboard" >&2
+        exit 1
+    fi
+else
+    # Escape single quotes in the input
+    escaped_input=$(echo "$input" | sed "s/'/'\\\\''/g")
+
+    # Call PowerShell's Set-Clipboard
+    if ! "$POWERSHELL" -command "Set-Clipboard ('$escaped_input')" 2>&1; then
+        echo "Error: Failed to set clipboard" >&2
+        exit 1
+    fi
+fi
+
+if [ -n "$WSL_CLIPBOARD_DEBUG" ]; then
+    echo "[$(date)] wl-copy completed successfully" >&2
+fi

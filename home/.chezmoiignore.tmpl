@@ -3,3 +3,9 @@
 .config/aerc
 .config/pizauth.conf
 {{- end }}
+
+{{- if not .isWSL }}
+# WSL-specific scripts
+.local/bin/wl-copy
+.local/bin/wl-paste
+{{- end }}

@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+
+echo "=== WSL Clipboard Debug ==="
+echo
+
+# Check if running in WSL
+if grep -qi microsoft /proc/version; then
+    echo "✓ Running in WSL"
+else
+    echo "✗ NOT running in WSL"
+fi
+
+# Check if wl-copy exists and is executable
+if [ -x "$HOME/.local/bin/wl-copy" ]; then
+    echo "✓ wl-copy found at: $HOME/.local/bin/wl-copy"
+else
+    echo "✗ wl-copy not found or not executable at: $HOME/.local/bin/wl-copy"
+fi
+
+# Check if wl-paste exists and is executable
+if [ -x "$HOME/.local/bin/wl-paste" ]; then
+    echo "✓ wl-paste found at: $HOME/.local/bin/wl-paste"
+else
+    echo "✗ wl-paste not found or not executable at: $HOME/.local/bin/wl-paste"
+fi
+
+# Check if PowerShell is accessible
+if [ -x "/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe" ]; then
+    echo "✓ PowerShell found"
+else
+    echo "✗ PowerShell not found at expected location"
+fi
+
+# Test wl-copy
+echo
+echo "Testing wl-copy..."
+if echo "test" | "$HOME/.local/bin/wl-copy" 2>&1; then
+    echo "✓ wl-copy test successful"
+else
+    echo "✗ wl-copy test failed"
+fi
+
+# Test wl-paste
+echo
+echo "Testing wl-paste..."
+if result=$("$HOME/.local/bin/wl-paste" 2>&1); then
+    echo "✓ wl-paste test successful. Content: '$result'"
+else
+    echo "✗ wl-paste test failed: $result"
+fi
+
+# Check PATH
+echo
+echo "PATH check:"
+if echo "$PATH" | grep -q "$HOME/.local/bin"; then
+    echo "✓ ~/.local/bin is in PATH"
+else
+    echo "✗ ~/.local/bin is NOT in PATH"
+fi
+
+# Test from Neovim's perspective
+echo
+echo "Testing from Neovim's perspective:"
+echo "Run this in Neovim to test: :lua print(vim.fn.system({'wl-copy'}, 'test'))"
+echo "Then check with: :lua print(vim.fn.system({'wl-paste'}))"

@@ -1,0 +1,54 @@
+{{- if .isWSL -}}
+-- WSL Clipboard debugging commands
+
+-- Test clipboard functionality
+vim.api.nvim_create_user_command('ClipboardTest', function()
+  print("Testing WSL clipboard integration...")
+
+  -- Test wl-copy
+  local home = os.getenv("HOME")
+  local copy_result = vim.fn.system({home .. '/.local/bin/wl-copy'}, 'test clipboard')
+  if vim.v.shell_error == 0 then
+    print("✓ wl-copy command succeeded")
+  else
+    print("✗ wl-copy failed with exit code: " .. vim.v.shell_error)
+    print("  Output: " .. copy_result)
+  end
+
+  -- Test wl-paste
+  local paste_result = vim.fn.system({home .. '/.local/bin/wl-paste'})
+  if vim.v.shell_error == 0 then
+    print("✓ wl-paste command succeeded")
+    print("  Content: '" .. vim.trim(paste_result) .. "'")
+  else
+    print("✗ wl-paste failed with exit code: " .. vim.v.shell_error)
+    print("  Output: " .. paste_result)
+  end
+
+  -- Check clipboard provider
+  print("\nClipboard provider:")
+  print(vim.inspect(vim.g.clipboard))
+end, {})
+
+-- Enable clipboard debug logging
+vim.api.nvim_create_user_command('ClipboardDebugOn', function()
+  vim.fn.setenv('WSL_CLIPBOARD_DEBUG', '1')
+  print("WSL clipboard debug logging enabled")
+  print("Logs will be written to:")
+  print("  ~/.local/share/wl-copy.log")
+  print("  ~/.local/share/wl-paste.log")
+end, {})
+
+-- Disable clipboard debug logging
+vim.api.nvim_create_user_command('ClipboardDebugOff', function()
+  vim.fn.setenv('WSL_CLIPBOARD_DEBUG', '')
+  print("WSL clipboard debug logging disabled")
+end, {})
+
+-- Check clipboard health
+vim.api.nvim_create_user_command('ClipboardHealth', function()
+  vim.cmd('checkhealth provider.clipboard')
+end, {})
+{{- else -}}
+-- Clipboard debug commands are only available on WSL
+{{- end -}}

@@ -1,0 +1,19 @@
+{{- if .isWSL -}}
+-- WSL clipboard configuration using wl-copy/wl-paste
+local home = os.getenv("HOME")
+vim.g.clipboard = {
+  name = 'wsl-clipboard',
+  copy = {
+    ['+'] = home .. '/.local/bin/wl-copy',
+    ['*'] = home .. '/.local/bin/wl-copy',
+  },
+  paste = {
+    ['+'] = home .. '/.local/bin/wl-paste',
+    ['*'] = home .. '/.local/bin/wl-paste',
+  },
+  cache_enabled = true,
+}
+{{- else -}}
+-- Use system clipboard
+vim.opt.clipboard = 'unnamedplus'
+{{- end -}}
