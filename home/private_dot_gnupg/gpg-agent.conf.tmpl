@@ -1,0 +1,13 @@
+{{ if eq .chezmoi.os "darwin" -}}
+pinentry-program /opt/homebrew/bin/pinentry-mac
+{{- else if eq .chezmoi.os "linux" -}}
+{{-   if lookPath "pinentry-gnome3" -}}
+pinentry-program /usr/bin/pinentry-gnome3
+{{-   else if lookPath "pinentry-qt" -}}
+pinentry-program /usr/bin/pinentry-qt
+{{-   else -}}
+pinentry-program /usr/bin/pinentry-curses
+{{-   end -}}
+{{- end }}
+default-cache-ttl 600
+max-cache-ttl 7200
