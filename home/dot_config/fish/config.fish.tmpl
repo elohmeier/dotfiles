@@ -51,6 +51,9 @@ set -gx REQUESTS_CA_BUNDLE "{{ .customCABundle }}"
 set -gx SSL_CERT_FILE "{{ .customCABundle }}"
 set -gx CURL_CA_BUNDLE "{{ .customCABundle }}"
 set -gx UV_NATIVE_TLS "1"
+# dprint TLS configuration
+set -gx DPRINT_CERT "{{ .customCABundle }}"
+set -gx DPRINT_TLS_CA_STORE "system,mozilla"
 {{- end }}
 
 {{- if .customPyPIIndex }}
