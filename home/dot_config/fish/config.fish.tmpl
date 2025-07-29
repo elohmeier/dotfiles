@@ -20,6 +20,9 @@ if status is-interactive
     set -gx PATH "$HOME/.local/bin" $PATH
   end
 
+  # Set bat theme
+  set -gx BAT_THEME tokyonight_day
+
   source $__fish_config_dir/conf.d/shortcuts.fish
   source $__fish_config_dir/conf.d/fish-ssh-agent.fish
 
