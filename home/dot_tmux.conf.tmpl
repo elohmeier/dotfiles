@@ -1,6 +1,7 @@
 # Split panes using Vim-like bindings (with current directory)
-bind-key s split-window -h -c "#{pane_current_path}"
-bind-key v split-window -v -c "#{pane_current_path}"
+# Match Neovim behavior: s for horizontal split, v for vertical split
+bind-key s split-window -v -c "#{pane_current_path}"
+bind-key v split-window -h -c "#{pane_current_path}"
 
 # Vim-like pane navigation
 bind-key h select-pane -L
