@@ -14,30 +14,47 @@ if [ ! -x "$POWERSHELL" ]; then
     exit 1
 fi
 
+# Create temporary file for large inputs
+TEMP_FILE=$(mktemp /tmp/wl-copy.XXXXXX)
+trap 'rm -f "$TEMP_FILE"' EXIT
+
 # Read input either from pipe or argument
 if [ -t 0 ]; then
     # No pipe input, use arguments
-    input="$*"
+    echo -n "$*" > "$TEMP_FILE"
 else
-    # Input from pipe
-    input=$(cat)
+    # Input from pipe - stream to temp file
+    cat > "$TEMP_FILE"
 fi
 
-# Handle empty input - PowerShell's Set-Clipboard doesn't accept null
-if [ -z "$input" ]; then
+# Check if input is empty
+if [ ! -s "$TEMP_FILE" ]; then
     # Set a single space for empty clipboard
     if ! "$POWERSHELL" -command "Set-Clipboard ' '" 2>&1; then
         echo "Error: Failed to set clipboard" >&2
         exit 1
     fi
 else
-    # Escape single quotes in the input
-    escaped_input=$(echo "$input" | sed "s/'/'\\\\''/g")
+    # Convert Unix path to Windows path
+    WIN_PATH=$(wslpath -w "$TEMP_FILE")
 
-    # Call PowerShell's Set-Clipboard
-    if ! "$POWERSHELL" -command "Set-Clipboard ('$escaped_input')" 2>&1; then
-        echo "Error: Failed to set clipboard" >&2
-        exit 1
+    # Get file size for decision making
+    FILE_SIZE=$(stat -c%s "$TEMP_FILE" 2>/dev/null || stat -f%z "$TEMP_FILE" 2>/dev/null || echo "0")
+
+    # For files larger than 10MB, use file-based approach
+    if [ "$FILE_SIZE" -gt 10485760 ]; then
+        # Use PowerShell to read file directly
+        if ! "$POWERSHELL" -command "Get-Content -Path '$WIN_PATH' -Raw | Set-Clipboard" 2>&1; then
+            echo "Error: Failed to set clipboard from file" >&2
+            exit 1
+        fi
+    else
+        # For smaller files, use the same file-based approach
+        # This avoids shell escaping issues entirely
+        if ! "$POWERSHELL" -command "\$input = Get-Content -Path '$WIN_PATH' -Raw; Set-Clipboard \$input" 2>&1; then
+            echo "Error: Failed to set clipboard" >&2
+            exit 1
+        fi
     fi
 fi
 
