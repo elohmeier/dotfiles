@@ -63,6 +63,16 @@ set -gx DPRINT_TLS_CA_STORE "system,mozilla"
 set -gx UV_INDEX_URL "{{ .customPyPIIndex }}"
 set -gx PIP_INDEX_URL "{{ .customPyPIIndex }}"
 {{- end }}
+
+{{- if .isWSL }}
+  # WSL workaround for missing XDG_RUNTIME_DIR
+  set -gx XDG_RUNTIME_DIR "/tmp/run_user_1000"
+
+  # Create runtime directory if it doesn't exist
+  if not test -d $XDG_RUNTIME_DIR
+    mkdir -p $XDG_RUNTIME_DIR
+  end
+{{- end }}
 end
 
 {{- if eq .chezmoi.os "darwin" }}

@@ -95,25 +95,6 @@
                 ];
 
               };
-
-              # home.sessionPath = [ "${config.home.homeDirectory}/.local/bin" ];
-              # home.sessionVariables = {
-              #   # workaround WSL missing dir issue
-              #   XDG_RUNTIME_DIR = "/tmp/run_user_1000";
-              #   SSH_AUTH_SOCK = "/tmp/run_user_1000/ssh-agent";
-              # };
-              # programs.fish.interactiveShellInit = ''
-              #   mkdir -p /tmp/run_user_1000
-              #   # no user systemd available in wsl
-              #   if not pgrep -u (id -un) ssh-agent > /dev/null
-              #       ${pkgs.openssh}/bin/ssh-agent -a "$XDG_RUNTIME_DIR/ssh-agent" > /dev/null
-              #   end
-              # '';
-              # programs.gpg.enable = true;
-              # services.gpg-agent = {
-              #   enable = true;
-              #   pinentryPackage = pkgs.pinentry-curses;
-              # };
             }
           )
         ];
