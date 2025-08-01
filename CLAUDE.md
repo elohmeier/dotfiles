@@ -108,6 +108,43 @@ Examples:
 - **`home/dot_config/git/config.tmpl`** - Git configuration with delta integration
 - **`home/dot_config/nvim/`** - LazyVim-based Neovim configuration
 
+### Neovim Plugin Management
+
+This configuration uses **Lazy.nvim** (not LazyVim distro) for plugin management. Important guidelines:
+
+1. **One Plugin Per File Rule**
+   - Each plugin should have its own file in `home/dot_config/nvim/lua/plugins/`
+   - Never declare the same plugin in multiple files - Lazy.nvim merges specs which can cause conflicts
+   - Example: Don't create `templates.lua` with `telescope.nvim` if `telescope.lua` already exists
+
+2. **Plugin Specification Patterns**
+   ```lua
+   return {
+     "author/plugin-name",
+     dependencies = { ... },     -- Other plugins this depends on
+     lazy = false,              -- Set to false for immediate loading (e.g., colorschemes)
+     event = "VeryLazy",        -- Or specific events like "BufReadPre"
+     config = function() ... end, -- Configuration function
+     opts = { ... },            -- Or configuration table
+     keys = { ... },            -- Lazy-load on specific keybinds
+   }
+   ```
+
+3. **Adding Functionality to Existing Plugins**
+   - If extending an existing plugin (e.g., adding telescope pickers), modify the existing file
+   - Don't create a new file that returns the same plugin
+   - Use the plugin's `config` function to add keymaps and functionality
+
+4. **Keybinding Best Practices**
+   - Define keybindings in the plugin's `config` function using `vim.keymap.set()`
+   - Or use the `keys` table for lazy-loaded keybindings
+   - Check existing keybindings with `:Telescope keymaps` to avoid conflicts
+
+5. **Debugging Plugin Issues**
+   - Use `:Lazy` to see loaded plugins and their source files
+   - Check for duplicate plugin specifications if keybindings stop working
+   - Look for multiple files returning the same plugin name
+
 ### Working with Encrypted Files
 
 Files with `.age` extension are encrypted. To work with them:
