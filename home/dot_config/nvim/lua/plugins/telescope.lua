@@ -69,5 +69,36 @@ return {
     vim.keymap.set("n", "<C-j>", "<cmd>Telescope lsp_references<cr>", { desc = "References" })
     vim.keymap.set("n", "<leader>sd", "<cmd>Telescope diagnostics bufnr=0<cr>", { desc = "Document diagnostics" })
     vim.keymap.set("n", "<leader>st", "<cmd>TodoTelescope<cr>", { silent = true, desc = "Todo (Telescope)" })
+
+    -- Template picker
+    vim.keymap.set("n", "<leader>ft", function()
+      require("telescope.builtin").find_files({
+        prompt_title = "Templates",
+        cwd = vim.fn.stdpath("config") .. "/templates",
+        attach_mappings = function(_, map)
+          map("i", "<CR>", function(prompt_bufnr)
+            local selection = require("telescope.actions.state").get_selected_entry()
+            require("telescope.actions").close(prompt_bufnr)
+
+            if selection then
+              local template_path = selection.path
+              local content = vim.fn.readfile(template_path)
+
+              -- Get the current buffer position
+              local cursor = vim.api.nvim_win_get_cursor(0)
+              local line = cursor[1]
+
+              -- Insert template content at cursor position
+              vim.api.nvim_buf_set_lines(0, line - 1, line - 1, false, content)
+
+              -- Move cursor to the end of inserted content
+              vim.api.nvim_win_set_cursor(0, { line + #content - 1, 0 })
+            end
+          end)
+
+          return true
+        end,
+      })
+    end, { desc = "Insert Template" })
   end,
 }
