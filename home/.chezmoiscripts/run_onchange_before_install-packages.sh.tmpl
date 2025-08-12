@@ -10,114 +10,132 @@ if ! command -v brew &> /dev/null; then
     exit 0
 fi
 
-# other useful packages:
-{{ $extraBrews := list
-    "aerc"
-    "atuin"
-    "dante"
-    "chawan"
-    "elohmeier/tap/tabula-java"
-    "mailpit"
-    "maven"
-    "minio"
-    "nim"
-    "ollama"
-    "pass"
-    "pkgconf"
-    "postgresql@17"
-    "rustup"
-    "tabiew"
-    "tanka"
-    "valkey"
-    "w3m" -}}
-{{ $extraCasks := list
-    "cleanshot"
-    "dbeaver-enterprise"
-    "element"
-    "logseq"
-    "rectangle"
-    "spotify"
-    "visual-studio-code" -}}
+# Other useful packages (not installed by default):
+# Brews:
+#   aerc, dante, chawan, elohmeier/tap/tabula-java, mailpit, maven,
+#   minio, nim, ollama, pass, pkgconf, postgresql@17, rustup, tabiew,
+#   tanka, valkey, w3m
+# Casks:
+#   cleanshot, dbeaver-enterprise, element, logseq, rectangle, spotify,
+#   visual-studio-code
 
-{{ $brews := list
-    "atuin"
-    "bash-language-server"
-    "bat"
-    "btop"
-    "oven-sh/bun/bun"
-    "derailed/k9s/k9s"
-    "direnv"
-    "dprint"
-    "elohmeier/tap/jsonnet-language-server"
-    "entr"
-    "eza"
-    "f1bonacc1/tap/process-compose"
-    "fd"
-    "fish"
-    "fzf"
-    "gh"
-    "git-delta"
-    "go"
-    "go-jsonnet"
-    "gnupg"
-    "helm"
-    "jsonnet-bundler"
-    "lazygit"
-    "lua-language-server"
-    "make"
-    "minio-mc"
-    "ncdu"
-    "neovim"
-    "opentofu"
-    "pinentry-mac"
-    "pnpm"
-    "ripgrep"
-    "rsync"
-    "shellcheck"
-    "shfmt"
-    "sops"
-    "stylua"
-    "tinymist"
-    "typst"
-    "typstyle"
-    "uv"
-    "vivid"
-    "watch"
-    "yazi"
-    "yq"
-    "zoxide" -}}
-{{ $casks := list
-    "db-browser-for-sqlite"
-    "firefox"
-    "font-ibm-plex-mono"
-    "font-ibm-plex-sans"
-    "font-spleen"
-    "ghostty"
-    "google-chrome"
-    "orbstack"
-    "rectangle"
-    "stats" -}}
+# Package mode from chezmoi config
+MINIMAL_PACKAGES="{{ .minimalPackages }}"
 
-# Extract taps from brew formulas
-{{ $taps := list -}}
-{{ range ($brews | sortAlpha | uniq) -}}
-{{   if contains "/" . -}}
-{{     $parts := splitList "/" . -}}
-{{     if eq (len $parts) 3 -}}
-{{       $tap := printf "%s/%s" (index $parts 0) (index $parts 1) -}}
-{{       $taps = append $taps $tap -}}
-{{     end -}}
-{{   end -}}
-{{ end -}}
+# Essential packages (always installed)
+ESSENTIAL_BREWS=(
+    bat
+    btop
+    eza
+    fd
+    fish
+    fzf
+    ncdu
+    sops
+    uv
+)
 
-brew bundle --file=/dev/stdin <<EOF
-{{ range ($taps | sortAlpha | uniq) -}}
-tap "{{ . }}"
-{{ end -}}
-{{ range ($brews | sortAlpha | uniq) -}}
-brew "{{ . }}"
-{{ end -}}
-{{ range ($casks | sortAlpha | uniq) -}}
-cask "{{ . }}"
-{{ end -}}
-EOF
+ESSENTIAL_CASKS=(
+    firefox
+    font-ibm-plex-mono
+    font-ibm-plex-sans
+    font-spleen
+    ghostty
+    google-chrome
+)
+
+# Additional packages for full installation
+EXTRA_BREWS=(
+    atuin
+    bash-language-server
+    oven-sh/bun/bun
+    derailed/k9s/k9s
+    direnv
+    dprint
+    elohmeier/tap/jsonnet-language-server
+    entr
+    f1bonacc1/tap/process-compose
+    gh
+    git-delta
+    go
+    go-jsonnet
+    gnupg
+    helm
+    jsonnet-bundler
+    lazygit
+    lua-language-server
+    make
+    minio-mc
+    neovim
+    opentofu
+    pinentry-mac
+    pnpm
+    ripgrep
+    rsync
+    shellcheck
+    shfmt
+    stylua
+    tinymist
+    typst
+    typstyle
+    vivid
+    watch
+    yazi
+    yq
+    zoxide
+)
+
+EXTRA_CASKS=(
+    db-browser-for-sqlite
+    orbstack
+    rectangle
+    stats
+)
+
+# Build final package lists
+BREWS=("${ESSENTIAL_BREWS[@]}")
+CASKS=("${ESSENTIAL_CASKS[@]}")
+
+if [ "$MINIMAL_PACKAGES" = "true" ]; then
+    echo "Installing minimal package set..."
+else
+    echo "Installing full package set..."
+    BREWS+=("${EXTRA_BREWS[@]}")
+    CASKS+=("${EXTRA_CASKS[@]}")
+fi
+
+# Extract and add taps
+TAPS=()
+for brew in "${BREWS[@]}"; do
+    if [[ "$brew" == *"/"* ]]; then
+        # Extract tap from formula like "owner/tap/formula"
+        IFS='/' read -r owner tap formula <<< "$brew"
+        if [ -n "$owner" ] && [ -n "$tap" ] && [ -n "$formula" ]; then
+            TAP="$owner/$tap"
+            # Add tap if not already in array
+            if [[ ! " ${TAPS[@]:-} " =~ " ${TAP} " ]]; then
+                TAPS+=("$TAP")
+            fi
+        fi
+    fi
+done
+
+# Generate and run brew bundle
+{
+    # Add taps
+    if [ ${#TAPS[@]} -gt 0 ]; then
+        for tap in "${TAPS[@]}"; do
+            echo "tap \"$tap\""
+        done
+    fi
+
+    # Add brews
+    for brew in "${BREWS[@]}"; do
+        echo "brew \"$brew\""
+    done
+
+    # Add casks
+    for cask in "${CASKS[@]}"; do
+        echo "cask \"$cask\""
+    done
+} | brew bundle --file=/dev/stdin
