@@ -36,12 +36,14 @@ ESSENTIAL_BREWS=(
 )
 
 ESSENTIAL_CASKS=(
+{{- if eq .chezmoi.os "darwin" }}
     firefox
     font-ibm-plex-mono
     font-ibm-plex-sans
     font-spleen
     ghostty
     google-chrome
+{{- end }}
 )
 
 # Additional packages for full installation
@@ -86,10 +88,12 @@ EXTRA_BREWS=(
 )
 
 EXTRA_CASKS=(
+{{- if eq .chezmoi.os "darwin" }}
     db-browser-for-sqlite
     orbstack
     rectangle
     stats
+{{- end }}
 )
 
 # Build final package lists
@@ -134,8 +138,10 @@ done
         echo "brew \"$brew\""
     done
 
-    # Add casks
+    # Add casks (only on macOS)
+{{- if eq .chezmoi.os "darwin" }}
     for cask in "${CASKS[@]}"; do
         echo "cask \"$cask\""
     done
+{{- end }}
 } | brew bundle --file=/dev/stdin
