@@ -49,6 +49,10 @@ if status is-interactive
     direnv hook fish | source
   end
 
+  if command -q mise
+    mise activate fish | source
+  end
+
 {{- if .customCABundle }}
 set -gx REQUESTS_CA_BUNDLE "{{ .customCABundle }}"
 set -gx SSL_CERT_FILE "{{ .customCABundle }}"
