@@ -1,0 +1,242 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#     "click",
+#     "PyYAML",
+#     "requests",
+# ]
+# ///
+"""OpenShift authentication tool."""
+
+import os
+import re
+import subprocess
+from pathlib import Path
+from urllib.parse import parse_qs, urlparse
+
+import click
+import requests
+import yaml
+from requests.auth import HTTPBasicAuth
+
+KUBECONFIG_PATH = Path.home() / ".kube" / "config"
+
+# Common OAuth route names to try
+OAUTH_ROUTES = ["oauth-openshift", "oauth"]
+
+
+def parse_cluster_input(cluster_input: str) -> tuple[str, str]:
+    """Parse cluster input to extract cluster name and domain.
+
+    Supports formats:
+    - Full URL: https://api.test.example.com:6443
+    - API URL: api.test.example.com
+    - Cluster.domain: test.example.com
+    - Just cluster name if domain has standard format
+    """
+    # Remove protocol and port if present
+    cluster_input = cluster_input.replace("https://", "").replace("http://", "")
+    cluster_input = cluster_input.split(":")[0]  # Remove port
+
+    # Remove 'api.' prefix if present
+    if cluster_input.startswith("api."):
+        cluster_input = cluster_input[4:]
+
+    # Split into parts
+    parts = cluster_input.split(".", 1)
+
+    if len(parts) == 1:
+        # Just cluster name - user needs to provide domain
+        raise click.ClickException(
+            "Please provide full cluster address (e.g., 'test.example.com' or 'api.test.example.com')"
+        )
+
+    cluster_name = parts[0]
+    domain = parts[1]
+
+    return cluster_name, domain
+
+
+def get_token(cluster: str, domain: str, username: str, password: str, insecure: bool) -> str:
+    """Retrieve OAuth token from OpenShift cluster by trying different OAuth routes."""
+
+    # Try different OAuth routes until one works
+    for oauth_route in OAUTH_ROUTES:
+        oauth_url = (
+            f"https://{oauth_route}.apps.{cluster}.{domain}"
+            f"/oauth/authorize?response_type=token&client_id=openshift-challenging-client"
+        )
+
+        try:
+            response = requests.get(
+                oauth_url,
+                auth=HTTPBasicAuth(username, password),
+                headers={"X-CSRF-Token": "empty"},
+                allow_redirects=False,
+                verify=not insecure,
+                timeout=10,
+            )
+
+            # If we get a 404, try the next route
+            if response.status_code == 404:
+                continue
+
+            # If authentication failed but route exists
+            if response.status_code == 401:
+                raise click.ClickException("Authentication failed: Invalid credentials")
+
+            # If we got a redirect, we found the right route
+            if response.status_code == 302:
+                # Extract token from redirect URL
+                location = response.headers.get("Location", "")
+                fragment = urlparse(location).fragment
+                if not fragment:
+                    continue  # Try next route if no fragment
+
+                params = parse_qs(fragment)
+                if "access_token" in params:
+                    return params["access_token"][0]
+
+        except requests.RequestException:
+            # Try next route on connection errors
+            continue
+
+    # If we couldn't get a token from any route
+    raise click.ClickException(
+        f"Could not authenticate to {cluster}.{domain}. "
+        "Please check cluster address and credentials."
+    )
+
+
+def normalize_name(name: str) -> str:
+    """Normalize a name for use in kubeconfig (letters, numbers, hyphens, dots)."""
+    # Replace any character that's not alphanumeric, hyphen, dot, or underscore with hyphen
+    normalized = re.sub(r"[^a-zA-Z0-9._-]", "-", name)
+    # Remove consecutive hyphens
+    normalized = re.sub(r"-+", "-", normalized)
+    # Remove leading/trailing hyphens
+    normalized = normalized.strip("-")
+    return normalized
+
+
+def update_kubeconfig(cluster: str, domain: str, username: str, token: str, insecure: bool) -> str:
+    """Update kubeconfig with new authentication."""
+    # Create normalized identifiers based on full cluster address
+    cluster_identifier = f"{cluster}.{domain}"
+    normalized_cluster = normalize_name(cluster_identifier)
+
+    context_name = f"{username}@{normalized_cluster}"
+    user_name = f"{username}-{normalized_cluster}"
+    cluster_name = normalized_cluster
+    api_server = f"https://api.{cluster}.{domain}:6443"
+
+    # Load existing kubeconfig or create new one
+    if KUBECONFIG_PATH.exists():
+        with open(KUBECONFIG_PATH) as f:
+            config = yaml.safe_load(f) or {}
+    else:
+        config = {}
+
+    # Ensure structure exists
+    config.setdefault("apiVersion", "v1")
+    config.setdefault("kind", "Config")
+    config.setdefault("clusters", [])
+    config.setdefault("contexts", [])
+    config.setdefault("users", [])
+
+    # Update clusters
+    cluster_entry = {
+        "name": cluster_name,
+        "cluster": {"server": api_server, "insecure-skip-tls-verify": insecure},
+    }
+    config["clusters"] = [c for c in config["clusters"] if c["name"] != cluster_name]
+    config["clusters"].append(cluster_entry)
+
+    # Update contexts
+    context_entry = {
+        "name": context_name,
+        "context": {"cluster": cluster_name, "user": user_name},
+    }
+    config["contexts"] = [c for c in config["contexts"] if c["name"] != context_name]
+    config["contexts"].append(context_entry)
+
+    # Update users
+    user_entry = {"name": user_name, "user": {"token": token}}
+    config["users"] = [u for u in config["users"] if u["name"] != user_name]
+    config["users"].append(user_entry)
+
+    # Set current context
+    config["current-context"] = context_name
+
+    # Save kubeconfig
+    KUBECONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    KUBECONFIG_PATH.write_text(yaml.dump(config))
+    KUBECONFIG_PATH.chmod(0o600)
+
+    return context_name
+
+
+@click.command()
+@click.argument("cluster", required=True)
+@click.option("-u", "--user", help="Username (defaults to $USER)")
+@click.option("-p", "--password", help="Password (will prompt if not provided)")
+@click.option("-k", "--insecure", is_flag=True, help="Skip TLS certificate verification")
+def main(
+    cluster: str,
+    user: str | None,
+    password: str | None,
+    insecure: bool,
+):
+    """Simple OpenShift authentication tool.
+
+    CLUSTER can be provided in multiple formats:
+    - Full API URL: https://api.test.example.com:6443
+    - API hostname: api.test.example.com
+    - Cluster.domain: test.example.com
+
+    Examples:
+        ocauth test.example.com
+        ocauth api.prod.example.com -u john
+        ocauth https://api.dev.example.com:6443 -k
+    """
+
+    # Parse cluster input
+    try:
+        cluster_name, domain = parse_cluster_input(cluster)
+    except click.ClickException:
+        raise
+
+    # Get username
+    if not user:
+        user = os.environ.get("USER")
+        if not user:
+            user = click.prompt("Username")
+
+    # Get password
+    if not password:
+        password = click.prompt("Password", hide_input=True)
+
+    # Get token and update kubeconfig
+    print(f"Authenticating to {cluster_name}.{domain}...")
+
+    # At this point, user and password are guaranteed to be strings
+    assert user is not None and password is not None
+
+    try:
+        token = get_token(cluster_name, domain, user, password, insecure)
+        context_name = update_kubeconfig(cluster_name, domain, user, token, insecure)
+
+        # Switch to new context
+        subprocess.run(["kubectl", "config", "use-context", context_name], check=True)
+        print(f"✓ Switched to context: {context_name}")
+
+    except requests.RequestException as e:
+        raise click.ClickException(f"Connection error: {e}") from e
+    except subprocess.CalledProcessError:
+        print("Warning: Could not switch context automatically")
+        print(f"Run: kubectl config use-context {user}@{cluster_name}")
+
+
+if __name__ == "__main__":
+    main()
