@@ -54,28 +54,18 @@ if status is-interactive
   end
 
 {{- if .customCABundle }}
-set -gx REQUESTS_CA_BUNDLE "{{ .customCABundle }}"
-set -gx SSL_CERT_FILE "{{ .customCABundle }}"
-set -gx CURL_CA_BUNDLE "{{ .customCABundle }}"
-set -gx UV_NATIVE_TLS "1"
-# dprint TLS configuration
-set -gx DPRINT_CERT "{{ .customCABundle }}"
-set -gx DPRINT_TLS_CA_STORE "system,mozilla"
+  set -gx REQUESTS_CA_BUNDLE "{{ .customCABundle }}"
+  set -gx SSL_CERT_FILE "{{ .customCABundle }}"
+  set -gx CURL_CA_BUNDLE "{{ .customCABundle }}"
+  set -gx UV_NATIVE_TLS "1"
+  # dprint TLS configuration
+  set -gx DPRINT_CERT "{{ .customCABundle }}"
+  set -gx DPRINT_TLS_CA_STORE "system,mozilla"
 {{- end }}
 
 {{- if .customPyPIIndex }}
-set -gx UV_INDEX_URL "{{ .customPyPIIndex }}"
-set -gx PIP_INDEX_URL "{{ .customPyPIIndex }}"
-{{- end }}
-
-{{- if .isWSL }}
-  # WSL workaround for missing XDG_RUNTIME_DIR
-  set -gx XDG_RUNTIME_DIR "/tmp/run_user_1000"
-
-  # Create runtime directory if it doesn't exist
-  if not test -d $XDG_RUNTIME_DIR
-    mkdir -p $XDG_RUNTIME_DIR
-  end
+  set -gx UV_INDEX_URL "{{ .customPyPIIndex }}"
+  set -gx PIP_INDEX_URL "{{ .customPyPIIndex }}"
 {{- end }}
 end
 
