@@ -23,6 +23,11 @@ if status is-interactive
   # Set bat theme
   set -gx BAT_THEME tokyonight_day
 
+  # Set LS_COLORS using vivid if available and not already set
+  if command -q vivid; and not set -q LS_COLORS
+    set -Ux LS_COLORS (vivid generate ayu)
+  end
+
   source $__fish_config_dir/conf.d/shortcuts.fish
   source $__fish_config_dir/conf.d/fish-ssh-agent.fish
 
