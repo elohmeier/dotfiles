@@ -28,6 +28,15 @@ if status is-interactive
     set -Ux LS_COLORS (vivid generate ayu)
   end
 
+{{- if .isWSL }}
+  # Windows Terminal integration for WSL
+  function storePathForWindowsTerminal --on-variable PWD
+    if test -n "$WT_SESSION"
+      printf "\e]9;9;%s\e\\" (wslpath -w "$PWD")
+    end
+  end
+{{- end }}
+
   source $__fish_config_dir/conf.d/shortcuts.fish
   source $__fish_config_dir/conf.d/fish-ssh-agent.fish
 
