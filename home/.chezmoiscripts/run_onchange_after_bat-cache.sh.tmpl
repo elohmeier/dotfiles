@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Rebuild bat cache when themes change
+# Hash: {{ include "dot_config/bat/themes/tokyonight_day.tmTheme" | sha256sum }}
+
+set -eufo pipefail
+
+echo "Rebuilding bat cache..."
+
+if command -v bat &>/dev/null; then
+    bat cache --build
+    echo "✓ Bat cache rebuilt successfully"
+else
+    echo "⚠ Bat is not installed, skipping cache rebuild"
+fi

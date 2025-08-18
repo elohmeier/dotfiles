@@ -238,3 +238,8 @@ These scripts run automatically during `chezmoi apply`:
   - Creates symlinks from `~/Library/Application Support/` to `~/.config/`
   - Handles applications that expect macOS-style paths (lazygit, k9s, process-compose)
   - Creates backups before replacing existing directories
+
+- **`run_onchange_after_bat-cache.sh.tmpl`** - Rebuild bat syntax highlighting cache
+  - Runs after applying dotfiles when bat themes change
+  - Automatically rebuilds bat cache when themes are added or modified
+  - Uses template hash to detect changes in theme files
