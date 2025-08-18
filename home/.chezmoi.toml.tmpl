@@ -1,29 +1,32 @@
 encryption = "age"
 
 [age]
-    {{- if eq .chezmoi.os "darwin" }}
-    identity = "{{ .chezmoi.homeDir }}/Library/Application Support/sops/age/keys.txt"
-    {{- else }}
-    identity = "{{ .chezmoi.homeDir }}/.config/sops/age/keys.txt"
-    {{- end }}
-    recipient = "age1e6gdd6c0nf5p47jhcq8dvrcyu4vmrzvg2kd75thsgyl7pzqemunq9mfl7e"
+{{- if eq .chezmoi.os "darwin" }}
+identity = "{{ .chezmoi.homeDir }}/Library/Application Support/sops/age/keys.txt"
+{{- else }}
+identity = "{{ .chezmoi.homeDir }}/.config/sops/age/keys.txt"
+{{- end }}
+recipient = "age1e6gdd6c0nf5p47jhcq8dvrcyu4vmrzvg2kd75thsgyl7pzqemunq9mfl7e"
+
+[cd]
+command = "fish"
 
 [data]
-    email = "enno@nerdworks.de"
-    name = "Enno Richter"
-    displayConfig = {{ output (joinPath .chezmoi.sourceDir ".." "scripts" "get-display-config.sh") | quote }}
+email = "enno@nerdworks.de"
+name = "Enno Richter"
+displayConfig = {{ output (joinPath .chezmoi.sourceDir ".." "scripts" "get-display-config.sh") | quote }}
 
-    enableEmail = false
-    enableSecrets = false
+enableEmail = false
+enableSecrets = false
 
-    # Install only essential packages (false = install all packages)
-    minimalPackages = true
+# Install only essential packages (false = install all packages)
+minimalPackages = true
 
-    customCABundle = ""
-    customPyPIIndex = ""
+customCABundle = ""
+customPyPIIndex = ""
 
-    # Enable WSL-specific workarounds and tools
-    isWSL = false
+# Enable WSL-specific workarounds and tools
+isWSL = false
 
 [secret]
-    command = "{{ joinPath .chezmoi.sourceDir ".." "scripts" "chesops.sh" }}"
+command = "{{ joinPath .chezmoi.sourceDir ".." "scripts" "chesops.sh" }}"
