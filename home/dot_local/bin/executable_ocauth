@@ -58,7 +58,9 @@ def parse_cluster_input(cluster_input: str) -> tuple[str, str]:
     return cluster_name, domain
 
 
-def get_token(cluster: str, domain: str, username: str, password: str, insecure: bool) -> str:
+def get_token(
+    cluster: str, domain: str, username: str, password: str, insecure: bool
+) -> str:
     """Retrieve OAuth token from OpenShift cluster by trying different OAuth routes."""
 
     # Try different OAuth routes until one works
@@ -120,7 +122,9 @@ def normalize_name(name: str) -> str:
     return normalized
 
 
-def update_kubeconfig(cluster: str, domain: str, username: str, token: str, insecure: bool) -> str:
+def update_kubeconfig(
+    cluster: str, domain: str, username: str, token: str, insecure: bool
+) -> str:
     """Update kubeconfig with new authentication."""
     # Create normalized identifiers based on full cluster address
     cluster_identifier = f"{cluster}.{domain}"
@@ -181,7 +185,9 @@ def update_kubeconfig(cluster: str, domain: str, username: str, token: str, inse
 @click.argument("cluster", required=True)
 @click.option("-u", "--user", help="Username (defaults to $USER)")
 @click.option("-p", "--password", help="Password (will prompt if not provided)")
-@click.option("-k", "--insecure", is_flag=True, help="Skip TLS certificate verification")
+@click.option(
+    "-k", "--insecure", is_flag=True, help="Skip TLS certificate verification"
+)
 def main(
     cluster: str,
     user: str | None,
@@ -240,3 +246,5 @@ def main(
 
 if __name__ == "__main__":
     main()
+
+# vim: set ft=python:

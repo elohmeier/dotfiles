@@ -1,0 +1,158 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#     "rich-click",
+#     "rich",
+# ]
+# ///
+"""Clone all GitLab repositories using glab."""
+
+import json
+import subprocess
+import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+import rich_click as click
+from rich.console import Console
+from rich.progress import Progress
+
+console = Console()
+
+
+@click.command()
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Show what would be done without cloning",
+)
+@click.option(
+    "--parallel",
+    default=1,
+    type=int,
+    help="Number of parallel clone operations (default: 1)",
+)
+def main(dry_run: bool, parallel: int):
+    """Clone all accessible GitLab repositories."""
+
+    # Get all repos from glab with pagination
+    console.print("Fetching repositories...")
+    all_repos = []
+    page = 1
+
+    while True:
+        result = subprocess.run(
+            [
+                "glab",
+                "repo",
+                "list",
+                "-a",
+                "-F",
+                "json",
+                "--per-page",
+                "100",
+                "--page",
+                str(page),
+            ],
+            capture_output=True,
+            text=True,
+        )
+
+        if result.returncode != 0:
+            console.print(f"[red]Failed to fetch repos: {result.stderr}[/red]")
+            sys.exit(1)
+
+        repos = json.loads(result.stdout) if result.stdout else []
+
+        # Stop if we get an empty array (no more pages)
+        if not repos:
+            break
+
+        all_repos.extend(repos)
+        console.print(f"Fetched page {page} ({len(repos)} repositories)")
+        page += 1
+
+    if not all_repos:
+        console.print("[yellow]No repositories found[/yellow]")
+        return
+
+    console.print(f"Found {len(all_repos)} repositories total")
+
+    # Check if ghq is available
+    ghq_available = (
+        subprocess.run(
+            ["which", "ghq"],
+            capture_output=True,
+        ).returncode
+        == 0
+    )
+
+    if not ghq_available:
+        console.print("[yellow]ghq not found[/yellow]")
+        sys.exit(1)
+
+    def clone_repo(repo, dry_run):
+        """Clone a single repository."""
+        ssh_url = repo["ssh_url_to_repo"]
+        name = repo["path_with_namespace"]
+
+        if dry_run:
+            return f"Would run: ghq get {ssh_url}", name
+        else:
+            result = subprocess.run(
+                ["ghq", "get", ssh_url],
+                capture_output=True,
+                text=True,
+            )
+            return result.returncode == 0, name
+
+    # Clone or update each repo
+    with Progress() as progress:
+        task = progress.add_task("Processing repos...", total=len(all_repos))
+
+        if parallel == 1:
+            # Sequential processing
+            for repo in all_repos:
+                ssh_url = repo["ssh_url_to_repo"]
+                name = repo["path_with_namespace"]
+
+                progress.update(task, description=f"Processing {name}")
+
+                if dry_run:
+                    console.print(f"[dim]Would run: ghq get {ssh_url}[/dim]")
+                else:
+                    subprocess.run(
+                        ["ghq", "get", ssh_url],
+                        capture_output=True,
+                    )
+
+                progress.update(task, advance=1)
+        else:
+            # Parallel processing
+            with ThreadPoolExecutor(max_workers=parallel) as executor:
+                futures = {
+                    executor.submit(clone_repo, repo, dry_run): repo
+                    for repo in all_repos
+                }
+
+                for future in as_completed(futures):
+                    repo = futures[future]
+                    name = repo["path_with_namespace"]
+
+                    try:
+                        result, repo_name = future.result()
+                        progress.update(task, description=f"Processed {repo_name}")
+                        if dry_run:
+                            console.print(f"[dim]{result}[/dim]")
+                    except Exception as e:
+                        console.print(f"[red]Error processing {name}: {e}[/red]")
+
+                    progress.update(task, advance=1)
+
+    console.print("[green]Done![/green]")
+
+
+if __name__ == "__main__":
+    main()
+
+# vim: set ft=python:
