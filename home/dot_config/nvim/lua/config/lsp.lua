@@ -144,6 +144,29 @@ vim.lsp.config["helm_ls"] = {
   },
 }
 
+vim.lsp.config["yamlls"] = {
+  cmd = { "yaml-language-server", "--stdio" },
+  filetypes = { "yaml", "yaml.docker-compose", "yaml.gitlab" },
+  root_markers = { ".git" },
+  single_file_support = true,
+  offset_encoding = "utf-8",
+  settings = {
+    yaml = {
+      schemas = {
+        ["https://json.schemastore.org/github-workflow.json"] = "/.github/workflows/*",
+        ["https://json.schemastore.org/docker-compose.json"] = "docker-compose*.yml",
+        ["https://raw.githubusercontent.com/compose-spec/compose-spec/master/schema/compose-spec.json"] = "docker-compose*.yml",
+      },
+      format = {
+        enable = true,
+      },
+      validate = true,
+      completion = true,
+      hover = true,
+    },
+  },
+}
+
 vim.lsp.enable("luals")
 vim.lsp.enable("bashls")
 vim.lsp.enable("jsonnet_ls")
@@ -154,6 +177,7 @@ vim.lsp.enable("tsserver")
 vim.lsp.enable("terraformls")
 vim.lsp.enable("svelte")
 vim.lsp.enable("helm_ls")
+vim.lsp.enable("yamlls")
 
 vim.diagnostic.config({ virtual_lines = {
   current_line = true,
