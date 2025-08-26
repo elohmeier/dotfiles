@@ -73,6 +73,26 @@ vim.lsp.config["basedpyright"] = {
   },
 }
 
+vim.lsp.config["ty"] = {
+  cmd = { "ty", "server" },
+  filetypes = { "python" },
+  root_markers = {
+    ".git",
+    ".ruff.toml",
+    "Pipfile",
+    "pyproject.toml",
+    "requirements.txt",
+    "ruff.toml",
+    "setup.cfg",
+    "setup.py",
+    "ty.toml",
+  },
+  single_file_support = true,
+  settings = {
+    ty = {},
+  },
+}
+
 vim.lsp.config["tinymist"] = {
   cmd = { "tinymist" },
   filetypes = { "typst" },
@@ -167,16 +187,17 @@ vim.lsp.config["yamlls"] = {
   },
 }
 
-vim.lsp.enable("luals")
-vim.lsp.enable("bashls")
-vim.lsp.enable("jsonnet_ls")
-vim.lsp.enable("ruff_lsp")
 vim.lsp.enable("basedpyright")
+vim.lsp.enable("bashls")
+vim.lsp.enable("helm_ls")
+vim.lsp.enable("jsonnet_ls")
+vim.lsp.enable("luals")
+vim.lsp.enable("ruff_lsp")
+vim.lsp.enable("svelte")
+vim.lsp.enable("terraformls")
 vim.lsp.enable("tinymist")
 vim.lsp.enable("tsserver")
-vim.lsp.enable("terraformls")
-vim.lsp.enable("svelte")
-vim.lsp.enable("helm_ls")
+vim.lsp.enable("ty")
 vim.lsp.enable("yamlls")
 
 vim.diagnostic.config({ virtual_lines = {
