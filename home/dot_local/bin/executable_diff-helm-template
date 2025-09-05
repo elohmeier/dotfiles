@@ -1,0 +1,100 @@
+#!/bin/bash
+
+set -e
+
+echo "Comparing helm template output between HEAD and remote main branch..."
+
+# Auto-detect release name from Chart.yaml, fallback to directory name
+if [[ -f "Chart.yaml" ]] && command -v yq >/dev/null 2>&1; then
+    RELEASE_NAME=$(yq e '.name' Chart.yaml 2>/dev/null || echo "")
+fi
+if [[ -z "$RELEASE_NAME" ]]; then
+    RELEASE_NAME=$(basename "$PWD")
+fi
+
+# Auto-detect namespace from argo.yaml files
+NAMESPACE=""
+for argo_file in */argo.yaml argo.yaml; do
+    if [[ -f "$argo_file" ]] && command -v yq >/dev/null 2>&1; then
+        NAMESPACE=$(yq e '.deploy_argo.spec.namespace // .spec.namespace // .namespace' "$argo_file" 2>/dev/null || echo "")
+        if [[ -n "$NAMESPACE" ]]; then
+            echo "Found namespace '$NAMESPACE' in $argo_file"
+            break
+        fi
+    fi
+done
+if [[ -z "$NAMESPACE" ]]; then
+    NAMESPACE="default"
+    echo "Warning: Could not detect namespace, using 'default'"
+fi
+
+# Auto-detect values files
+VALUES_FILES=()
+if [[ -f "values.yaml" ]]; then
+    VALUES_FILES+=("-f" "values.yaml")
+fi
+# Look for environment-specific values files
+for env_dir in */; do
+    env_name=${env_dir%/}
+    if [[ -f "$env_dir/values.yaml" ]]; then
+        VALUES_FILES+=("-f" "$env_name/values.yaml")
+        echo "Found environment values: $env_name/values.yaml"
+    fi
+done
+
+if [[ ${#VALUES_FILES[@]} -eq 0 ]]; then
+    echo "Warning: No values files found, using helm defaults"
+fi
+
+echo "Using release name: $RELEASE_NAME"
+echo "Using namespace: $NAMESPACE"
+echo "Using values files: ${VALUES_FILES[*]}"
+
+# Create temporary directory for comparison
+TEMP_DIR=$(mktemp -d)
+trap 'rm -rf "$TEMP_DIR"' EXIT
+
+# Generate helm template for current HEAD
+echo "Generating template for current HEAD..."
+helm template -n "$NAMESPACE" "$RELEASE_NAME" . "${VALUES_FILES[@]}" >"$TEMP_DIR/head.yaml"
+
+# Stash current changes if any
+STASH_CREATED=false
+if ! git diff --quiet HEAD; then
+    echo "Stashing current changes..."
+    git stash push -q -m "temp stash for helm diff"
+    STASH_CREATED=true
+fi
+
+# Switch to remote main
+echo "Switching to origin/main..."
+git checkout --quiet origin/main
+
+# Generate helm template for remote main
+echo "Generating template for origin/main..."
+helm template -n "$NAMESPACE" "$RELEASE_NAME" . "${VALUES_FILES[@]}" >"$TEMP_DIR/main.yaml"
+
+# Switch back to original branch
+echo "Switching back to previous branch..."
+git checkout --quiet -
+
+# Restore stashed changes if any
+if [ "$STASH_CREATED" = true ]; then
+    echo "Restoring stashed changes..."
+    git stash pop -q
+fi
+
+# Show the diff
+echo "Showing differences (main -> HEAD):"
+echo "=================================="
+if command -v delta >/dev/null 2>&1; then
+    delta --no-gitconfig "$TEMP_DIR/main.yaml" "$TEMP_DIR/head.yaml" || true
+else
+    diff -u "$TEMP_DIR/main.yaml" "$TEMP_DIR/head.yaml" || true
+    echo ""
+    echo "Legend:"
+    echo "  - Lines removed from main"
+    echo "  + Lines added in HEAD"
+    echo ""
+    echo "Tip: Install 'delta' for better diff visualization."
+fi
