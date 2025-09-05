@@ -1,0 +1,339 @@
+#!/bin/bash
+
+# Script to validate Helm templates against Kyverno policies
+# Usage: validate-policies [OPTIONS] [CHART_PATH]
+
+set -e
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Default configuration
+TEMP_DIR=$(mktemp -d)
+VERBOSE=false
+KEEP_TEMP=false
+POLICIES_PATH=""
+CHART_PATH=""
+VALUES_FILES=()
+
+usage() {
+    cat <<EOF
+Usage: $0 [OPTIONS] [CHART_PATH]
+
+Validate Helm templates against Kyverno policies.
+
+OPTIONS:
+    -h, --help              Show this help message
+    -v, --verbose           Enable verbose output
+    -p, --policies PATH     Path to Kyverno policies file or directory (required)
+    -f, --values FILE       Specify values files (can be used multiple times)
+    -n, --namespace NS      Kubernetes namespace (default: default)
+    -r, --release NAME      Helm release name (default: test-release)
+    --keep-temp             Keep temporary directory for debugging
+
+EXAMPLES:
+    # Validate chart with policies
+    $0 -p ./policies.yaml ./my-chart
+
+    # Validate with custom values and namespace
+    $0 -p ./policies -f values.yaml -n production ./my-chart
+
+    # Validate with verbose output
+    $0 -v -p ./policies.yaml ./my-chart
+
+    # Auto-detect chart configuration (like diff-helm-template)
+    $0 -p ./policies.yaml  # in a chart directory
+EOF
+}
+
+# shellcheck disable=SC2329  # Function is used via trap
+cleanup() {
+    if [[ "$KEEP_TEMP" != "true" && -d "$TEMP_DIR" ]]; then
+        rm -rf "$TEMP_DIR"
+    elif [[ "$KEEP_TEMP" == "true" ]]; then
+        echo -e "${BLUE}Temporary directory preserved at: $TEMP_DIR${NC}"
+    fi
+}
+
+trap cleanup EXIT
+
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+log_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1" >&2
+}
+
+check_dependencies() {
+    local missing_deps=()
+
+    if ! command -v helm >/dev/null 2>&1; then
+        missing_deps+=("helm")
+    fi
+
+    if ! command -v kyverno >/dev/null 2>&1; then
+        missing_deps+=("kyverno")
+    fi
+
+    if [[ ${#missing_deps[@]} -ne 0 ]]; then
+        log_error "Missing required dependencies: ${missing_deps[*]}"
+        log_error "Install with: brew install helm kyverno"
+        exit 1
+    fi
+}
+
+auto_detect_chart_config() {
+    local release_name=""
+    local namespace="default"
+    local values_files=()
+
+    # Auto-detect release name from Chart.yaml, fallback to directory name
+    if [[ -f "Chart.yaml" ]] && command -v yq >/dev/null 2>&1; then
+        release_name=$(yq e '.name' Chart.yaml 2>/dev/null || echo "")
+    fi
+    if [[ -z "$release_name" ]]; then
+        release_name=$(basename "$PWD")
+    fi
+
+    # Auto-detect namespace from argo.yaml files
+    for argo_file in */argo.yaml argo.yaml; do
+        if [[ -f "$argo_file" ]] && command -v yq >/dev/null 2>&1; then
+            namespace=$(yq e '.deploy_argo.spec.namespace // .spec.namespace // .namespace' "$argo_file" 2>/dev/null || echo "")
+            if [[ -n "$namespace" ]]; then
+                log_info "Found namespace '$namespace' in $argo_file"
+                break
+            fi
+        fi
+    done
+
+    # Auto-detect values files
+    if [[ -f "values.yaml" ]]; then
+        values_files+=("values.yaml")
+    fi
+    # Look for environment-specific values files
+    for env_dir in */; do
+        env_name=${env_dir%/}
+        if [[ -f "$env_dir/values.yaml" ]]; then
+            values_files+=("$env_name/values.yaml")
+            log_info "Found environment values: $env_name/values.yaml"
+        fi
+    done
+
+    # Set global variables if not already set
+    if [[ -z "$RELEASE_NAME" ]]; then
+        RELEASE_NAME="$release_name"
+    fi
+    if [[ -z "$NAMESPACE" ]]; then
+        NAMESPACE="$namespace"
+    fi
+    if [[ ${#VALUES_FILES[@]} -eq 0 && ${#values_files[@]} -gt 0 ]]; then
+        VALUES_FILES=("${values_files[@]}")
+    fi
+}
+
+# Parse command line arguments
+RELEASE_NAME=""
+NAMESPACE=""
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+    -h | --help)
+        usage
+        exit 0
+        ;;
+    -v | --verbose)
+        VERBOSE=true
+        shift
+        ;;
+    -p | --policies)
+        POLICIES_PATH="$2"
+        shift 2
+        ;;
+    -f | --values)
+        VALUES_FILES+=("$2")
+        shift 2
+        ;;
+    -n | --namespace)
+        NAMESPACE="$2"
+        shift 2
+        ;;
+    -r | --release)
+        RELEASE_NAME="$2"
+        shift 2
+        ;;
+    --keep-temp)
+        KEEP_TEMP=true
+        shift
+        ;;
+    -*)
+        log_error "Unknown option: $1"
+        usage
+        exit 1
+        ;;
+    *)
+        if [[ -z "$CHART_PATH" ]]; then
+            CHART_PATH="$1"
+        else
+            log_error "Multiple chart paths specified: $CHART_PATH and $1"
+            exit 1
+        fi
+        shift
+        ;;
+    esac
+done
+
+# Check required parameters
+if [[ -z "$POLICIES_PATH" ]]; then
+    log_error "Policies path is required. Use -p/--policies to specify."
+    usage
+    exit 1
+fi
+
+# Auto-detect chart configuration if in a chart directory
+if [[ -z "$CHART_PATH" ]]; then
+    if [[ -f "Chart.yaml" ]]; then
+        CHART_PATH="."
+        log_info "Auto-detected chart directory: $CHART_PATH"
+    else
+        log_error "Chart path is required when not in a chart directory"
+        usage
+        exit 1
+    fi
+fi
+
+# Run auto-detection for missing configuration
+auto_detect_chart_config
+
+# Set defaults if still not set
+if [[ -z "$RELEASE_NAME" ]]; then
+    RELEASE_NAME="test-release"
+fi
+if [[ -z "$NAMESPACE" ]]; then
+    NAMESPACE="default"
+fi
+
+# Validate inputs
+check_dependencies
+
+if [[ ! -d "$CHART_PATH" ]]; then
+    log_error "Chart directory not found: $CHART_PATH"
+    exit 1
+fi
+
+if [[ ! -f "$CHART_PATH/Chart.yaml" ]]; then
+    log_error "Chart.yaml not found in: $CHART_PATH"
+    exit 1
+fi
+
+if [[ ! -f "$POLICIES_PATH" && ! -d "$POLICIES_PATH" ]]; then
+    log_error "Policies file or directory not found: $POLICIES_PATH"
+    exit 1
+fi
+
+# Validate values files
+for values_file in "${VALUES_FILES[@]}"; do
+    # Make relative paths relative to chart directory
+    if [[ ! "$values_file" = /* ]]; then
+        values_file="$CHART_PATH/$values_file"
+    fi
+
+    if [[ ! -f "$values_file" ]]; then
+        log_error "Values file not found: $values_file"
+        exit 1
+    fi
+done
+
+# Build helm template command
+HELM_CMD=(helm template "$RELEASE_NAME" "$CHART_PATH" --namespace "$NAMESPACE")
+
+# Add values files
+for values_file in "${VALUES_FILES[@]}"; do
+    # Make relative paths relative to chart directory
+    if [[ ! "$values_file" = /* ]]; then
+        values_file="$CHART_PATH/$values_file"
+    fi
+    HELM_CMD+=(-f "$values_file")
+done
+
+log_info "Starting policy validation..."
+log_info "Chart: $CHART_PATH"
+log_info "Release: $RELEASE_NAME"
+log_info "Namespace: $NAMESPACE"
+log_info "Policies: $POLICIES_PATH"
+if [[ ${#VALUES_FILES[@]} -gt 0 ]]; then
+    log_info "Values files: ${VALUES_FILES[*]}"
+fi
+if [[ "$VERBOSE" == "true" ]]; then
+    log_info "Temporary directory: $TEMP_DIR"
+fi
+
+# Generate Helm templates
+log_info "Generating Helm templates..."
+if [[ "$VERBOSE" == "true" ]]; then
+    log_info "Running: ${HELM_CMD[*]}"
+fi
+
+OUTPUT_FILE="$TEMP_DIR/manifests.yaml"
+if ! "${HELM_CMD[@]}" >"$OUTPUT_FILE" 2>/dev/null; then
+    log_error "Failed to generate Helm templates"
+    if [[ "$VERBOSE" == "true" ]]; then
+        log_error "Command: ${HELM_CMD[*]}"
+        "${HELM_CMD[@]}" || true
+    fi
+    exit 1
+fi
+
+# Check if templates were generated
+if [[ ! -s "$OUTPUT_FILE" ]]; then
+    log_error "No templates generated or output file is empty"
+    exit 1
+fi
+
+log_success "Helm templates generated successfully"
+if [[ "$VERBOSE" == "true" ]]; then
+    RESOURCE_COUNT=$(grep -c "^kind:" "$OUTPUT_FILE" 2>/dev/null || echo "0")
+    log_info "Generated $RESOURCE_COUNT Kubernetes resources"
+fi
+
+# Run Kyverno policy validation
+log_info "Running Kyverno policy validation..."
+
+KYVERNO_CMD=(kyverno apply "$POLICIES_PATH" --resource "$OUTPUT_FILE")
+
+if [[ "$VERBOSE" == "true" ]]; then
+    log_info "Running: ${KYVERNO_CMD[*]}"
+    "${KYVERNO_CMD[@]}"
+    KYVERNO_EXIT_CODE=$?
+else
+    "${KYVERNO_CMD[@]}" 2>/dev/null
+    KYVERNO_EXIT_CODE=$?
+fi
+
+# Report results
+echo ""
+if [[ $KYVERNO_EXIT_CODE -eq 0 ]]; then
+    log_success "All policy validations passed! ✅"
+else
+    log_error "Policy validation failed! ❌"
+    echo ""
+    log_info "To see detailed output, run with --verbose flag:"
+    log_info "$0 --verbose $(printf '%q ' "$@")"
+
+    if [[ "$KEEP_TEMP" == "true" ]]; then
+        echo ""
+        log_info "Generated manifests available at: $OUTPUT_FILE"
+        log_info "You can manually inspect with:"
+        log_info "  kyverno apply $POLICIES_PATH --resource $OUTPUT_FILE"
+    fi
+fi
+
+exit $KYVERNO_EXIT_CODE
+
