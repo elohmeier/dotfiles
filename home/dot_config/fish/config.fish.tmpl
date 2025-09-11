@@ -35,6 +35,11 @@ if status is-interactive
       printf "\e]9;9;%s\e\\" (wslpath -w "$PWD")
     end
   end
+
+  # Switch to home directory if starting in Windows system32
+  if test "$PWD" = "/mnt/c/WINDOWS/system32"
+    cd ~
+  end
 {{- end }}
 
   source $__fish_config_dir/conf.d/shortcuts.fish
