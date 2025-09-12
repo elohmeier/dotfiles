@@ -243,3 +243,7 @@ These scripts run automatically during `chezmoi apply`:
   - Runs after applying dotfiles when bat themes change
   - Automatically rebuilds bat cache when themes are added or modified
   - Uses template hash to detect changes in theme files
+
+# Notes
+
+- the fish config is at home/dot_config/fish/config.fish.tmpl
