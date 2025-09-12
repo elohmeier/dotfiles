@@ -2,7 +2,56 @@
 
 set -e
 
-echo "Comparing helm template output between HEAD and remote main branch..."
+# Parse command line arguments for --set parameters and namespace
+SET_ARGS=()
+NAMESPACE_OVERRIDE=""
+while [[ $# -gt 0 ]]; do
+    case $1 in
+    --set)
+        SET_ARGS+=("--set" "$2")
+        shift 2
+        ;;
+    --set=*)
+        SET_ARGS+=("--set" "${1#--set=}")
+        shift
+        ;;
+    -n | --namespace)
+        NAMESPACE_OVERRIDE="$2"
+        shift 2
+        ;;
+    -n=* | --namespace=*)
+        NAMESPACE_OVERRIDE="${1#*=}"
+        shift
+        ;;
+    *)
+        echo "Unknown argument: $1"
+        echo "Usage: $0 [-n|--namespace NAMESPACE] [--set key=value] [--set key=value,key2=value2] ..."
+        exit 1
+        ;;
+    esac
+done
+
+echo "Comparing helm template output between HEAD and remote default branch..."
+
+# Auto-detect default branch
+DEFAULT_BRANCH=""
+if git remote show origin >/dev/null 2>&1; then
+    DEFAULT_BRANCH=$(git remote show origin | grep 'HEAD branch' | cut -d' ' -f5 2>/dev/null || echo "")
+fi
+if [[ -z "$DEFAULT_BRANCH" ]]; then
+    # Fallback: try common branch names
+    for branch in main master develop; do
+        if git show-ref --verify --quiet "refs/remotes/origin/$branch"; then
+            DEFAULT_BRANCH="$branch"
+            break
+        fi
+    done
+fi
+if [[ -z "$DEFAULT_BRANCH" ]]; then
+    echo "Error: Could not detect default branch"
+    exit 1
+fi
+echo "Using default branch: origin/$DEFAULT_BRANCH"
 
 # Auto-detect release name from Chart.yaml, fallback to directory name
 if [[ -f "Chart.yaml" ]] && command -v yq >/dev/null 2>&1; then
@@ -12,20 +61,25 @@ if [[ -z "$RELEASE_NAME" ]]; then
     RELEASE_NAME=$(basename "$PWD")
 fi
 
-# Auto-detect namespace from argo.yaml files
+# Auto-detect namespace from argo.yaml files or use override
 NAMESPACE=""
-for argo_file in */argo.yaml argo.yaml; do
-    if [[ -f "$argo_file" ]] && command -v yq >/dev/null 2>&1; then
-        NAMESPACE=$(yq e '.deploy_argo.spec.namespace // .spec.namespace // .namespace' "$argo_file" 2>/dev/null || echo "")
-        if [[ -n "$NAMESPACE" ]]; then
-            echo "Found namespace '$NAMESPACE' in $argo_file"
-            break
+if [[ -n "$NAMESPACE_OVERRIDE" ]]; then
+    NAMESPACE="$NAMESPACE_OVERRIDE"
+    echo "Using provided namespace: $NAMESPACE"
+else
+    for argo_file in */argo.yaml argo.yaml; do
+        if [[ -f "$argo_file" ]] && command -v yq >/dev/null 2>&1; then
+            NAMESPACE=$(yq e '.deploy_argo.spec.namespace // .spec.namespace // .namespace' "$argo_file" 2>/dev/null || echo "")
+            if [[ -n "$NAMESPACE" ]]; then
+                echo "Found namespace '$NAMESPACE' in $argo_file"
+                break
+            fi
         fi
+    done
+    if [[ -z "$NAMESPACE" ]]; then
+        NAMESPACE="default"
+        echo "Warning: Could not detect namespace, using 'default'"
     fi
-done
-if [[ -z "$NAMESPACE" ]]; then
-    NAMESPACE="default"
-    echo "Warning: Could not detect namespace, using 'default'"
 fi
 
 # Auto-detect values files
@@ -49,6 +103,9 @@ fi
 echo "Using release name: $RELEASE_NAME"
 echo "Using namespace: $NAMESPACE"
 echo "Using values files: ${VALUES_FILES[*]}"
+if [[ ${#SET_ARGS[@]} -gt 0 ]]; then
+    echo "Using set arguments: ${SET_ARGS[*]}"
+fi
 
 # Create temporary directory for comparison
 TEMP_DIR=$(mktemp -d)
@@ -56,7 +113,7 @@ trap 'rm -rf "$TEMP_DIR"' EXIT
 
 # Generate helm template for current HEAD
 echo "Generating template for current HEAD..."
-helm template -n "$NAMESPACE" "$RELEASE_NAME" . "${VALUES_FILES[@]}" >"$TEMP_DIR/head.yaml"
+helm template -n "$NAMESPACE" "$RELEASE_NAME" . "${VALUES_FILES[@]}" "${SET_ARGS[@]}" >"$TEMP_DIR/head.yaml"
 
 # Stash current changes if any
 STASH_CREATED=false
@@ -66,13 +123,13 @@ if ! git diff --quiet HEAD; then
     STASH_CREATED=true
 fi
 
-# Switch to remote main
-echo "Switching to origin/main..."
-git checkout --quiet origin/main
+# Switch to remote default branch
+echo "Switching to origin/$DEFAULT_BRANCH..."
+git checkout --quiet "origin/$DEFAULT_BRANCH"
 
-# Generate helm template for remote main
-echo "Generating template for origin/main..."
-helm template -n "$NAMESPACE" "$RELEASE_NAME" . "${VALUES_FILES[@]}" >"$TEMP_DIR/main.yaml"
+# Generate helm template for remote default branch
+echo "Generating template for origin/$DEFAULT_BRANCH..."
+helm template -n "$NAMESPACE" "$RELEASE_NAME" . "${VALUES_FILES[@]}" "${SET_ARGS[@]}" >"$TEMP_DIR/main.yaml"
 
 # Switch back to original branch
 echo "Switching back to previous branch..."
@@ -85,7 +142,7 @@ if [ "$STASH_CREATED" = true ]; then
 fi
 
 # Show the diff
-echo "Showing differences (main -> HEAD):"
+echo "Showing differences ($DEFAULT_BRANCH -> HEAD):"
 echo "=================================="
 if command -v delta >/dev/null 2>&1; then
     delta --no-gitconfig "$TEMP_DIR/main.yaml" "$TEMP_DIR/head.yaml" || true
@@ -93,7 +150,7 @@ else
     diff -u "$TEMP_DIR/main.yaml" "$TEMP_DIR/head.yaml" || true
     echo ""
     echo "Legend:"
-    echo "  - Lines removed from main"
+    echo "  - Lines removed from $DEFAULT_BRANCH"
     echo "  + Lines added in HEAD"
     echo ""
     echo "Tip: Install 'delta' for better diff visualization."
