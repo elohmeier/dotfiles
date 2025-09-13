@@ -222,19 +222,44 @@ vim.lsp.config["rust_analyzer"] = {
   },
 }
 
-vim.lsp.enable("basedpyright")
-vim.lsp.enable("bashls")
-vim.lsp.enable("helm_ls")
-vim.lsp.enable("jsonnet_ls")
-vim.lsp.enable("luals")
-vim.lsp.enable("ruff_lsp")
-vim.lsp.enable("rust_analyzer")
-vim.lsp.enable("svelte")
-vim.lsp.enable("terraformls")
-vim.lsp.enable("tinymist")
-vim.lsp.enable("tsserver")
-vim.lsp.enable("ty")
-vim.lsp.enable("yamlls")
+-- Helper function to check if command is executable
+local function is_executable(cmd)
+  if type(cmd) == "table" and #cmd > 0 then
+    return vim.fn.executable(cmd[1]) == 1
+  elseif type(cmd) == "string" then
+    return vim.fn.executable(cmd) == 1
+  end
+  return false
+end
+
+-- Enable LSP servers only if their commands are executable
+local servers_to_enable = {
+  { name = "basedpyright", config = vim.lsp.config.basedpyright },
+  { name = "bashls", config = vim.lsp.config.bashls },
+  { name = "helm_ls", config = vim.lsp.config.helm_ls },
+  { name = "jsonnet_ls", config = vim.lsp.config.jsonnet_ls },
+  { name = "luals", config = vim.lsp.config.luals },
+  { name = "ruff_lsp", config = vim.lsp.config.ruff_lsp },
+  { name = "rust_analyzer", config = vim.lsp.config.rust_analyzer },
+  { name = "svelte", config = vim.lsp.config.svelte },
+  { name = "terraformls", config = vim.lsp.config.terraformls },
+  { name = "tinymist", config = vim.lsp.config.tinymist },
+  { name = "tsserver", config = vim.lsp.config.tsserver },
+  { name = "ty", config = vim.lsp.config.ty },
+  { name = "yamlls", config = vim.lsp.config.yamlls },
+}
+
+for _, server in ipairs(servers_to_enable) do
+  if server.config and is_executable(server.config.cmd) then
+    vim.lsp.enable(server.name)
+  else
+    local cmd_name = type(server.config.cmd) == "table" and server.config.cmd[1] or server.config.cmd
+    vim.notify(
+      string.format("LSP server '%s' not enabled: command '%s' not found", server.name, cmd_name),
+      vim.log.levels.WARN
+    )
+  end
+end
 
 vim.diagnostic.config({ virtual_lines = {
   current_line = true,
