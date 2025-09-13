@@ -187,12 +187,48 @@ vim.lsp.config["yamlls"] = {
   },
 }
 
+vim.lsp.config["rust_analyzer"] = {
+  cmd = { "rust-analyzer" },
+  filetypes = { "rust" },
+  root_markers = { "Cargo.toml", "rust-project.json", ".git" },
+  single_file_support = true,
+  offset_encoding = "utf-8",
+  settings = {
+    ["rust-analyzer"] = {
+      cargo = {
+        allFeatures = true,
+        loadOutDirsFromCheck = false, -- Disable loading from build scripts
+        buildScripts = {
+          enable = false, -- Disable build scripts entirely
+          invocationStrategy = "once",
+          invocationLocation = "workspace",
+        },
+        extraEnv = {
+          CMAKE_POLICY_VERSION_MINIMUM = "3.5", -- Try to help with cmake issues
+        },
+      },
+      procMacro = {
+        enable = true,
+      },
+      checkOnSave = {
+        enable = true,
+        command = "check", -- Use 'check' instead of 'clippy' for faster builds
+        extraArgs = { "--offline" }, -- Work offline to avoid network issues
+      },
+      diagnostics = {
+        disabled = { "unresolved-proc-macro" }, -- Ignore proc macro issues
+      },
+    },
+  },
+}
+
 vim.lsp.enable("basedpyright")
 vim.lsp.enable("bashls")
 vim.lsp.enable("helm_ls")
 vim.lsp.enable("jsonnet_ls")
 vim.lsp.enable("luals")
 vim.lsp.enable("ruff_lsp")
+vim.lsp.enable("rust_analyzer")
 vim.lsp.enable("svelte")
 vim.lsp.enable("terraformls")
 vim.lsp.enable("tinymist")
