@@ -1,0 +1,216 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.13"
+# dependencies = [
+#     "click",
+#     "flask",
+# ]
+# ///
+import shutil
+import zipfile
+import subprocess
+import tempfile
+from pathlib import Path
+import click
+from flask import Flask, request
+import os
+import signal
+import threading
+import time
+
+app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB max
+profile_name = None
+launch_chrome = True
+
+@app.route('/')
+def index():
+    return f'''
+    <h3>Profile: {profile_name}</h3>
+    <form method="POST" action="/upload" enctype="multipart/form-data">
+        <input type="file" name="zipfile" accept=".zip" required>
+        <input type="submit" value="Upload">
+    </form>
+    '''
+
+@app.route('/upload', methods=['POST'])
+def upload():
+    try:
+        if 'zipfile' not in request.files:
+            return "No file uploaded"
+
+        file = request.files['zipfile']
+        if file.filename == '':
+            return "No file selected"
+
+        if not file.filename.endswith('.zip'):
+            return "Only ZIP files allowed"
+
+        with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as tmp_file:
+            file.save(tmp_file.name)
+            tmp_path = tmp_file.name
+
+        try:
+            result = replace_profile(tmp_path, profile_name, launch=launch_chrome, verbose=False)
+
+            # Schedule server shutdown after successful upload
+            def shutdown_server():
+                time.sleep(1)  # Give time for the response to be sent
+                os.kill(os.getpid(), signal.SIGTERM)
+
+            threading.Thread(target=shutdown_server).start()
+            return result
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
+
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+def replace_profile(zip_path, profile, launch=True, verbose=True):
+    """Replace Chrome profile with contents of zip file."""
+    # Verify zip
+    with zipfile.ZipFile(zip_path, 'r') as zf:
+        if zf.testzip() is not None:
+            raise zipfile.BadZipFile("Corrupted ZIP file")
+        file_count = len(zf.namelist())
+        if verbose:
+            click.echo(f"✓ Verified ZIP file ({file_count} files/folders)")
+
+    # Build profile path
+    profile_path = Path.home() / "Library" / "Application Support" / "Google" / "Chrome" / profile
+
+    if verbose:
+        click.echo(f"→ Target profile path: {profile_path}")
+
+    # Remove existing profile
+    if profile_path.exists():
+        if verbose:
+            click.echo(f"→ Removing existing profile '{profile}'...")
+        shutil.rmtree(profile_path)
+
+    # Create directory
+    profile_path.mkdir(parents=True, exist_ok=True)
+
+    # Extract and handle nested folders
+    with zipfile.ZipFile(zip_path, 'r') as zf:
+        namelist = zf.namelist()
+
+        # Normalize paths (convert backslashes to forward slashes)
+        normalized_names = [name.replace('\\', '/') for name in namelist]
+
+        # Check for common prefix
+        if normalized_names and normalized_names[0] and '/' in normalized_names[0]:
+            # Get the first directory component
+            first_dir = normalized_names[0].split('/')[0]
+            # Check if all files start with the same directory
+            if all(name.startswith(first_dir + '/') or name == first_dir + '/' for name in normalized_names if name):
+                # Files are in a subdirectory, need to strip it
+                if verbose:
+                    click.echo(f"→ Detected nested structure: '{first_dir}'")
+                    click.echo("→ Extracting contents to profile...")
+
+                # Extract each file/directory with the prefix stripped
+                for member in zf.namelist():
+                    # Normalize the member name
+                    normalized = member.replace('\\', '/')
+
+                    # Skip the directory entry itself if it exists
+                    if normalized == first_dir + '/' or normalized == first_dir:
+                        continue
+
+                    # Remove the prefix
+                    if normalized.startswith(first_dir + '/'):
+                        target_name = normalized[len(first_dir) + 1:]
+                    else:
+                        continue  # Skip files not in the expected directory
+
+                    # Create the target path
+                    target = profile_path / target_name
+
+                    # Handle directories
+                    if member.endswith('/') or member.endswith('\\'):
+                        target.mkdir(parents=True, exist_ok=True)
+                    else:
+                        # Extract file
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        with zf.open(member) as source, open(target, 'wb') as dest:
+                            shutil.copyfileobj(source, dest)
+            else:
+                # No common prefix, extract directly but fix paths
+                if verbose:
+                    click.echo(f"→ Extracting {file_count} items to profile...")
+                for member in zf.namelist():
+                    # Normalize the member name
+                    normalized = member.replace('\\', '/')
+                    target = profile_path / normalized
+
+                    if member.endswith('/') or member.endswith('\\'):
+                        target.mkdir(parents=True, exist_ok=True)
+                    else:
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        with zf.open(member) as source, open(target, 'wb') as dest:
+                            shutil.copyfileobj(source, dest)
+        else:
+            # Empty zip or no nested structure
+            if verbose:
+                click.echo(f"→ Extracting {file_count} items to profile...")
+            for member in zf.namelist():
+                # Normalize the member name
+                normalized = member.replace('\\', '/')
+                target = profile_path / normalized
+
+                if member.endswith('/') or member.endswith('\\'):
+                    target.mkdir(parents=True, exist_ok=True)
+                else:
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    with zf.open(member) as source, open(target, 'wb') as dest:
+                        shutil.copyfileobj(source, dest)
+
+    if verbose:
+        click.echo(f"✓ Profile '{profile}' replaced successfully")
+
+    # Launch Chrome if requested
+    if launch:
+        chrome_path = Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
+        if verbose:
+            click.echo(f"→ Launching Chrome with profile '{profile}'...")
+        subprocess.Popen([str(chrome_path), f"--profile-directory={profile}"])
+        return "Success"
+    else:
+        return "Success"
+
+@click.group()
+def cli():
+    """Chrome profile manager."""
+    pass
+
+@cli.command()
+@click.argument('zip_file', type=click.Path(exists=True))
+@click.option('--profile', default='chrome-profile-manager', help='Chrome profile name')
+@click.option('--no-launch', is_flag=True, help='Do not launch Chrome after replacing profile')
+def local(zip_file, profile, no_launch):
+    """Replace Chrome profile from local ZIP file."""
+    try:
+        result = replace_profile(zip_file, profile, launch=not no_launch, verbose=True)
+        click.echo(result)
+    except Exception as e:
+        click.echo(f"✗ Error: {str(e)}", err=True)
+
+@cli.command()
+@click.option('--profile', default='chrome-profile-manager', help='Chrome profile name')
+@click.option('--port', default=18080, help='Port to run server on')
+@click.option('--no-launch', is_flag=True, help='Do not launch Chrome after replacing profile')
+def server(profile, port, no_launch):
+    """Run web server for uploading profile ZIP."""
+    global profile_name, launch_chrome
+    profile_name = profile
+    launch_chrome = not no_launch
+
+    click.echo(f"Server running at http://0.0.0.0:{port}")
+    click.echo(f"Profile: {profile}")
+    if no_launch:
+        click.echo("Chrome will NOT be launched after upload")
+    app.run(host='0.0.0.0', port=port, debug=False)
+
+if __name__ == '__main__':
+    cli()
