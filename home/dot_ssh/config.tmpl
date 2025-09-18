@@ -8,6 +8,9 @@ Include ~/.orbstack/ssh/config
 Host *
     ForwardAgent no
     AddKeysToAgent yes
+{{- if .secretiveAvailable }}
+    IdentityAgent {{ .secretiveSocketPath }}
+{{- end }}
 
 Host docs.nn42.de
     IdentityFile ~/.ssh/mb4_id_ed25519

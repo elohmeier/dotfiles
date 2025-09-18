@@ -28,5 +28,16 @@ customPyPIIndex = ""
 # Enable WSL-specific workarounds and tools
 isWSL = false
 
+{{- if eq .chezmoi.os "darwin" }}
+# Secretive SSH Agent detection (macOS only)
+{{-   $secretiveSocket := joinPath .chezmoi.homeDir "Library/Containers/com.maxgoedjen.Secretive.SecretAgent/Data/socket.ssh" }}
+{{-   $socketExists := stat $secretiveSocket }}
+secretiveAvailable = {{ if $socketExists }}true{{ else }}false{{ end }}
+secretiveSocketPath = {{ $secretiveSocket | quote }}
+{{- else }}
+secretiveAvailable = false
+secretiveSocketPath = ""
+{{- end }}
+
 [secret]
 command = "{{ joinPath .chezmoi.sourceDir ".." "scripts" "chesops.sh" }}"

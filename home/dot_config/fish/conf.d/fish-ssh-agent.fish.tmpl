@@ -1,0 +1,13 @@
+{{- if .secretiveAvailable }}
+# Use Secretive as SSH agent (macOS)
+set -gx SSH_AUTH_SOCK {{ .secretiveSocketPath }}
+{{- else }}
+# Use traditional SSH agent
+if test -z "$SSH_ENV"
+    set -xg SSH_ENV $HOME/.ssh/environment
+end
+
+if not __ssh_agent_is_started
+    __ssh_agent_start
+end
+{{- end }}
