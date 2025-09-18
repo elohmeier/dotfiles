@@ -1,3 +1,10 @@
+# Set default shell to fish
+{{ if eq .chezmoi.os "darwin" -}}
+set-option -g default-shell /opt/homebrew/bin/fish
+{{- else if eq .chezmoi.os "linux" -}}
+set-option -g default-shell /home/linuxbrew/.linuxbrew/bin/fish
+{{- end }}
+
 # Split panes using Vim-like bindings (with current directory)
 # Match Neovim behavior: s for horizontal split, v for vertical split
 bind-key s split-window -v -c "#{pane_current_path}"
