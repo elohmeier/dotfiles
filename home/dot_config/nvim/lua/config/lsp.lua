@@ -89,7 +89,12 @@ vim.lsp.config["ty"] = {
   },
   single_file_support = true,
   settings = {
-    ty = {},
+    ty = {
+      experimental = {
+        autoImport = true,
+        rename = true,
+      },
+    },
   },
 }
 
