@@ -7,3 +7,4 @@
 .direnv/
 .ipynb_checkpoints/
 **/.claude/settings.local.json
+~$*
