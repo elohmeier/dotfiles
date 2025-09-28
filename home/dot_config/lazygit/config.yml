@@ -11,3 +11,8 @@ customCommands:
     command: aicommit2 --no-verify
     context: files
     output: terminal
+  - key: D
+    description: Add file to DVC
+    command: uvx --with dvc-s3 dvc add {{.SelectedFile.Name}}
+    context: files
+    output: terminal
