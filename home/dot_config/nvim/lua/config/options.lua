@@ -5,7 +5,7 @@ vim.opt.relativenumber = true
 -- Set tabs to 4 spaces
 vim.opt.tabstop = 4
 vim.opt.softtabstop = 4
-vim.opt.showtabline = 4
+vim.opt.showtabline = 2
 vim.opt.expandtab = true
 
 -- Enable auto indenting and set it to spaces

@@ -257,12 +257,6 @@ local servers_to_enable = {
 for _, server in ipairs(servers_to_enable) do
   if server.config and is_executable(server.config.cmd) then
     vim.lsp.enable(server.name)
-  else
-    local cmd_name = type(server.config.cmd) == "table" and server.config.cmd[1] or server.config.cmd
-    vim.notify(
-      string.format("LSP server '%s' not enabled: command '%s' not found", server.name, cmd_name),
-      vim.log.levels.WARN
-    )
   end
 end
 
@@ -374,7 +368,7 @@ vim.api.nvim_create_autocmd("FileType", {
       "tinymist.getDocumentMetrics",
     }) do
       local cmd_func, cmd_name, cmd_desc = create_tinymist_command(command)
-      vim.api.nvim_create_user_command(cmd_name, cmd_func, { nargs = 0, desc = cmd_desc })
+      vim.api.nvim_create_user_command(cmd_name, cmd_func, { nargs = 0, desc = cmd_desc, force = true })
     end
   end,
 })
@@ -395,11 +389,7 @@ end, { desc = "Migrate Component to Svelte 5 Syntax" })
 
 -- Add LspRestart command
 vim.api.nvim_create_user_command("LspRestart", function()
-  -- Get the current buffer
   local bufnr = vim.api.nvim_get_current_buf()
-  local filename = vim.api.nvim_buf_get_name(bufnr)
-
-  -- Get all clients attached to the current buffer
   local clients = vim.lsp.get_clients({ buffer = bufnr })
 
   if #clients == 0 then
@@ -407,26 +397,43 @@ vim.api.nvim_create_user_command("LspRestart", function()
     return
   end
 
-  -- Store client names to restart
   local client_names = {}
   for _, client in ipairs(clients) do
-    table.insert(client_names, client.name)
-    local client_name = client.name or "unknown"
-    vim.notify("Stopping LSP: " .. client_name, vim.log.levels.INFO)
-
-    -- Stop the client
+    local name = client.name or ("client_" .. client.id)
+    client_names[name] = true
+    vim.notify("Stopping LSP: " .. name, vim.log.levels.INFO)
     vim.lsp.stop_client(client.id, true)
   end
 
-  -- Re-enable clients and re-attach to buffer after a short delay
   vim.defer_fn(function()
-    for _, client_name in ipairs(client_names) do
-      vim.notify("Restarting LSP: " .. client_name, vim.log.levels.INFO)
-      vim.lsp.enable(client_name)
-    end
+    for name in pairs(client_names) do
+      vim.notify("Restarting LSP: " .. name, vim.log.levels.INFO)
 
-    -- Force LSP to re-attach to the current buffer
-    vim.cmd("edit " .. vim.fn.fnameescape(filename))
-    vim.notify("LSP clients restarted and re-attached", vim.log.levels.INFO)
-  end, 500)
+      local restarted = false
+      if vim.lsp and vim.lsp.enable then
+        local ok, err = pcall(vim.lsp.enable, name)
+        if ok then
+          restarted = true
+        else
+          vim.notify("Failed to restart LSP '" .. name .. "' via vim.lsp.enable: " .. err, vim.log.levels.WARN)
+        end
+      end
+
+      if not restarted and vim.fn.exists(":LspStart") == 2 then
+        local ok, err = pcall(vim.cmd, "LspStart " .. name)
+        if ok then
+          restarted = true
+        else
+          vim.notify("Failed to restart LSP '" .. name .. "' via :LspStart: " .. err, vim.log.levels.ERROR)
+        end
+      end
+
+      if not restarted then
+        vim.notify(
+          "No restart mechanism available for LSP '" .. name .. "'",
+          vim.log.levels.WARN
+        )
+      end
+    end
+  end, 200)
 end, { desc = "Restart LSP servers for current buffer" })

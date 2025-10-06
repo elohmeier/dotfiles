@@ -5,15 +5,13 @@ vim.g.clipboard = {
   name = 'wsl-clipboard',
   copy = {
     ['+'] = home .. '/.local/bin/wl-copy',
-    ['*'] = home .. '/.local/bin/wl-copy',
   },
   paste = {
     ['+'] = home .. '/.local/bin/wl-paste',
-    ['*'] = home .. '/.local/bin/wl-paste',
   },
   cache_enabled = true,
 }
 {{- else -}}
--- Use system clipboard
-vim.opt.clipboard = 'unnamedplus'
+-- Keep default clipboard behavior to avoid automatic copying on selection
+vim.opt.clipboard = ''
 {{- end -}}

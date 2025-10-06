@@ -1,5 +1,8 @@
 -- Autocmd to set filetype to helm for Helm chart files
+local helm_ft_group = vim.api.nvim_create_augroup("helm_filetype_detection", { clear = true })
+
 vim.api.nvim_create_autocmd({ "BufNewFile", "BufRead" }, {
+  group = helm_ft_group,
   pattern = {
     "Chart.yaml",
     "values.yaml",
