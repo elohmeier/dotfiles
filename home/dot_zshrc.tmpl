@@ -1,0 +1,20 @@
+{{- if eq .chezmoi.os "darwin" }}
+t() {
+    local session="${1:-main}"
+    [ -n "$TMUX" ] && return 0
+    if tmux has-session -t "$session" 2>/dev/null; then
+        tmux attach-session -t "$session"
+    else
+        if ! security show-keychain-info ~/Library/Keychains/login.keychain-db &>/dev/null; then
+            security unlock-keychain ~/Library/Keychains/login.keychain-db || return 1
+        fi
+        tmux new-session -s "$session"
+    fi
+}
+{{- else }}
+t() {
+    local session="${1:-main}"
+    [ -n "$TMUX" ] && return 0
+    tmux has-session -t "$session" 2>/dev/null && tmux attach-session -t "$session" || tmux new-session -s "$session"
+}
+{{- end }}
