@@ -2,7 +2,6 @@ return {
   "nvim-telescope/telescope.nvim",
   dependencies = {
     "nvim-lua/plenary.nvim",
-    { "nvim-telescope/telescope-frecency.nvim", version = "*" },
     "nvim-telescope/telescope-ui-select.nvim",
     "debugloop/telescope-undo.nvim",
   },
@@ -23,26 +22,15 @@ return {
         },
       },
       extensions = {
-        frecency = {
-          db_safe_mode = false, -- disable "remove n entries from database?" dialog
-          matcher = "fuzzy",
-        },
         ["ui-select"] = {},
         undo = {},
       },
     })
 
-    telescope.load_extension("frecency")
     telescope.load_extension("ui-select")
     telescope.load_extension("undo")
 
     -- Keymaps
-    vim.keymap.set(
-      "n",
-      "<C-p>",
-      "<cmd>Telescope frecency workspace=CWD<cr>",
-      { desc = "Find frequent or recent files" }
-    )
     vim.keymap.set("n", "<leader>/", "<cmd>Telescope live_grep<cr>", { desc = "Grep (root dir)" })
     vim.keymap.set("n", "<leader>:", "<cmd>Telescope command_history<cr>", { desc = "Command History" })
     vim.keymap.set("n", "<leader>b", "<cmd>Telescope buffers<cr>", { desc = "+buffer" })
