@@ -11,3 +11,9 @@ repos:
         language: system
         pass_filenames: false
         files: \.(json|md|toml|yaml|yml)$
+      - id: stylua
+        name: Format Lua files with stylua
+        entry: stylua
+        language: system
+        types: [lua]
+        files: ^home/dot_config/nvim/
