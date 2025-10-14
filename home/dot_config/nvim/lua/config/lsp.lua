@@ -227,6 +227,10 @@ vim.lsp.config["rust_analyzer"] = {
   },
 }
 
+-- Configure LSP logging to reduce log file size
+-- Set log level to WARN to only log warnings and errors
+vim.lsp.set_log_level("WARN")
+
 -- Helper function to check if command is executable
 local function is_executable(cmd)
   if type(cmd) == "table" and #cmd > 0 then
@@ -429,10 +433,7 @@ vim.api.nvim_create_user_command("LspRestart", function()
       end
 
       if not restarted then
-        vim.notify(
-          "No restart mechanism available for LSP '" .. name .. "'",
-          vim.log.levels.WARN
-        )
+        vim.notify("No restart mechanism available for LSP '" .. name .. "'", vim.log.levels.WARN)
       end
     end
   end, 200)
