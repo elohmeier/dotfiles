@@ -1,6 +1,30 @@
+{{- $mkcertInstalled := false -}}
+{{- $mkcertCAFile := "" -}}
+{{- with lookPath "mkcert" -}}
+  {{- $mkcertCARoot := trim (output "mkcert" "-CAROOT") -}}
+  {{- if $mkcertCARoot -}}
+    {{- $candidate := joinPath $mkcertCARoot "rootCA.pem" -}}
+    {{- if (stat $candidate) -}}
+      {{- $mkcertInstalled = true -}}
+      {{- $mkcertCAFile = $candidate -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
 {
   "policies": {
-    "Bookmarks": [],
+    "Bookmarks": [
+      {
+        "Placement": "toolbar",
+        "Title": "Grafana",
+        "URL": "https://grafana.pug-coho.ts.net/"
+      }
+    ],
+    "Certificates": {
+      "ImportEnterpriseRoots": true{{ if $mkcertInstalled }},
+      "Install": [
+        "{{ $mkcertCAFile }}"
+      ]{{ end }}
+    },
     "Cookies": {
       "Behavior": "reject-foreign",
       "BehaviorPrivateBrowsing": "reject-foreign"
@@ -49,6 +73,11 @@
         "Status": "locked",
         "Type": "boolean",
         "Value": false
+      },
+      "security.enterprise_roots.enabled": {
+        "Status": "locked",
+        "Type": "boolean",
+        "Value": true
       }
     },
     "TranslateEnabled": false
