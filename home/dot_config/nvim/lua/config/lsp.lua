@@ -91,7 +91,7 @@ vim.lsp.config["ty"] = {
   settings = {
     ty = {
       experimental = {
-        autoImport = true,
+        autoImport = false,
         rename = true,
       },
     },
