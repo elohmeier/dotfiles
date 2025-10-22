@@ -38,6 +38,7 @@ return {
       htmldjango = { "djade" },
       javascript = { "dprint" },
       json = { "dprint" },
+      just = { "just" },
       jsonnet = { "jsonnetfmt" },
       lua = { "stylua" },
       nix = { "nixfmt" },
