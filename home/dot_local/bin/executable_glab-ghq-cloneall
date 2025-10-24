@@ -78,6 +78,17 @@ def main(dry_run: bool, parallel: int):
 
     console.print(f"Found {len(all_repos)} repositories total")
 
+    # Skip personal repositories (user namespace).
+    filtered_repos = [
+        repo for repo in all_repos if repo.get("namespace", {}).get("kind") != "user"
+    ]
+
+    if not filtered_repos:
+        console.print("[yellow]No group repositories found after filtering[/yellow]")
+        return
+
+    console.print(f"Filtering down to {len(filtered_repos)} group repositories")
+
     # Check if ghq is available
     ghq_available = (
         subprocess.run(
@@ -108,11 +119,11 @@ def main(dry_run: bool, parallel: int):
 
     # Clone or update each repo
     with Progress() as progress:
-        task = progress.add_task("Processing repos...", total=len(all_repos))
+        task = progress.add_task("Processing repos...", total=len(filtered_repos))
 
         if parallel == 1:
             # Sequential processing
-            for repo in all_repos:
+            for repo in filtered_repos:
                 ssh_url = repo["ssh_url_to_repo"]
                 name = repo["path_with_namespace"]
 
@@ -132,7 +143,7 @@ def main(dry_run: bool, parallel: int):
             with ThreadPoolExecutor(max_workers=parallel) as executor:
                 futures = {
                     executor.submit(clone_repo, repo, dry_run): repo
-                    for repo in all_repos
+                    for repo in filtered_repos
                 }
 
                 for future in as_completed(futures):
