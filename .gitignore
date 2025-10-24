@@ -1,1 +1,7 @@
 *.pyc
+
+# AI Rules generated files
+.claude/agents/
+.mcp.json
+AGENTS.md
+CLAUDE.md

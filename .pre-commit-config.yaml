@@ -1,10 +1,10 @@
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: trailing-whitespace
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.14.0
+    rev: v0.14.2
     hooks:
       - id: ruff
         name: Check and fix Python code with Ruff
@@ -14,6 +14,21 @@ repos:
       - id: ruff-format
         name: Format Python code with Ruff
         files: .*\.py$
+  - repo: https://github.com/python-jsonschema/check-jsonschema
+    rev: 0.34.1
+    hooks:
+      - id: check-jsonschema
+        name: Validate pre-commit configuration
+        args:
+          - "--schemafile"
+          - "https://json.schemastore.org/pre-commit-config.json"
+        files: ^\.pre-commit-config\.yaml$
+      - id: check-jsonschema
+        name: Validate AI rulez configuration
+        args:
+          - "--schemafile"
+          - "https://raw.githubusercontent.com/Goldziher/ai-rulez/refs/heads/main/schema/ai-rules-v2.schema.json"
+        files: ^\.ai-rulez\.yaml$
   - repo: local
     hooks:
       - id: dprint
@@ -28,3 +43,9 @@ repos:
         language: system
         types: [lua]
         files: ^home/dot_config/nvim/
+      - id: ai-rulez-generate
+        name: Generate AGENTS.md/CLAUDE.md from .ai-rulez.yaml
+        entry: uvx ai-rulez generate
+        language: system
+        pass_filenames: false
+        files: ^.ai-rulez\.yaml$
