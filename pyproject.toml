@@ -24,6 +24,7 @@ backup-pg = "scripts.backup_pg:cli"
 ocauth = "scripts.ocauth:main"
 httpserve = "scripts.httpserve:main"
 chrome-profile-manager = "scripts.chrome_profile_manager:main"
+compress-dir = "scripts.compress_dir:main"
 
 [build-system]
 requires = ["uv_build>=0.9.4,<0.10.0"]
