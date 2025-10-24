@@ -107,11 +107,13 @@ def main(dry_run: bool, parallel: int):
         ssh_url = repo["ssh_url_to_repo"]
         name = repo["path_with_namespace"]
 
+        command = ["ghq", "get", "--update", ssh_url]
+
         if dry_run:
-            return f"Would run: ghq get {ssh_url}", name
+            return f"Would run: {' '.join(command)}", name
         else:
             result = subprocess.run(
-                ["ghq", "get", ssh_url],
+                command,
                 capture_output=True,
                 text=True,
             )
@@ -129,11 +131,13 @@ def main(dry_run: bool, parallel: int):
 
                 progress.update(task, description=f"Processing {name}")
 
+                command = ["ghq", "get", "--update", ssh_url]
+
                 if dry_run:
-                    console.print(f"[dim]Would run: ghq get {ssh_url}[/dim]")
+                    console.print(f"[dim]Would run: {' '.join(command)}[/dim]")
                 else:
                     subprocess.run(
-                        ["ghq", "get", ssh_url],
+                        command,
                         capture_output=True,
                     )
 
