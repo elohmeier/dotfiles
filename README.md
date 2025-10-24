@@ -54,3 +54,11 @@ chezmoi diff
 # Apply dotfiles
 chezmoi apply
 ```
+
+## Scripts
+
+Run packaged scripts directly with uv:
+
+```bash
+uvx --from git+https://github.com/elohmeier/dotfiles httpserve
+```

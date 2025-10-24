@@ -3,6 +3,17 @@ repos:
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.0
+    hooks:
+      - id: ruff
+        name: Check and fix Python code with Ruff
+        args: [--fix, --exit-zero]
+        files: .*\.py$
+        stages: [pre-push]
+      - id: ruff-format
+        name: Format Python code with Ruff
+        files: .*\.py$
   - repo: local
     hooks:
       - id: dprint

@@ -1,13 +1,6 @@
-#!/usr/bin/env -S uv run --script
-# /// script
-# requires-python = ">=3.12"
-# dependencies = [
-#     "click",
-#     "PyYAML",
-#     "requests",
-# ]
-# ///
 """OpenShift authentication tool."""
+
+from __future__ import annotations
 
 import os
 import re
@@ -193,7 +186,7 @@ def main(
     user: str | None,
     password: str | None,
     insecure: bool,
-):
+) -> None:
     """Simple OpenShift authentication tool.
 
     CLUSTER can be provided in multiple formats:
@@ -246,5 +239,3 @@ def main(
 
 if __name__ == "__main__":
     main()
-
-# vim: set ft=python:

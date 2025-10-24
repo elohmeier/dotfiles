@@ -1,13 +1,3 @@
-#!/usr/bin/env -S uv run --script
-# /// script
-# requires-python = ">=3.12"
-# dependencies = [
-#     "click",
-#     "questionary",
-#     "rich",
-# ]
-# ///
-
 import base64
 import datetime
 import os
@@ -1195,5 +1185,9 @@ def restore(ctx, backup_file, yes):
     console.print(f"Database '{db_name}' has been restored from: {backup_file}")
 
 
+def main() -> None:
+    cli(standalone_mode=True)
+
+
 if __name__ == "__main__":
-    cli()
+    main()
