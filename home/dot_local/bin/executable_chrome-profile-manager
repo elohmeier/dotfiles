@@ -4,6 +4,7 @@
 # dependencies = [
 #     "click",
 #     "flask",
+#     "waitress",
 # ]
 # ///
 import shutil
@@ -19,7 +20,7 @@ import threading
 import time
 
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB max
+app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024 * 1024  # 2GB max
 profile_name = None
 launch_chrome = True
 
@@ -202,6 +203,8 @@ def local(zip_file, profile, no_launch):
 @click.option('--no-launch', is_flag=True, help='Do not launch Chrome after replacing profile')
 def server(profile, port, no_launch):
     """Run web server for uploading profile ZIP."""
+    from waitress import serve
+
     global profile_name, launch_chrome
     profile_name = profile
     launch_chrome = not no_launch
@@ -210,7 +213,9 @@ def server(profile, port, no_launch):
     click.echo(f"Profile: {profile}")
     if no_launch:
         click.echo("Chrome will NOT be launched after upload")
-    app.run(host='0.0.0.0', port=port, debug=False)
+
+    # Use waitress for better handling of large uploads
+    serve(app, host='0.0.0.0', port=port, channel_timeout=300)
 
 if __name__ == '__main__':
     cli()
