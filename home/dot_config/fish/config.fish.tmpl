@@ -1,6 +1,7 @@
 {{/* vim: set filetype=fish: */}}
 if status is-interactive
   set -U fish_greeting
+  set -gx EDITOR nvim
 
   # Set PNPM_HOME based on OS and add to PATH
   if test (uname) = "Darwin"
