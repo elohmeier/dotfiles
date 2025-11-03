@@ -106,6 +106,14 @@ vim.lsp.config["tinymist"] = {
   offset_encoding = "utf-8",
 }
 
+vim.lsp.config["taplo"] = {
+  cmd = { "taplo", "lsp", "stdio" },
+  filetypes = { "toml" },
+  root_markers = { ".git" },
+  single_file_support = true,
+  offset_encoding = "utf-8",
+}
+
 vim.lsp.config["tsserver"] = {
   cmd = { "typescript-language-server", "--stdio" },
   filetypes = {
@@ -251,6 +259,7 @@ local servers_to_enable = {
   { name = "ruff_lsp", config = vim.lsp.config.ruff_lsp },
   { name = "rust_analyzer", config = vim.lsp.config.rust_analyzer },
   { name = "svelte", config = vim.lsp.config.svelte },
+  { name = "taplo", config = vim.lsp.config.taplo },
   { name = "terraformls", config = vim.lsp.config.terraformls },
   { name = "tinymist", config = vim.lsp.config.tinymist },
   { name = "tsserver", config = vim.lsp.config.tsserver },

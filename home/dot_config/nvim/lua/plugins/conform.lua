@@ -46,7 +46,7 @@ return {
       sh = { "shfmt" },
       svelte = { "dprint" },
       terraform = { "tofu_fmt" },
-      toml = { "dprint" },
+      toml = { "taplo" },
       typescript = { "dprint" },
       typst = { "typstyle" },
       xml = { "xmllint" },
@@ -98,6 +98,10 @@ return {
       },
       shfmt = {
         prepend_args = { "-i", "4" },
+      },
+      taplo = {
+        command = "taplo",
+        args = { "format", "--stdin-filepath", "$FILENAME", "-" },
       },
     },
     format_on_save = function(bufnr)
