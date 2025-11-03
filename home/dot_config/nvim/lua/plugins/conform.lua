@@ -41,6 +41,7 @@ return {
       just = { "just" },
       jsonnet = { "jsonnetfmt" },
       lua = { "stylua" },
+      markdown = { "rumdl" },
       nix = { "nixfmt" },
       python = { "ruff_format", "ruff_fix" },
       sh = { "shfmt" },
@@ -95,6 +96,18 @@ return {
           "$FILENAME",
           "-",
         },
+      },
+      rumdl = {
+        command = "rumdl",
+        args = {
+          "fmt",
+          "-",
+          "--stdin-filename",
+          "$FILENAME",
+          "-d",
+          "MD013", -- ignore line length
+        },
+        stdin = true,
       },
       shfmt = {
         prepend_args = { "-i", "4" },
