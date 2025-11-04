@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Windows Explorer (WSL)
+Exec=/mnt/c/Windows/explorer.exe %u
+Type=Application
+Terminal=false
+MimeType=inode/directory;
+NoDisplay=true
+TryExec=/mnt/c/Windows/explorer.exe

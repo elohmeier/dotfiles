@@ -14,6 +14,9 @@ rules:
   - name: Chezmoi Hooks
     priority: medium
     content: Store all chezmoi hook scripts under `home/.chezmoiscripts/` and reference that path in documentation or tooling updates.
+  - name: Chezmoi Ignore
+    priority: medium
+    content: Platform-specific file exclusions go in `home/.chezmoiignore.tmpl`.
   - name: External Sources
     priority: medium
     content: |
