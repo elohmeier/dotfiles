@@ -5,8 +5,6 @@ vim.api.nvim_create_autocmd({ "BufNewFile", "BufRead" }, {
   group = helm_ft_group,
   pattern = {
     "Chart.yaml",
-    "values.yaml",
-    "values.yml",
     "*/templates/*.yaml",
     "*/templates/*.tpl",
     "*/charts/*/templates/*.yaml",
