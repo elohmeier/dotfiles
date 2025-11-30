@@ -316,6 +316,11 @@ vim.keymap.set("n", "[d", function()
   })
 end, { desc = "Previous Diagnostic", silent = true })
 
+-- Show diagnostic in floating window
+vim.keymap.set("n", "<leader>e", function()
+  vim.diagnostic.open_float()
+end, { desc = "Show Diagnostic", silent = true })
+
 -- Go to definition
 vim.keymap.set("n", "<C-k>", "<cmd>lua vim.lsp.buf.definition()<CR>", { desc = "Goto Definition", silent = true })
 
