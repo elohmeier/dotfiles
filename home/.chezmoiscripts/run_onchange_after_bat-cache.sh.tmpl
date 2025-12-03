@@ -4,11 +4,4 @@
 
 set -eufo pipefail
 
-echo "Rebuilding bat cache..."
-
-if command -v bat &>/dev/null; then
-    bat cache --build
-    echo "✓ Bat cache rebuilt successfully"
-else
-    echo "⚠ Bat is not installed, skipping cache rebuild"
-fi
+command -v bat &>/dev/null && bat cache --build &>/dev/null || true
