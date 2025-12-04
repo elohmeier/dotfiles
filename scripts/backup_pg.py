@@ -1,9 +1,11 @@
 import base64
+import binascii
 import datetime
 import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import Literal
 
 import click
 import questionary
@@ -118,13 +120,97 @@ def get_kube_secret_value(
             "Please check if the secret and key exist and you have permissions."
         )
         sys.exit(1)
-    except (ValueError, base64.binascii.Error) as e:
+    except (ValueError, binascii.Error) as e:
         console.print(
             f"[bold red]Error:[/bold red] Failed to decode secret value for '{secret_name}' key '{data_key}'. Error: {e}"
         )
         sys.exit(1)
     else:
         return decoded_value
+
+
+def ensure_value(value: str | None, flag: str) -> str:
+    """Ensure a required CLI/config value is present."""
+    if value:
+        return value
+    console.print(f"[bold red]Error:[/bold red] Missing required option {flag}.")
+    sys.exit(1)
+
+
+def resolve_context_namespace(
+    kubeconfig: str, context: str | None, namespace: str | None
+) -> tuple[str, str]:
+    """Prompt/select context and namespace, ensuring strings."""
+    if not context:
+        contexts = get_kube_contexts(kubeconfig)
+        context = select_from_list(contexts, "Select the Kubernetes context")
+    context = ensure_value(context, "--context")
+
+    if not namespace:
+        namespaces = get_kube_namespaces(kubeconfig, context)
+        namespace = select_from_list(
+            namespaces, f"Select the namespace in context '{context}'"
+        )
+    namespace = ensure_value(namespace, "--namespace")
+    return context, namespace
+
+
+def resolve_db_params(
+    mode: Literal["backup", "restore"],
+    kubeconfig: str,
+    context: str,
+    namespace: str,
+    cnpg_cluster: str | None,
+    pod_name: str | None,
+    db_name: str | None,
+    db_user: str | None,
+) -> tuple[str | None, str, str, str]:
+    """Shared auto-discovery for cluster/pod/db/user."""
+    if not cnpg_cluster and (not pod_name or not db_name or not db_user):
+        cnpg_clusters = get_cnpg_clusters(kubeconfig, context, namespace)
+        cnpg_cluster = select_from_list(
+            cnpg_clusters,
+            f"Select the CloudNativePG cluster in '{namespace}'",
+        )
+
+    if cnpg_cluster:
+        console.print(
+            f"Attempting to derive config from CNPG cluster '{cnpg_cluster}'..."
+        )
+        if not pod_name:
+            pod_selector = (
+                get_cnpg_primary_pod if mode == "restore" else get_cnpg_backup_pod
+            )
+            pod_name = pod_selector(kubeconfig, context, namespace, cnpg_cluster)
+            if not pod_name:
+                console.print(
+                    f"  Could not find suitable pod for cluster '{cnpg_cluster}'"
+                )
+
+        if not db_name or not db_user:
+            db_name_found, db_owner = get_cnpg_db_info(
+                kubeconfig, context, namespace, cnpg_cluster
+            )
+            if db_name_found and not db_name:
+                db_name = db_name_found
+                console.print(f"  Derived database name: {db_name}")
+            if db_owner and not db_user:
+                db_user = db_owner
+                console.print(f"  Derived database user: {db_user}")
+
+        if not db_name:
+            db_name = questionary.text(
+                "Enter database name:", default=cnpg_cluster
+            ).ask()
+        if not db_user:
+            db_user = questionary.text(
+                "Enter database user:", default=cnpg_cluster
+            ).ask()
+
+    pod_name = ensure_value(pod_name, "--pod-name")
+    db_name = ensure_value(db_name, "--db-name")
+    db_user = ensure_value(db_user, "--db-user")
+    return cnpg_cluster, pod_name, db_name, db_user
 
 
 def kubectl_exec_dump(
@@ -834,84 +920,17 @@ def backup(
     # --- Auto-Discovery ---
     console.print("\n[bold blue]--- Auto-Discovery and Configuration ---[/bold blue]")
 
-    # Kubernetes Context
-    if not context:
-        contexts = get_kube_contexts(kubeconfig)
-        context = select_from_list(contexts, "Select the Kubernetes context")
-        if not context:
-            sys.exit(1)
-
-    # Namespace
-    if not namespace:
-        namespaces = get_kube_namespaces(kubeconfig, context)
-        namespace = select_from_list(
-            namespaces, f"Select the namespace in context '{context}'"
-        )
-        if not namespace:
-            sys.exit(1)
-
-    # CNPG Cluster and derived values
-    if not cnpg_cluster and (not pod_name or not db_name or not db_user):
-        cnpg_clusters = get_cnpg_clusters(kubeconfig, context, namespace)
-        cnpg_cluster = select_from_list(
-            cnpg_clusters,
-            f"Select the CloudNativePG cluster in '{namespace}'",
-        )
-        # Don't exit if no CNPG cluster, maybe user provided manual overrides
-
-    if cnpg_cluster:
-        console.print(
-            f"Attempting to derive config from CNPG cluster '{cnpg_cluster}'..."
-        )
-        if not pod_name:
-            pod_name = get_cnpg_backup_pod(kubeconfig, context, namespace, cnpg_cluster)
-            if not pod_name:
-                console.print(
-                    f"  Could not find suitable pod for backup from cluster '{cnpg_cluster}'"
-                )
-
-        # Try to get database name and owner from CNPG cluster spec
-        if not db_name or not db_user:
-            db_name_found, db_owner = get_cnpg_db_info(
-                kubeconfig, context, namespace, cnpg_cluster
-            )
-            if db_name_found and not db_name:
-                db_name = db_name_found
-                console.print(f"  Derived database name: {db_name}")
-            if db_owner and not db_user:
-                db_user = db_owner
-                console.print(f"  Derived database user: {db_user}")
-
-        # Fall back to prompting if we couldn't get the info from the cluster spec
-        if not db_name:
-            db_name = questionary.text(
-                "Enter database name:", default=cnpg_cluster
-            ).ask()
-        if not db_user:
-            db_user = questionary.text(
-                "Enter database user:", default=cnpg_cluster
-            ).ask()
-
-    # --- Final Parameter Validation ---
-    missing_params = []
-    if not context:
-        missing_params.append("--context")
-    if not namespace:
-        missing_params.append("--namespace")
-    if not pod_name:
-        missing_params.append("--pod-name")
-    if not db_name:
-        missing_params.append("--db-name")
-    if not db_user:
-        missing_params.append("--db-user")
-
-    if missing_params:
-        console.print(
-            "[bold red]Error:[/bold red] The following required parameters are missing after auto-discovery:"
-        )
-        for param in missing_params:
-            console.print(f"  - {param}")
-        sys.exit(1)
+    context, namespace = resolve_context_namespace(kubeconfig, context, namespace)
+    cnpg_cluster, pod_name, db_name, db_user = resolve_db_params(
+        "backup",
+        kubeconfig,
+        context,
+        namespace,
+        cnpg_cluster,
+        pod_name,
+        db_name,
+        db_user,
+    )
 
     # --- Setup Backup File Path ---
     console.print("\n[bold blue]--- Setting Up Backup File Path ---[/bold blue]")
@@ -1057,86 +1076,17 @@ def restore(ctx, backup_file, yes):
     # --- Auto-Discovery ---
     console.print("\n[bold blue]--- Auto-Discovery and Configuration ---[/bold blue]")
 
-    # Kubernetes Context
-    if not context:
-        contexts = get_kube_contexts(kubeconfig)
-        context = select_from_list(contexts, "Select the Kubernetes context")
-        if not context:
-            sys.exit(1)
-
-    # Namespace
-    if not namespace:
-        namespaces = get_kube_namespaces(kubeconfig, context)
-        namespace = select_from_list(
-            namespaces, f"Select the namespace in context '{context}'"
-        )
-        if not namespace:
-            sys.exit(1)
-
-    # CNPG Cluster and derived values
-    if not cnpg_cluster and (not pod_name or not db_name or not db_user):
-        cnpg_clusters = get_cnpg_clusters(kubeconfig, context, namespace)
-        cnpg_cluster = select_from_list(
-            cnpg_clusters,
-            f"Select the CloudNativePG cluster in '{namespace}'",
-        )
-
-    if cnpg_cluster:
-        console.print(
-            f"Attempting to derive config from CNPG cluster '{cnpg_cluster}'..."
-        )
-        if not pod_name:
-            # For restore operations, we need the primary pod (not replica)
-            pod_name = get_cnpg_primary_pod(
-                kubeconfig, context, namespace, cnpg_cluster
-            )
-            if not pod_name:
-                console.print(
-                    f"  Could not find primary pod for cluster '{cnpg_cluster}'"
-                )
-
-        # Try to get database name and owner from CNPG cluster spec
-        if not db_name or not db_user:
-            db_name_found, db_owner = get_cnpg_db_info(
-                kubeconfig, context, namespace, cnpg_cluster
-            )
-            if db_name_found and not db_name:
-                db_name = db_name_found
-                console.print(f"  Derived database name: {db_name}")
-            if db_owner and not db_user:
-                db_user = db_owner
-                console.print(f"  Derived database user: {db_user}")
-
-        # Fall back to prompting if we couldn't get the info from the cluster spec
-        if not db_name:
-            db_name = questionary.text(
-                "Enter database name:", default=cnpg_cluster
-            ).ask()
-        if not db_user:
-            db_user = questionary.text(
-                "Enter database user:", default=cnpg_cluster
-            ).ask()
-
-    # --- Final Parameter Validation ---
-    missing_params = []
-    if not context:
-        missing_params.append("--context")
-    if not namespace:
-        missing_params.append("--namespace")
-    if not pod_name:
-        missing_params.append("--pod-name")
-    if not db_name:
-        missing_params.append("--db-name")
-    if not db_user:
-        missing_params.append("--db-user")
-
-    if missing_params:
-        console.print(
-            "[bold red]Error:[/bold red] The following required parameters are missing after auto-discovery:"
-        )
-        for param in missing_params:
-            console.print(f"  - {param}")
-        sys.exit(1)
+    context, namespace = resolve_context_namespace(kubeconfig, context, namespace)
+    cnpg_cluster, pod_name, db_name, db_user = resolve_db_params(
+        "restore",
+        kubeconfig,
+        context,
+        namespace,
+        cnpg_cluster,
+        pod_name,
+        db_name,
+        db_user,
+    )
 
     # --- Display Confirmation ---
     console.print("\n[bold blue]--- Restore Plan ---[/bold blue]")
