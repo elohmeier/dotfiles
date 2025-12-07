@@ -70,3 +70,34 @@ install-extras:
     EOF
 
     echo "Extra packages installed successfully!"
+
+# Generate age key from SSH key for sops/mise
+setup-age-key ssh_key="~/.ssh/id_ed25519":
+    #!/bin/bash
+    set -eufo pipefail
+
+    SSH_KEY="{{"{{"}} ssh_key {{"}}"}}"
+    SSH_KEY="${SSH_KEY/#\~/$HOME}"
+    AGE_KEY_DIR="$HOME/.config/sops/age"
+    AGE_KEY_FILE="$AGE_KEY_DIR/keys.txt"
+
+    if [ ! -f "$SSH_KEY" ]; then
+        echo "SSH key not found: $SSH_KEY"
+        exit 1
+    fi
+
+    if ! command -v ssh-to-age &> /dev/null; then
+        echo "ssh-to-age not found. Run: djust install-extras"
+        exit 1
+    fi
+
+    mkdir -p "$AGE_KEY_DIR"
+
+    echo "Converting SSH key to age key..."
+    echo "# generated from $SSH_KEY" > "$AGE_KEY_FILE"
+    ssh-to-age -private-key -i "$SSH_KEY" >> "$AGE_KEY_FILE"
+
+    echo "Age key written to: $AGE_KEY_FILE"
+    echo ""
+    echo "Public key (for .sops.yaml):"
+    ssh-to-age -i "${SSH_KEY}.pub"
