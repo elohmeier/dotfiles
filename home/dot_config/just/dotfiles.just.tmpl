@@ -1,0 +1,72 @@
+{{/* vim: set filetype=just: */}}
+# Dotfiles task runner - run with: djust <recipe>
+
+# Install extra development packages via Homebrew
+install-extras:
+    #!/bin/bash
+    set -eufo pipefail
+
+    if ! command -v brew &> /dev/null; then
+        echo "Homebrew not found. Skipping package installation."
+        echo "To install Homebrew, run:"
+        echo "  /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
+        exit 1
+    fi
+
+    brew bundle --file=/dev/stdin <<'EOF'
+    tap "derailed/k9s"
+    tap "elohmeier/tap"
+    tap "f1bonacc1/tap"
+    tap "oven-sh/bun"
+    brew "atuin"
+    brew "bash-language-server"
+    brew "oven-sh/bun/bun"
+    brew "derailed/k9s/k9s"
+    brew "dprint"
+    brew "elohmeier/tap/jsonnet-language-server"
+    brew "elohmeier/tap/ssh-to-age"
+    brew "entr"
+    brew "f1bonacc1/tap/process-compose"
+    brew "gh"
+    brew "git"
+    brew "git-delta"
+    brew "git-lfs"
+    brew "go"
+    brew "go-jsonnet"
+    brew "gnupg"
+    brew "helm"
+    brew "jsonnet-bundler"
+    brew "lazygit"
+    brew "lua-language-server"
+    brew "make"
+    brew "minio-mc"
+    brew "neovim"
+    brew "opentofu"
+{{- if eq .chezmoi.os "darwin" }}
+    brew "pinentry-mac"
+{{- end }}
+    brew "pnpm"
+    brew "ripgrep"
+    brew "rsync"
+    brew "shellcheck"
+    brew "shfmt"
+    brew "stylua"
+    brew "taplo"
+    brew "tinymist"
+    brew "typst"
+    brew "typstyle"
+    brew "watch"
+    brew "yazi"
+    brew "yq"
+{{- if eq .chezmoi.os "darwin" }}
+    cask "db-browser-for-sqlite"
+    cask "firefox"
+    cask "ghostty"
+    cask "google-chrome"
+    cask "orbstack"
+    cask "rectangle"
+    cask "stats"
+{{- end }}
+    EOF
+
+    echo "Extra packages installed successfully!"
