@@ -39,6 +39,7 @@ alias nbconvert 'jupyter nbconvert --to script --stdout'
 alias tree 'eza --tree'
 alias vi nvim
 alias vim nvim
+alias djust "just --justfile $HOME/.config/just/dotfiles.just"
 
 # Only use orb for nix if nix is not directly available but orb is
 if not command -q nix; and command -q orb
