@@ -1,3 +1,5 @@
+**/.claude/settings.local.json
+*.pyc
 *.sqlite3-journal
 *.swp
 *~
@@ -5,7 +7,6 @@
 .aider*cache*
 .aider*history*
 .direnv/
-.ipynb_checkpoints/
-**/.claude/settings.local.json
-~$*
 .gradle-home/
+.ipynb_checkpoints/
+~$*
