@@ -6,13 +6,20 @@ Chezmoi-managed dotfiles repository and Python scripts collection.
 - Platform-specific file exclusions go in `home/.chezmoiignore.tmpl`.
 - Find the shortest and most concise implementation possible. Avoid error handling and backwards compatibility if possible.
 
-## External Sources
+## Relevant Sources for your reference
 
-- Chezmoi source code: `$HOME/repos/github.com/twpayne/chezmoi`
-- Chezmoi reference: `$HOME/repos/github.com/twpayne/chezmoi/assets/chezmoi.io/docs/reference/index.md`
-- Click source code: `$HOME/repos/github.com/pallets/click`
-- Rich source code: `$HOME/repos/github.com/Textualize/rich`
-- Rich-click source code: `$HOME/repos/github.com/ewels/rich-click`
+- $HOME/repos/github.com/Textualize/rich
+- $HOME/repos/github.com/ewels/rich-click
+- $HOME/repos/github.com/folke/tokyonight.nvim
+- $HOME/repos/github.com/pallets/click
+- $HOME/repos/github.com/scottmckendry/cyberdream.nvim/extras/helix/cyberdream.toml
+- $HOME/repos/github.com/twpayne/chezmoi
+- $HOME/repos/github.com/twpayne/chezmoi/assets/chezmoi.io/docs/reference/index.md
+
+## Theming
+
+- Valid themes: `tokyonight_day`, `tokyonight_night`, `cyberdream_light`, `cyberdream`
+- Use `{{ template "theme" . }}` in templates to get the validated theme name
 
 ## Python
 

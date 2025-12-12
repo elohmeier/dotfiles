@@ -19,9 +19,6 @@ displayConfig = {{ output (joinPath .chezmoi.sourceDir ".." "scripts" "get-displ
 enableEmail = false
 enableSecrets = false
 
-# Install only essential packages (false = install all packages)
-minimalPackages = true
-
 customCABundle = ""
 customPyPIIndex = ""
 
@@ -38,6 +35,9 @@ secretiveSocketPath = {{ $secretiveSocket | quote }}
 secretiveAvailable = false
 secretiveSocketPath = ""
 {{- end }}
+
+# available themes: "tokyonight_day", "tokyonight_night", "cyberdream_light", "cyberdream" (dark)
+theme = "tokyonight_day"
 
 [secret]
 command = "{{ joinPath .chezmoi.sourceDir ".." "scripts" "chesops.sh" }}"

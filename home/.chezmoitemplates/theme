@@ -1,0 +1,6 @@
+{{- $validThemes := list "tokyonight_day" "tokyonight_night" "cyberdream_light" "cyberdream" -}}
+{{- $theme := .theme | default "tokyonight_day" -}}
+{{- if not (has $theme $validThemes) -}}
+{{-   fail (printf "Invalid theme '%s'. Valid themes: %s" $theme ($validThemes | join ", ")) -}}
+{{- end -}}
+{{- $theme -}}

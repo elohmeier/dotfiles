@@ -2,8 +2,7 @@
 
 # Hint: Reload the config using Cmd+Shift+,
 
-#theme = light:tokyonight-day,dark:tokyonight
-theme = light:GitHub Light Default,dark:GitHub Dark Default
+theme = {{ template "theme" . }}
 unfocused-split-opacity = 0.8
 
 {{ if eq .displayConfig "external" }}

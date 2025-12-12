@@ -1,0 +1,90 @@
+{{- $theme := .theme | default "tokyonight_day" -}}
+{{- if eq $theme "tokyonight_day" -}}
+activeBorderColor:
+  - "#b15c00"
+  - bold
+inactiveBorderColor:
+  - "#4094a3"
+searchingActiveBorderColor:
+  - "#b15c00"
+  - bold
+optionsTextColor:
+  - "#2e7de9"
+selectedLineBgColor:
+  - "#b7c1e3"
+cherryPickedCommitFgColor:
+  - "#2e7de9"
+cherryPickedCommitBgColor:
+  - "#9854f1"
+markedBaseCommitFgColor:
+  - "#2e7de9"
+markedBaseCommitBgColor:
+  - "#8c6c3e"
+unstagedChangesColor:
+  - "#c64343"
+defaultFgColor:
+  - "#3760bf"
+{{- else if eq $theme "tokyonight_night" -}}
+activeBorderColor:
+  - "#ff9e64"
+  - bold
+inactiveBorderColor:
+  - "#27a1b9"
+searchingActiveBorderColor:
+  - "#ff9e64"
+  - bold
+optionsTextColor:
+  - "#7aa2f7"
+selectedLineBgColor:
+  - "#283457"
+cherryPickedCommitFgColor:
+  - "#7aa2f7"
+cherryPickedCommitBgColor:
+  - "#bb9af7"
+markedBaseCommitFgColor:
+  - "#7aa2f7"
+markedBaseCommitBgColor:
+  - "#e0af68"
+unstagedChangesColor:
+  - "#db4b4b"
+defaultFgColor:
+  - "#c0caf5"
+{{- else if eq $theme "cyberdream" -}}
+activeBorderColor:
+  - "#5ef1ff"
+inactiveBorderColor:
+  - "#7b8496"
+searchingActiveBorderColor:
+  - "#ff5ef1"
+optionsTextColor:
+  - "#3c4048"
+selectedLineBgColor:
+  - "#3c4048"
+cherryPickedCommitBgColor:
+  - "#3c4048"
+cherryPickedCommitFgColor:
+  - "#ff5ea0"
+unstagedChangesColor:
+  - "#ffbd5e"
+defaultFgColor:
+  - "#ffffff"
+{{- else if eq $theme "cyberdream_light" -}}
+activeBorderColor:
+  - "#008c99"
+inactiveBorderColor:
+  - "#7b8496"
+searchingActiveBorderColor:
+  - "#d100bf"
+optionsTextColor:
+  - "#acacac"
+selectedLineBgColor:
+  - "#acacac"
+cherryPickedCommitBgColor:
+  - "#acacac"
+cherryPickedCommitFgColor:
+  - "#f40064"
+unstagedChangesColor:
+  - "#d17c00"
+defaultFgColor:
+  - "#16181a"
+{{- end -}}

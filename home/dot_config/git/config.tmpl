@@ -1,123 +1,153 @@
+# vim: ft=toml
+
 [branch]
-        sort = "-committerdate"
+sort = "-committerdate"
 
 [branch "main"]
-        rebase = true
+rebase = true
 
 [branch "master"]
-        rebase = true
+rebase = true
 
 [column]
-        ui = "auto"
+ui = "auto"
 
 [commit]
-        gpgSign = false
-        verbose = true
+gpgSign = false
+verbose = true
 
 [core]
-        pager = "delta"
+pager = "delta"
 
 [delta]
-        features = "tokyonight_day"
-        navigate = true
-        line-numbers = true
-        side-by-side = false
-        hyperlinks = true
-        file-decoration-style = "blue ul"
-        hunk-header-decoration-style = "blue box"
-        whitespace-error-style = "22 reverse"
+features = "{{- template "theme" . -}}"
+navigate = true
+line-numbers = true
+side-by-side = false
+hyperlinks = true
+file-decoration-style = "blue ul"
+hunk-header-decoration-style = "blue box"
+whitespace-error-style = "22 reverse"
 
 [delta "tokyonight_day"]
-        line-numbers-minus-style = "#c25d64"
-        line-numbers-plus-style = "#399a96"
-        line-numbers-zero-style = "#a8aecb"
-        minus-emph-style = "syntax \"#d99ea2\""
-        minus-empty-line-marker-style = "syntax \"#dfccd4\""
-        minus-non-emph-style = "syntax \"#dfccd4\""
-        minus-style = "syntax \"#dfccd4\""
-        plus-emph-style = "syntax \"#57a7bc\""
-        plus-empty-line-marker-style = "syntax \"#aecde6\""
-        plus-non-emph-style = "syntax \"#aecde6\""
-        plus-style = "syntax \"#aecde6\""
-        syntax-theme = "tokyonight_day"
+line-numbers-minus-style = "#c25d64"
+line-numbers-plus-style = "#399a96"
+line-numbers-zero-style = "#a8aecb"
+minus-emph-style = "syntax \"#d99ea2\""
+minus-empty-line-marker-style = "syntax \"#dfccd4\""
+minus-non-emph-style = "syntax \"#dfccd4\""
+minus-style = "syntax \"#dfccd4\""
+plus-emph-style = "syntax \"#57a7bc\""
+plus-empty-line-marker-style = "syntax \"#aecde6\""
+plus-non-emph-style = "syntax \"#aecde6\""
+plus-style = "syntax \"#aecde6\""
+syntax-theme = "tokyonight_day"
 
 [delta "tokyonight_night"]
-        line-numbers-minus-style = "#b2555b"
-        line-numbers-plus-style = "#266d6a"
-        line-numbers-zero-style = "#3b4261"
-        minus-emph-style = "syntax \"#713137\""
-        minus-empty-line-marker-style = "syntax \"#37222c\""
-        minus-non-emph-style = "syntax \"#37222c\""
-        minus-style = "syntax \"#37222c\""
-        plus-emph-style = "syntax \"#2c5a66\""
-        plus-empty-line-marker-style = "syntax \"#20303b\""
-        plus-non-emph-style = "syntax \"#20303b\""
-        plus-style = "syntax \"#20303b\""
-        syntax-theme = "tokyonight_night"
+line-numbers-minus-style = "#b2555b"
+line-numbers-plus-style = "#266d6a"
+line-numbers-zero-style = "#3b4261"
+minus-emph-style = "syntax \"#713137\""
+minus-empty-line-marker-style = "syntax \"#37222c\""
+minus-non-emph-style = "syntax \"#37222c\""
+minus-style = "syntax \"#37222c\""
+plus-emph-style = "syntax \"#2c5a66\""
+plus-empty-line-marker-style = "syntax \"#20303b\""
+plus-non-emph-style = "syntax \"#20303b\""
+plus-style = "syntax \"#20303b\""
+syntax-theme = "tokyonight_night"
+
+[delta "cyberdream"]
+line-numbers-minus-style = "#ff6e5e"
+line-numbers-plus-style = "#5eff6c"
+line-numbers-zero-style = "#7b8496"
+minus-emph-style = "syntax \"#5c2a2a\""
+minus-empty-line-marker-style = "syntax \"#3c2020\""
+minus-non-emph-style = "syntax \"#3c2020\""
+minus-style = "syntax \"#3c2020\""
+plus-emph-style = "syntax \"#2a4a2a\""
+plus-empty-line-marker-style = "syntax \"#203c20\""
+plus-non-emph-style = "syntax \"#203c20\""
+plus-style = "syntax \"#203c20\""
+syntax-theme = "cyberdream"
+
+[delta "cyberdream-light"]
+line-numbers-minus-style = "#d11500"
+line-numbers-plus-style = "#008b0c"
+line-numbers-zero-style = "#7b8496"
+minus-emph-style = "syntax \"#f5c6c6\""
+minus-empty-line-marker-style = "syntax \"#fce0e0\""
+minus-non-emph-style = "syntax \"#fce0e0\""
+minus-style = "syntax \"#fce0e0\""
+plus-emph-style = "syntax \"#c6f5c6\""
+plus-empty-line-marker-style = "syntax \"#e0fce0\""
+plus-non-emph-style = "syntax \"#e0fce0\""
+plus-style = "syntax \"#e0fce0\""
+syntax-theme = "cyberdream-light"
 
 [diff]
-        algorithm = "histogram"
-        colorMoved = "plain"
-        mnemonicPrefix = true
-        renames = true
+algorithm = "histogram"
+colorMoved = "plain"
+mnemonicPrefix = true
+renames = true
 
 [diff "jupytext"]
-        textconv = "jupytext --to=markdown --output=-"
+textconv = "jupytext --to=markdown --output=-"
 
 [fetch]
-        all = true
-        prune = true
-        pruneTags = true
+all = true
+prune = true
+pruneTags = true
 
 [filter "lfs"]
-        clean = "git-lfs clean -- %f"
-        process = "git-lfs filter-process"
-        required = true
-        smudge = "git-lfs smudge -- %f"
+clean = "git-lfs clean -- %f"
+process = "git-lfs filter-process"
+required = true
+smudge = "git-lfs smudge -- %f"
 
 [ghq]
-        root = ~/repos
+root = ~/repos
 
 [gpg]
-        format = "openpgp"
+format = "openpgp"
 
 [gpg "openpgp"]
-        program = "gpg"
+program = "gpg"
 
 [help]
-        autocorrect = "prompt"
+autocorrect = "prompt"
 
 [init]
-        defaultBranch = "main"
+defaultBranch = "main"
 
 [interactive]
-        diffFilter = "delta --color-only"
+diffFilter = "delta --color-only"
 
 [merge]
-        conflictstyle = "zdiff3"
+conflictstyle = "zdiff3"
 
 [pull]
-        rebase = true
+rebase = true
 
 [push]
-        autoSetupRemote = true
-        default = "simple"
-        followTags = true
+autoSetupRemote = true
+default = "simple"
+followTags = true
 
 [rebase]
-        autoSquash = true
-        autoStash = true
-        updateRefs = true
+autoSquash = true
+autoStash = true
+updateRefs = true
 
 [rerere]
-        autoupdate = true
-        enabled = true
+autoupdate = true
+enabled = true
 
 [tag]
-        gpgSign = false
-        sort = "version:refname"
+gpgSign = false
+sort = "version:refname"
 
 [user]
-        email = "{{ .email }}"
-        name = "{{ .name }}"
-        signingKey = "0x807BC3355DA0F069"
+email = "{{ .email }}"
+name = "{{ .name }}"
+signingKey = "0x807BC3355DA0F069"

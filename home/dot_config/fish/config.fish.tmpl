@@ -2,11 +2,14 @@
 if status is-interactive
   set -U fish_greeting
   set -gx EDITOR nvim
+  fish_config theme choose "{{ template "theme" . }}"
 
   # Set PNPM_HOME based on OS and add to PATH
   if test (uname) = "Darwin"
     # macOS path
     set -gx PNPM_HOME "$HOME/Library/pnpm"
+    # Add Homebrew rustup to PATH
+    fish_add_path (brew --prefix)/opt/rustup/bin
   else
     # Linux/other path
     set -gx PNPM_HOME "$HOME/.local/share/pnpm"
@@ -22,11 +25,14 @@ if status is-interactive
   end
 
   # Set bat theme
-  set -gx BAT_THEME tokyonight_day
+  set -gx BAT_THEME "{{- template "theme" . -}}"
+
+  # Set fzf theme
+  set -gx FZF_DEFAULT_OPTS "$FZF_DEFAULT_OPTS --highlight-line --info=inline-right --ansi --layout=reverse --border=none {{ includeTemplate "fzf-theme" . }}"
 
   # Set LS_COLORS using vivid if available and not already set
   if command -q vivid; and not set -q LS_COLORS
-    set -Ux LS_COLORS (vivid generate ayu)
+    set -Ux LS_COLORS (vivid generate "$HOME/.config/vivid/themes/{{- template "theme" . -}}.yaml")
   end
 
 {{- if .isWSL }}

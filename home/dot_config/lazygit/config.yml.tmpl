@@ -1,4 +1,13 @@
+# vim: ft=yaml
 # yaml-language-server: $schema=https://raw.githubusercontent.com/jesseduffield/lazygit/master/schema/config.json
+
+gui:
+  border: rounded
+{{- $themeContent := includeTemplate "lazygit-theme" . -}}
+{{- if $themeContent }}
+  theme:
+{{ $themeContent | indent 4 }}
+{{- end }}
 
 customCommands:
   - key: <c-a>
@@ -13,6 +22,6 @@ customCommands:
     output: terminal
   - key: D
     description: Add file to DVC
-    command: uvx --with dvc-s3 dvc add {{.SelectedFile.Name}}
+    command: uvx --with dvc-s3 dvc add {{ "{{.SelectedFile.Name}}" }}
     context: files
     output: terminal
