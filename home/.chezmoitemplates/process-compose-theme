@@ -1,0 +1,150 @@
+{{- $theme := .theme | default "tokyonight_day" -}}
+{{- if eq $theme "tokyonight_day" -}}
+style:
+  name: tokyonight_day
+  body:
+    fgColor: "#3760bf"
+    bgColor: "#d0d5e3"
+    secondaryTextColor: "#6172b0"
+    tertiaryTextColor: "#b7c1e3"
+    borderColor: "#a8aecb"
+  stat_table:
+    keyFgColor: "#8c6c3e"
+    valueFgColor: "#3760bf"
+    logoColor: "#8c6c3e"
+  proc_table:
+    fgColor: "#2e7de9"
+    fgWarning: "#8c6c3e"
+    fgPending: "#8990b3"
+    fgCompleted: "#587539"
+    fgError: "#c64343"
+    headerFgColor: "#3760bf"
+  help:
+    fgColor: "#188092"
+    keyColor: "#3760bf"
+    hlColor: "#587539"
+    categoryFgColor: "#006a83"
+  dialog:
+    fgColor: "#188092"
+    bgColor: "#b4b5b9"
+    contrastBgColor: "#e1e2e7"
+    attentionBgColor: "#c64343"
+    buttonFgColor: "#b4b5b9"
+    buttonBgColor: "#c4c8da"
+    buttonFocusFgColor: "#b4b5b9"
+    buttonFocusBgColor: "#2e7de9"
+    labelFgColor: "#8c6c3e"
+    fieldFgColor: "#b4b5b9"
+    fieldBgColor: "#92a6d5"
+{{- else if eq $theme "tokyonight_night" -}}
+style:
+  name: tokyonight_night
+  body:
+    fgColor: "#c0caf5"
+    bgColor: "#16161e"
+    secondaryTextColor: "#a9b1d6"
+    tertiaryTextColor: "#283457"
+    borderColor: "#3b4261"
+  stat_table:
+    keyFgColor: "#e0af68"
+    valueFgColor: "#c0caf5"
+    logoColor: "#e0af68"
+  proc_table:
+    fgColor: "#7aa2f7"
+    fgWarning: "#e0af68"
+    fgPending: "#545c7e"
+    fgCompleted: "#9ece6a"
+    fgError: "#db4b4b"
+    headerFgColor: "#c0caf5"
+  help:
+    fgColor: "#2ac3de"
+    keyColor: "#c0caf5"
+    hlColor: "#9ece6a"
+    categoryFgColor: "#27a1b9"
+  dialog:
+    fgColor: "#2ac3de"
+    bgColor: "#1a1b26"
+    contrastBgColor: "#24283b"
+    attentionBgColor: "#db4b4b"
+    buttonFgColor: "#1a1b26"
+    buttonBgColor: "#3b4261"
+    buttonFocusFgColor: "#1a1b26"
+    buttonFocusBgColor: "#7aa2f7"
+    labelFgColor: "#e0af68"
+    fieldFgColor: "#1a1b26"
+    fieldBgColor: "#565f89"
+{{- else if eq $theme "cyberdream" -}}
+style:
+  name: cyberdream
+  body:
+    fgColor: "#ffffff"
+    bgColor: "#16181a"
+    secondaryTextColor: "#7b8496"
+    tertiaryTextColor: "#3c4048"
+    borderColor: "#7b8496"
+  stat_table:
+    keyFgColor: "#ffbd5e"
+    valueFgColor: "#ffffff"
+    logoColor: "#ffbd5e"
+  proc_table:
+    fgColor: "#5ef1ff"
+    fgWarning: "#ffbd5e"
+    fgPending: "#7b8496"
+    fgCompleted: "#5eff6c"
+    fgError: "#ff6e5e"
+    headerFgColor: "#ffffff"
+  help:
+    fgColor: "#5ef1ff"
+    keyColor: "#ffffff"
+    hlColor: "#5eff6c"
+    categoryFgColor: "#5ef1ff"
+  dialog:
+    fgColor: "#5ef1ff"
+    bgColor: "#16181a"
+    contrastBgColor: "#3c4048"
+    attentionBgColor: "#ff6e5e"
+    buttonFgColor: "#16181a"
+    buttonBgColor: "#3c4048"
+    buttonFocusFgColor: "#16181a"
+    buttonFocusBgColor: "#5ef1ff"
+    labelFgColor: "#ffbd5e"
+    fieldFgColor: "#16181a"
+    fieldBgColor: "#7b8496"
+{{- else if eq $theme "cyberdream_light" -}}
+style:
+  name: cyberdream_light
+  body:
+    fgColor: "#16181a"
+    bgColor: "#ffffff"
+    secondaryTextColor: "#7b8496"
+    tertiaryTextColor: "#acacac"
+    borderColor: "#7b8496"
+  stat_table:
+    keyFgColor: "#d17c00"
+    valueFgColor: "#16181a"
+    logoColor: "#d17c00"
+  proc_table:
+    fgColor: "#008c99"
+    fgWarning: "#d17c00"
+    fgPending: "#7b8496"
+    fgCompleted: "#008b0c"
+    fgError: "#d11500"
+    headerFgColor: "#16181a"
+  help:
+    fgColor: "#008c99"
+    keyColor: "#16181a"
+    hlColor: "#008b0c"
+    categoryFgColor: "#008c99"
+  dialog:
+    fgColor: "#008c99"
+    bgColor: "#ffffff"
+    contrastBgColor: "#acacac"
+    attentionBgColor: "#d11500"
+    buttonFgColor: "#ffffff"
+    buttonBgColor: "#acacac"
+    buttonFocusFgColor: "#ffffff"
+    buttonFocusBgColor: "#008c99"
+    labelFgColor: "#d17c00"
+    fieldFgColor: "#ffffff"
+    fieldBgColor: "#7b8496"
+{{- end -}}
