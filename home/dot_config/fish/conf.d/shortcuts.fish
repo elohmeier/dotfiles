@@ -26,6 +26,7 @@ abbr --add -- rff 'ruff format . && ruff check . --unsafe-fixes'
 abbr --add -- y yazi
 
 alias gaapf 'git add . && git commit --amend --no-edit && git push --force-with-lease'
+alias ww 'git add . && git commit -m wip'
 alias gapf 'git commit --amend --no-edit && git push --force-with-lease'
 alias gg lazygit
 alias grep 'grep --color'
