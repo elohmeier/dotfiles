@@ -19,7 +19,9 @@ RUN /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/instal
 ENV PATH="/home/linuxbrew/.linuxbrew/bin:${PATH}"
 
 RUN brew install \
-    neovim fish bat btop eza fd fzf just ncdu sops uv vivid zoxide chezmoi
+    neovim fish bat btop eza fd fzf just ncdu sops uv vivid zoxide chezmoi \
+    && brew cleanup --prune=all \
+    && rm -rf ~/.cache/Homebrew
 
 RUN echo /home/linuxbrew/.linuxbrew/bin/fish | sudo tee -a /etc/shells && \
     sudo chsh -s /home/linuxbrew/.linuxbrew/bin/fish dev
