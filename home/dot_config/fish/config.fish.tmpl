@@ -50,7 +50,10 @@ if status is-interactive
 {{- end }}
 
   source $__fish_config_dir/conf.d/shortcuts.fish
-  source $__fish_config_dir/conf.d/fish-ssh-agent.fish
+
+  if test -f $__fish_config_dir/conf.d/fish-ssh-agent.fish
+    source $__fish_config_dir/conf.d/fish-ssh-agent.fish
+  end
 
   function h
        set _h_dir ($__fish_config_dir/bin/h --resolve "{{ .chezmoi.homeDir }}/repos" $argv)
@@ -61,7 +64,9 @@ if status is-interactive
        return $_h_ret
   end
 
-  fzf_configure_bindings --directory=\ct
+  if command -q fzf
+    fzf_configure_bindings --directory=\ct
+  end
 
   if command -q zoxide
     zoxide init fish | source

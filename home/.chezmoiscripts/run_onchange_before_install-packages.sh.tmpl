@@ -1,12 +1,10 @@
 {{/* vim: set filetype=gotmpl: */}}#!/bin/bash
 
-set -eufo pipefail
+set -uo pipefail
 
 # Check if Homebrew is installed
 if ! command -v brew &> /dev/null; then
     echo "Homebrew not found. Skipping package installation."
-    echo "To install Homebrew, run:"
-    echo "  /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
     exit 0
 fi
 
@@ -58,4 +56,4 @@ echo "Installing essential packages..."
         echo "cask \"$cask\""
     done
 {{- end }}
-} | brew bundle --file=/dev/stdin
+} | brew bundle --file=/dev/stdin || true

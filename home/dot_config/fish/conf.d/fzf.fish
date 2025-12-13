@@ -3,6 +3,9 @@ if not status is-interactive && test "$CI" != true
     exit
 end
 
+# Skip if fzf is not installed
+command -q fzf || exit
+
 # Because of scoping rules, to capture the shell variables exactly as they are, we must read
 # them before even executing _fzf_search_variables. We use psub to store the
 # variables' info in temporary files and pass in the filenames as arguments.
