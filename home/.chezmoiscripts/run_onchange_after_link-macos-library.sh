@@ -3,10 +3,7 @@
 set -eufo pipefail
 
 # Check if running on macOS
-if [[ "$(uname)" != "Darwin" ]]; then
-    echo "Not running on macOS. Skipping Library/Application Support symlinks."
-    exit 0
-fi
+[[ "$(uname)" == "Darwin" ]] || exit 0
 
 # Create symlinks for application configs on macOS
 # Some apps look in Library/Application Support by default on macOS
