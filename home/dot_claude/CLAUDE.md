@@ -25,6 +25,7 @@ $HOME/repos/<host>/<owner>/<repo>
 ```
 
 Examples:
+
 - `$HOME/repos/github.com/anthropics/claude-code`
 - `$HOME/repos/gitlab.com/myorg/myproject`
 
