@@ -22,8 +22,7 @@ enableSecrets = false
 customCABundle = ""
 customPyPIIndex = ""
 
-# Enable WSL-specific workarounds and tools
-isWSL = false
+isWSL = {{ and (eq .chezmoi.os "linux") (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
 
 {{- if eq .chezmoi.os "darwin" }}
 # Secretive SSH Agent detection (macOS only)
