@@ -1,6 +1,9 @@
 {{/* vim: set filetype=just: */}}
 # Dotfiles task runner - run with: djust <recipe>
 
+default:
+  @just --list
+
 # Install extra development packages via Homebrew
 install-extras:
     #!/bin/bash
@@ -20,7 +23,6 @@ install-extras:
     tap "oven-sh/bun"
     brew "atuin"
     brew "bash-language-server"
-    brew "oven-sh/bun/bun"
     brew "derailed/k9s/k9s"
     brew "dprint"
     brew "elohmeier/tap/jsonnet-language-server"
@@ -31,9 +33,9 @@ install-extras:
     brew "git"
     brew "git-delta"
     brew "git-lfs"
+    brew "gnupg"
     brew "go"
     brew "go-jsonnet"
-    brew "gnupg"
     brew "helm"
     brew "jsonnet-bundler"
     brew "lazygit"
@@ -42,12 +44,11 @@ install-extras:
     brew "minio-mc"
     brew "neovim"
     brew "opentofu"
-{{- if eq .chezmoi.os "darwin" }}
-    brew "pinentry-mac"
-{{- end }}
+    brew "oven-sh/bun/bun"
     brew "pnpm"
     brew "ripgrep"
     brew "rsync"
+    brew "rustup"
     brew "shellcheck"
     brew "shfmt"
     brew "stylua"
@@ -59,6 +60,7 @@ install-extras:
     brew "yazi"
     brew "yq"
 {{- if eq .chezmoi.os "darwin" }}
+    brew "pinentry-mac"
     cask "db-browser-for-sqlite"
     cask "firefox"
     cask "ghostty"
