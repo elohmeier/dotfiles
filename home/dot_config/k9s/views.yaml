@@ -1,0 +1,7 @@
+views:
+  apps/v1/deployments:
+    sortColumn: AGE:asc
+  v1/pods:
+    sortColumn: AGE:asc
+  v1/services:
+    sortColumn: AGE:asc
