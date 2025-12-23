@@ -2,9 +2,6 @@
 
 set -eufo pipefail
 
-# Check if running on macOS
-[[ "$(uname)" == "Darwin" ]] || exit 0
-
 # Create symlinks for application configs on macOS
 # Some apps look in Library/Application Support by default on macOS
 # but we want to keep configs in .config for consistency

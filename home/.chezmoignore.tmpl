@@ -1,8 +1,0 @@
-{{- if ne .chezmoi.os "darwin" -}}
-Applications/Firefox.app
-{{- end -}}
-
-{{- if not .isWSL -}}
-.local/share/applications/windows-explorer-wsl.desktop
-.chezmoiscripts/run_once-register-windows-explorer.sh
-{{- end -}}
