@@ -2,7 +2,7 @@
 # Dotfiles task runner - run with: djust <recipe>
 
 default:
-  @just --list
+  @just --justfile {{"{{"}}justfile(){{"}}"}} --list
 
 # Install extra development packages via Homebrew
 install-extras:
