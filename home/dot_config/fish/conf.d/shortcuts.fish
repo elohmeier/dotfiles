@@ -1,5 +1,6 @@
 abbr --add -- cd.. 'cd ..'
 abbr --add -- e nvim
+abbr --add -- g 'git status'
 abbr --add -- ga 'git add'
 abbr --add -- ga. 'git add .'
 abbr --add -- gb 'git branch'
