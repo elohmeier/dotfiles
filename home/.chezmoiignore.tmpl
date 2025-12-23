@@ -1,13 +1,16 @@
-{{- if not .enableEmail }}
-# Email client configuration
-.config/aerc
-.config/pizauth.conf
-{{- end }}
+{{ if ne .chezmoi.os "darwin" }}
+Applications/Firefox.app
+.chezmoiscripts/darwin/**
+{{ end -}}
 
-{{- if not .isWSL }}
-# WSL-specific scripts
+{{ if ne .chezmoi.os "linux" }}
+.chezmoiscripts/linux/**
+{{ end -}}
+
+{{ if not .isWSL }}
+.chezmoiscripts/wsl/**
 .local/bin/wl-copy
 .local/bin/wl-paste
 .local/bin/wsl-clipboard-debug
-.chezmoiscripts/run_onchange_before_install-packages-wsl.sh
-{{- end }}
+.local/share/applications/windows-explorer-wsl.desktop
+{{- end -}}
