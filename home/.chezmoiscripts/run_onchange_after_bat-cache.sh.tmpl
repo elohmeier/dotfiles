@@ -1,7 +1,5 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # Rebuild bat cache when themes change
 # Hash: {{ include (printf "dot_config/bat/themes/%s.tmTheme" .theme) | sha256sum }}
 
-set -eufo pipefail
-
-command -v bat &>/dev/null && bat cache --build &>/dev/null || true
+command -v bat >/dev/null && bat cache --build >/dev/null 2>&1 || true
