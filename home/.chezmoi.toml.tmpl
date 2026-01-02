@@ -14,7 +14,11 @@ command = "fish"
 [data]
 email = "enno@nerdworks.de"
 name = "Enno Richter"
+{{- if eq .chezmoi.os "darwin" }}
 displayConfig = {{ output (joinPath .chezmoi.sourceDir ".." "scripts" "get-display-config.sh") | quote }}
+{{- else }}
+displayConfig = "internal"
+{{- end }}
 
 enableEmail = false
 enableSecrets = false
