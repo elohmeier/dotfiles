@@ -1,28 +1,22 @@
-#!/bin/bash
+#!/bin/sh
 
-set -uo pipefail
+set -u
 
-if ! command -v brew &>/dev/null; then
-    exit 0
-fi
-
-BREWS=(
-    bat
-    btop
-    eza
-    fd
-    fish
-    fzf
-    just
-    ncdu
-    sops
-    uv
-    vivid
-    zoxide
-)
+command -v brew >/dev/null || exit 0
 
 echo "Installing packages..."
 
-for brew in "${BREWS[@]}"; do
-    echo "brew \"$brew\""
-done | brew bundle --file=/dev/stdin || true
+brew bundle --file=/dev/stdin <<'EOF' || true
+brew "bat"
+brew "btop"
+brew "eza"
+brew "fd"
+brew "fish"
+brew "fzf"
+brew "just"
+brew "ncdu"
+brew "sops"
+brew "uv"
+brew "vivid"
+brew "zoxide"
+EOF
