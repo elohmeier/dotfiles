@@ -13,4 +13,9 @@ Applications/Firefox.app
 .local/bin/wl-paste
 .local/bin/wsl-clipboard-debug
 .local/share/applications/windows-explorer-wsl.desktop
+{{- end }}
+
+{{ if not .enableEmail }}
+.config/aerc/**
+.config/pizauth.conf
 {{- end -}}
