@@ -84,6 +84,10 @@ if status is-interactive
     mise activate fish | source
   end
 
+  if command -q starship
+    starship init fish | source
+  end
+
 {{- if .customCABundle }}
   set -gx REQUESTS_CA_BUNDLE "{{ .customCABundle }}"
   set -gx SSL_CERT_FILE "{{ .customCABundle }}"

@@ -1,0 +1,27 @@
+format = """
+$kubernetes\
+$directory\
+$git_branch\
+$git_status\
+$character"""
+
+[directory]
+truncation_length = 3
+truncate_to_repo = true
+
+[git_branch]
+format = '([$branch ]($style))'
+style = "purple"
+
+[git_status]
+format = '([$all_status$ahead_behind ]($style))'
+style = "red"
+
+[character]
+success_symbol = "[>](green)"
+error_symbol = "[>](red)"
+
+[kubernetes]
+disabled = false
+format = '([$context(\($namespace\)) ]($style))'
+contexts = [{ context_pattern = "orbstack", context_alias = "" }]
