@@ -12,7 +12,7 @@ require 'open-uri'
 require 'pathname'
 require 'uri'
 
-DEFAULT_CODE_ROOT = ENV['H_CODE_ROOT'] || '~/src'
+CODE_ROOT = Pathname.new('{{ .chezmoi.homeDir }}/repos')
 
 def abort(*)
   puts Dir.pwd
@@ -24,34 +24,9 @@ path = nil
 url  = nil
 
 case term
-when "--setup"
-  code_root = Pathname.new(ARGV[0] || DEFAULT_CODE_ROOT).expand_path
-  puts <<-SH
-h() {
-  _h_dir=$(command h --resolve "#{code_root}" "$@")
-  _h_ret=$?
-  [ "$_h_dir" != "$PWD" ] && cd "$_h_dir"
-  return $_h_ret
-}
-  SH
-  exit
-when "--resolve"
-  CODE_ROOT = Pathname.new(ARGV.shift)
-else
-  puts "h is not installed"
-  puts
-  puts "h needs to be hooked into the shell before it can be used."
-  puts
-
-  abort "Usage: eval \"$(h --setup [code-root])\""
-end
-
-term = ARGV.shift
-case term
 when nil, "-h", "--help"
   abort "Usage: h (<name> | <repo>/<name> | <url>) [git opts]"
 when %r[\A([\w\.\-]+)/([\w\.\-]+)\z] # github user/repo
-  # query the github API to find out the right file case
   begin
     api_info = JSON.load(URI.open("https://api.github.com/repos/#{$1}/#{$2}").read)
     owner = api_info["owner"]["login"]
@@ -73,26 +48,22 @@ when %r[\Agit(?:ea)?@([^:]+):(.*)] # git url
 when %r[\A[\w\.\-]+\z] # just search for repo
   path_depth = 0
 
-  if term == term.downcase then
-    # case insentitive search
+  if term == term.downcase
     compare = ->(basename) { basename.downcase == term }
   else
     compare = ->(basename) { basename == term }
   end
 
-  # Find all matches
   CODE_ROOT.find do |curpath|
     next unless curpath.directory?
 
     depth = curpath.to_s.sub(CODE_ROOT.to_s, '').split('/').size
 
-    # Select deepest result
     if compare.(curpath.basename.to_s) && depth > path_depth
       path = curpath
       path_depth = depth
     end
 
-    # Don't search below 4
     Find.prune if depth > 3
   end
 else
@@ -101,15 +72,12 @@ end
 
 abort "#{term} not found" unless path
 
-# Remove .git to path
 path = path.sub_ext('') if path.extname == '.git'
 
 unless path.directory?
-  # Keep note of the existing path
   parent = path.parent
   dir = parent
   dir = dir.parent until dir.directory? || dir.root?
-  # Make sure the parent directory exists
   parent.mkpath
   unless system(
       'git',
@@ -121,7 +89,6 @@ unless path.directory?
       out: :err,
       close_others: true,
   )
-    # Cleanup the parent directory if created
     until parent == dir
       parent.rmdir
       parent = parent.parent

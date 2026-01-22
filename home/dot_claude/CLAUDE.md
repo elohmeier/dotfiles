@@ -14,7 +14,7 @@ These tools are installed and available for use:
 
 **Infrastructure:** `helm`, `opentofu`, `minio-mc`
 
-**Other:** `entr`, `go-jsonnet`, `jb` (jsonnet-bundler), `make`, `rsync`, `typst`, `watch`, `yq`
+**Other:** `entr`, `go-jsonnet`, `jb` (jsonnet-bundler), `make`, `rsync`, `typst`, `uu-timeout` (timeout/gtimeout), `watch`, `yq`
 
 ## Repository Layout
 
@@ -31,7 +31,7 @@ Examples:
 
 ## The `h` Tool
 
-The `h` command clones and navigates to repositories:
+The `h` command (`$HOME/.local/bin/h`) clones and navigates to repositories:
 
 ```bash
 h anthropics/claude-code  # Clone/cd to github.com/anthropics/claude-code

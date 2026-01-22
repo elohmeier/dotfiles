@@ -56,7 +56,7 @@ if status is-interactive
   end
 
   function h
-       set _h_dir ($__fish_config_dir/bin/h --resolve "{{ .chezmoi.homeDir }}/repos" $argv)
+       set _h_dir ($HOME/.local/bin/h $argv)
        set _h_ret $status
        if test "$_h_dir" != "$PWD"
            cd "$_h_dir"
