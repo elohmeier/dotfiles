@@ -1,12 +1,9 @@
 #!/bin/sh
 # Install Firefox policy file for Flatpak Firefox
-# hash: {{ include "dot_config/firefox/policies.json.tmpl" | sha256sum }}
+# hash: {{ include ".chezmoitemplates/firefox-policies" | sha256sum }}
 
-POLICY_FILE="$HOME/.config/firefox/policies.json"
-
-# Flatpak Firefox uses extension point
 if flatpak list 2>/dev/null | grep -q org.mozilla.firefox; then
     DEST="$HOME/.local/share/flatpak/extension/org.mozilla.firefox.systemconfig/x86_64/stable/policies"
     mkdir -p "$DEST"
-    cp "$POLICY_FILE" "$DEST/policies.json"
+    chezmoi execute-template '{{ template "firefox-policies" . }}' > "$DEST/policies.json"
 fi

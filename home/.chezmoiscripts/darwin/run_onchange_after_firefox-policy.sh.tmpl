@@ -1,15 +1,13 @@
 #!/bin/sh
 # Install Firefox policy file on macOS
-# hash: {{ include "dot_config/firefox/policies.json.tmpl" | sha256sum }}
-
-POLICY_FILE="$HOME/.config/firefox/policies.json"
+# hash: {{ include ".chezmoitemplates/firefox-policies" | sha256sum }}
 
 if [ -d "$HOME/Applications/Firefox.app" ]; then
     DEST="$HOME/Applications/Firefox.app/Contents/Resources/distribution"
     mkdir -p "$DEST"
-    cp "$POLICY_FILE" "$DEST/policies.json"
+    chezmoi execute-template '{{ template "firefox-policies" . }}' > "$DEST/policies.json"
 elif [ -d "/Applications/Firefox.app" ]; then
     DEST="/Applications/Firefox.app/Contents/Resources/distribution"
     sudo mkdir -p "$DEST"
-    sudo cp "$POLICY_FILE" "$DEST/policies.json"
+    chezmoi execute-template '{{ template "firefox-policies" . }}' | sudo tee "$DEST/policies.json" > /dev/null
 fi

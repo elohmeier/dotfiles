@@ -17,6 +17,60 @@
         "Placement": "toolbar",
         "Title": "Grafana",
         "URL": "https://grafana.pug-coho.ts.net/"
+      },
+      {
+        "Placement": "toolbar",
+        "Folder": "Cluster SVC",
+        "Title": "Argo Workflows",
+        "URL": "http://argo-workflows-server.argo-workflows.svc.cluster.local:2746"
+      },
+      {
+        "Placement": "toolbar",
+        "Folder": "Cluster SVC",
+        "Title": "Grafana",
+        "URL": "http://grafana-service.grafana.svc.cluster.local:3000"
+      },
+      {
+        "Placement": "toolbar",
+        "Folder": "Cluster SVC",
+        "Title": "Longhorn",
+        "URL": "http://longhorn-frontend.longhorn-system.svc.cluster.local"
+      },
+      {
+        "Placement": "toolbar",
+        "Folder": "Cluster SVC",
+        "Title": "VictoriaMetrics",
+        "URL": "http://vmsingle-vmks-victoria-metrics-k8s-stack.victoriametrics.svc.cluster.local:8428"
+      },
+      {
+        "Placement": "toolbar",
+        "Folder": "Cluster SVC",
+        "Title": "VictoriaLogs",
+        "URL": "http://vl-victoria-logs-single-server.victorialogs.svc.cluster.local:9428"
+      },
+      {
+        "Placement": "toolbar",
+        "Folder": "Cluster SVC",
+        "Title": "VMAgent",
+        "URL": "http://vmagent-vmks-victoria-metrics-k8s-stack.victoriametrics.svc.cluster.local:8429"
+      },
+      {
+        "Placement": "toolbar",
+        "Folder": "Cluster SVC",
+        "Title": "VMAlert",
+        "URL": "http://vmalert-vmks-victoria-metrics-k8s-stack.victoriametrics.svc.cluster.local:8080"
+      },
+      {
+        "Placement": "toolbar",
+        "Folder": "Cluster SVC",
+        "Title": "Alertmanager",
+        "URL": "http://vmalertmanager-vmks-victoria-metrics-k8s-stack.victoriametrics.svc.cluster.local:9093"
+      },
+      {
+        "Placement": "toolbar",
+        "Folder": "Cluster SVC",
+        "Title": "Convexio Admin",
+        "URL": "http://apiserver.convexio.svc.cluster.local:8000/admin/"
       }
     ],
     "Certificates": {
@@ -73,11 +127,6 @@
         "Status": "locked",
         "Type": "boolean",
         "Value": false
-      },
-      "security.enterprise_roots.enabled": {
-        "Status": "locked",
-        "Type": "boolean",
-        "Value": true
       }
     },
     "TranslateEnabled": false
