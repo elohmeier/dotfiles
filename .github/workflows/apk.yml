@@ -73,7 +73,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: packages-${{ matrix.arch }}
-          path: packages/${{ matrix.arch }}/*.apk
+          path: packages/
 
   publish:
     needs: [version, build]
