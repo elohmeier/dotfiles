@@ -1,5 +1,7 @@
 abbr --add -- cd.. 'cd ..'
+{{- if lookPath "nvim" }}
 abbr --add -- e nvim
+{{- end }}
 abbr --add -- g 'git status'
 abbr --add -- ga 'git add'
 abbr --add -- ga. 'git add .'
@@ -31,16 +33,25 @@ alias ww 'git add . && git commit -m wip'
 alias gapf 'git commit --amend --no-edit && git push --force-with-lease'
 alias gg lazygit
 alias grep 'grep --color'
+alias lgg lazygit
+alias nbconvert 'jupyter nbconvert --to script --stdout'
+
+{{- if lookPath "eza" }}
 alias l 'eza -al'
 alias la 'eza -al'
 alias lg 'eza -al --git'
-alias lgg lazygit
 alias ll 'eza -l'
 alias ls eza
-alias nbconvert 'jupyter nbconvert --to script --stdout'
 alias tree 'eza --tree'
+{{- else }}
+alias l 'ls -al'
+alias la 'ls -al'
+alias ll 'ls -l'
+{{- end }}
+{{- if lookPath "nvim" }}
 alias vi nvim
 alias vim nvim
+{{- end }}
 alias djust "just --justfile $HOME/.config/just/dotfiles.just"
 
 # Only use orb for nix if nix is not directly available but orb is
