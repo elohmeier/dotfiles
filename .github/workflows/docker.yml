@@ -1,13 +1,13 @@
 name: Build and Push Docker Image
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - Dockerfile
-      - docker-entrypoint.sh
-      - home/**
-      - .github/workflows/docker.yml
+  # push:
+  #   branches: [main]
+  #   paths:
+  #     - Dockerfile
+  #     - docker-entrypoint.sh
+  #     - home/**
+  #     - .github/workflows/docker.yml
   workflow_dispatch:
 
 env:
