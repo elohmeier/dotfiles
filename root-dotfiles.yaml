@@ -5,6 +5,9 @@ package:
   description: "Dotfiles for root user (applied via chezmoi)"
   copyright:
     - license: MIT
+  dependencies:
+    runtime:
+      - fish
   target-architecture:
     - aarch64
     - x86_64
@@ -21,6 +24,7 @@ environment:
     packages:
       - busybox
       - chezmoi
+      - fish
       - git
 pipeline:
   - runs: |

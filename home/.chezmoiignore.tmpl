@@ -18,4 +18,8 @@ Applications/Firefox.app
 {{ if not .enableEmail }}
 .config/aerc/**
 .config/pizauth.conf
+{{- end }}
+
+{{ if not (lookPath "fish") }}
+.config/fish/**
 {{- end -}}
