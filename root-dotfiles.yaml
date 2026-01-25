@@ -1,6 +1,6 @@
 package:
   name: root-dotfiles
-  version: "0.0.1"
+  version: "2026.01.25"
   epoch: 0
   description: "Dotfiles for root user (applied via chezmoi)"
   copyright:
@@ -11,7 +11,6 @@ package:
   checks:
     disabled:
       - usrmerge
-
 environment:
   contents:
     repositories:
@@ -23,18 +22,15 @@ environment:
       - busybox
       - chezmoi
       - git
-
 pipeline:
   - runs: |
       # Apply chezmoi to generate dotfiles for root
       mkdir -p "${{targets.destdir}}/root"
       chezmoi init --source . --destination "${{targets.destdir}}/root" --apply
-
 update:
   enabled: false
   exclude-reason: |
     Version tracks dotfiles repo commits
-
 test:
   environment:
     contents:
