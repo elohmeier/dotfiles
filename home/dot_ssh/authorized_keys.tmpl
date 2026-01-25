@@ -1,3 +1,4 @@
+{{- $fish := lookPath "fish" -}}
 {{ range (gitHubKeys "elohmeier") -}}
-{{   .Key }}
+{{- if $fish }}command="{{ $fish }} -l" {{ end }}{{ .Key }}
 {{ end -}}
