@@ -500,6 +500,46 @@ file_doc = "#5ef1ff"
 file_exec = "#5eff6c"
 file_dir = "#5ef1ff"
 
+[git_delta.tokyonight_day]
+line_numbers_minus = "#c25d64"
+line_numbers_plus = "#399a96"
+line_numbers_zero = "#a8aecb"
+minus_emph_bg = "#d99ea2"
+minus_bg = "#dfccd4"
+plus_emph_bg = "#57a7bc"
+plus_bg = "#aecde6"
+syntax_theme = "tokyonight_day"
+
+[git_delta.tokyonight_night]
+line_numbers_minus = "#b2555b"
+line_numbers_plus = "#266d6a"
+line_numbers_zero = "#3b4261"
+minus_emph_bg = "#713137"
+minus_bg = "#37222c"
+plus_emph_bg = "#2c5a66"
+plus_bg = "#20303b"
+syntax_theme = "tokyonight_night"
+
+[git_delta.cyberdream]
+line_numbers_minus = "#ff6e5e"
+line_numbers_plus = "#5eff6c"
+line_numbers_zero = "#7b8496"
+minus_emph_bg = "#5c2a2a"
+minus_bg = "#3c2020"
+plus_emph_bg = "#2a4a2a"
+plus_bg = "#203c20"
+syntax_theme = "cyberdream"
+
+[git_delta.cyberdream_light]
+line_numbers_minus = "#d11500"
+line_numbers_plus = "#008b0c"
+line_numbers_zero = "#7b8496"
+minus_emph_bg = "#f5c6c6"
+minus_bg = "#fce0e0"
+plus_emph_bg = "#c6f5c6"
+plus_bg = "#e0fce0"
+syntax_theme = "cyberdream_light"
+
 [yazi.cyberdream_light]
 cwd = "#7b8496"
 hovered_bg = "#acacac"

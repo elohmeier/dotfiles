@@ -8,7 +8,7 @@ import subprocess
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-import click
+import rich_click as click
 import requests
 import yaml
 from requests.auth import HTTPBasicAuth

@@ -12,7 +12,7 @@ import time
 import zipfile
 from pathlib import Path
 
-import click
+import rich_click as click
 from flask import Flask, request
 
 

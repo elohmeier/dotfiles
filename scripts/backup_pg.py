@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 from typing import Literal
 
-import click
+import rich_click as click
 import questionary
 from rich.console import Console
 from rich.panel import Panel

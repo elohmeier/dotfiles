@@ -1,0 +1,15 @@
+{{- range $name, $t := .git_delta }}
+[delta "{{ $name }}"]
+line-numbers-minus-style = "{{ $t.line_numbers_minus }}"
+line-numbers-plus-style = "{{ $t.line_numbers_plus }}"
+line-numbers-zero-style = "{{ $t.line_numbers_zero }}"
+minus-emph-style = "syntax \"{{ $t.minus_emph_bg }}\""
+minus-empty-line-marker-style = "syntax \"{{ $t.minus_bg }}\""
+minus-non-emph-style = "syntax \"{{ $t.minus_bg }}\""
+minus-style = "syntax \"{{ $t.minus_bg }}\""
+plus-emph-style = "syntax \"{{ $t.plus_emph_bg }}\""
+plus-empty-line-marker-style = "syntax \"{{ $t.plus_bg }}\""
+plus-non-emph-style = "syntax \"{{ $t.plus_bg }}\""
+plus-style = "syntax \"{{ $t.plus_bg }}\""
+syntax-theme = "{{ $t.syntax_theme }}"
+{{ end -}}
