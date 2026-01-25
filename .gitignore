@@ -1,0 +1,5 @@
+# Melange build artifacts
+packages/
+melange.rsa
+melange.rsa.pub
+melange-cache/

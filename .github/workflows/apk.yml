@@ -1,0 +1,158 @@
+name: Build APK Package
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - home/**
+      - root-dotfiles.yaml
+      - .github/workflows/apk.yml
+  workflow_dispatch:
+
+env:
+  REPO_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      sha: ${{ steps.commit.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bump version
+        run: |
+          VERSION=$(date +%Y.%m.%d)
+          CURRENT=$(yq '.package.version' root-dotfiles.yaml)
+          if [ "$CURRENT" = "$VERSION" ]; then
+            EPOCH=$(($(yq '.package.epoch' root-dotfiles.yaml) + 1))
+          else
+            EPOCH=0
+          fi
+          yq -i ".package.version = \"$VERSION\" | .package.epoch = $EPOCH" root-dotfiles.yaml
+
+      - name: Commit version
+        id: commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add root-dotfiles.yaml
+          git commit -m "chore: bump version [skip ci]" || true
+          git push
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: version
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [x86_64, aarch64]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.sha }}
+
+      - uses: chainguard-dev/actions/setup-melange@main
+
+      - name: Setup signing key
+        run: |
+          echo "${{ secrets.ABUILD_PRIVKEY }}" > melange.pem
+          openssl rsa -in melange.pem -out dotfiles@elohmeier.rsa -traditional 2>/dev/null || cp melange.pem dotfiles@elohmeier.rsa
+          chmod 600 dotfiles@elohmeier.rsa
+
+      - name: Build package
+        run: |
+          melange build root-dotfiles.yaml \
+            --arch ${{ matrix.arch }} \
+            --signing-key dotfiles@elohmeier.rsa
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ matrix.arch }}
+          path: packages/${{ matrix.arch }}/*.apk
+
+  publish:
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.sha }}
+
+      - uses: chainguard-dev/actions/setup-melange@main
+
+      - name: Setup signing key
+        run: |
+          echo "${{ secrets.ABUILD_PRIVKEY }}" > melange.pem
+          openssl rsa -in melange.pem -out dotfiles@elohmeier.rsa -traditional 2>/dev/null || cp melange.pem dotfiles@elohmeier.rsa
+          chmod 600 dotfiles@elohmeier.rsa
+          openssl rsa -in dotfiles@elohmeier.rsa -pubout -out dotfiles@elohmeier.rsa.pub
+          mkdir -p _site/keys
+          cp dotfiles@elohmeier.rsa.pub _site/keys/
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: _site
+          merge-multiple: true
+
+      - name: Generate APK indexes
+        run: |
+          for arch in x86_64 aarch64; do
+            if ls "_site/$arch"/*.apk 2>/dev/null | grep -q .; then
+              melange index \
+                --signing-key dotfiles@elohmeier.rsa \
+                --arch "$arch" \
+                -o "_site/$arch/APKINDEX.tar.gz" \
+                "_site/$arch"/*.apk
+            fi
+          done
+
+      - name: Create index.html
+        run: |
+          cat > _site/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+          <title>Root Dotfiles APK</title>
+          <style>
+          body { font-family: system-ui, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
+          pre { background: #f4f4f4; padding: 1rem; overflow-x: auto; }
+          </style>
+          </head>
+          <body>
+          <h1>Root Dotfiles APK</h1>
+          <p>Alpine Linux package for root user dotfiles.</p>
+
+          <h2>Installation</h2>
+          <pre>
+          # Add signing key
+          wget -qO /etc/apk/keys/dotfiles@elohmeier.rsa.pub \
+            $REPO_URL/keys/dotfiles@elohmeier.rsa.pub
+
+          # Add repository
+          echo "$REPO_URL" >> /etc/apk/repositories
+
+          apk update
+          apk add root-dotfiles
+          </pre>
+
+          <p><a href="https://github.com/${{ github.repository }}">Source</a></p>
+          </body>
+          </html>
+          EOF
+          sed -i "s|\$REPO_URL|${REPO_URL}|g" _site/index.html
+
+      - uses: actions/upload-pages-artifact@v3
+
+      - uses: actions/deploy-pages@v4

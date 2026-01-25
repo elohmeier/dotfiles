@@ -1,0 +1,52 @@
+package:
+  name: root-dotfiles
+  version: "0.0.1"
+  epoch: 0
+  description: "Dotfiles for root user (applied via chezmoi)"
+  copyright:
+    - license: MIT
+  target-architecture:
+    - aarch64
+    - x86_64
+  checks:
+    disabled:
+      - usrmerge
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - busybox
+      - chezmoi
+      - git
+
+pipeline:
+  - runs: |
+      # Apply chezmoi to generate dotfiles for root
+      mkdir -p "${{targets.destdir}}/root"
+      chezmoi init --source . --destination "${{targets.destdir}}/root" --apply
+
+update:
+  enabled: false
+  exclude-reason: |
+    Version tracks dotfiles repo commits
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+        - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+      packages:
+        - busybox
+  pipeline:
+    - runs: |
+        # Verify some dotfiles exist
+        test -d /root
+        ls -la /root/
