@@ -4,6 +4,7 @@ Chezmoi-managed dotfiles repository and Python scripts collection.
 
 - Store all chezmoi hook scripts under `home/.chezmoiscripts/` and reference that path in documentation or tooling updates.
 - Platform-specific file exclusions go in `home/.chezmoiignore.tmpl`.
+- Use `{{ lookPath "cmd" }}` for executable paths in templates.
 - Find the shortest and most concise implementation possible. Avoid error handling and backwards compatibility if possible.
 
 ## Relevant Sources for your reference
