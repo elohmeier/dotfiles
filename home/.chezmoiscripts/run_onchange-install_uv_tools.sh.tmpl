@@ -1,4 +1,4 @@
 #!/bin/sh
 
 command -v uv >/dev/null || exit 0
-uv tool install --force "{{ .chezmoi.sourceDir }}/.." || true
+uv tool install --force --upgrade "{{ .chezmoi.sourceDir }}/.." || true
