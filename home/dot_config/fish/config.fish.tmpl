@@ -84,6 +84,10 @@ if status is-interactive
     mise activate fish | source
   end
 
+  if command -q rbenv
+    rbenv init - fish | source
+  end
+
   if command -q starship
     starship init fish | source
   end
