@@ -1,6 +1,6 @@
 package:
   name: root-dotfiles
-  version: "2026.01.27"
+  version: "2026.01.28"
   epoch: 0
   description: "Dotfiles for root user (applied via chezmoi)"
   copyright:
