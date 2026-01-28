@@ -43,7 +43,7 @@ return {
       lua = { "stylua" },
       markdown = { "rumdl" },
       nix = { "nixfmt" },
-      puppet = { "puppet_lint" },
+      puppet = { "puppet_fmt" },
       python = { "ruff_format", "ruff_fix" },
       ruby = { "rubocop" },
       sh = { "shfmt" },
@@ -111,10 +111,10 @@ return {
         },
         stdin = true,
       },
-      puppet_lint = {
-        command = "puppet-lint",
-        args = { "--fix", "$FILENAME" },
-        stdin = false,
+      puppet_fmt = {
+        command = "puppet-fmt",
+        args = { "--indentation", "2" },
+        stdin = true,
       },
       shfmt = {
         prepend_args = { "-i", "4" },
