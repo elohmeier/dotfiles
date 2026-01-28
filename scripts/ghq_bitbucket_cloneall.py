@@ -71,7 +71,9 @@ def _fetch_all_repos(
     return all_repos
 
 
-def _clone_repo(repo: dict[str, Any], dry_run: bool) -> tuple[bool | str, str]:
+def _clone_repo(
+    repo: dict[str, Any], dry_run: bool, verbose: bool
+) -> tuple[bool | str, str]:
     """Clone a single repository via ghq."""
     ssh_url = _get_ssh_url(repo)
     name = f"{repo['project']['key']}/{repo['slug']}"
@@ -84,7 +86,7 @@ def _clone_repo(repo: dict[str, Any], dry_run: bool) -> tuple[bool | str, str]:
     if dry_run:
         return f"Would run: {' '.join(command)}", name
 
-    result = subprocess.run(command, capture_output=True, text=True)
+    result = subprocess.run(command, capture_output=not verbose, text=True)
     return result.returncode == 0, name
 
 
@@ -102,6 +104,7 @@ def _clone_repo(repo: dict[str, Any], dry_run: bool) -> tuple[bool | str, str]:
     "--project", "-p", multiple=True, help="Filter by project key (can be repeated)"
 )
 @click.option("--dry-run", is_flag=True, help="Show what would be done without cloning")
+@click.option("--verbose", "-v", is_flag=True, help="Show ghq command output")
 @click.option(
     "--parallel", default=1, type=int, help="Number of parallel clone operations"
 )
@@ -111,6 +114,7 @@ def main(
     token: str,
     project: tuple[str, ...],
     dry_run: bool,
+    verbose: bool,
     parallel: int,
 ) -> None:
     """Clone all Bitbucket Server repositories into ghq."""
@@ -141,14 +145,15 @@ def main(
                     console.print(f"[dim]Would run: ghq get --update {ssh_url}[/dim]")
                 else:
                     subprocess.run(
-                        ["ghq", "get", "--update", ssh_url], capture_output=True
+                        ["ghq", "get", "--update", ssh_url],
+                        capture_output=not verbose,
                     )
 
                 progress.update(task, advance=1)
         else:
             with ThreadPoolExecutor(max_workers=parallel) as executor:
                 futures = {
-                    executor.submit(_clone_repo, repo, dry_run): repo
+                    executor.submit(_clone_repo, repo, dry_run, verbose): repo
                     for repo in all_repos
                 }
 
