@@ -24,6 +24,7 @@ return {
         "make",
         "markdown",
         "nix",
+        "puppet",
         "python",
         "readline",
         "regex",

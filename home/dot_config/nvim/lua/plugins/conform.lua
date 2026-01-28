@@ -43,6 +43,7 @@ return {
       lua = { "stylua" },
       markdown = { "rumdl" },
       nix = { "nixfmt" },
+      puppet = { "puppet_lint" },
       python = { "ruff_format", "ruff_fix" },
       ruby = { "rubocop" },
       sh = { "shfmt" },
@@ -109,6 +110,11 @@ return {
           "MD013", -- ignore line length
         },
         stdin = true,
+      },
+      puppet_lint = {
+        command = "puppet-lint",
+        args = { "--fix", "$FILENAME" },
+        stdin = false,
       },
       shfmt = {
         prepend_args = { "-i", "4" },
