@@ -31,7 +31,6 @@ pipeline:
       # Apply chezmoi to generate dotfiles for root
       mkdir -p "${{targets.destdir}}/root"
       chezmoi init --source . --destination "${{targets.destdir}}/root" --apply
-      chown -R 0:0 "${{targets.destdir}}/root"
 update:
   enabled: false
   exclude-reason: |
