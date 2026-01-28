@@ -16,7 +16,13 @@ package:
       - usrmerge
 environment:
   accounts:
-    run-as: root
+    users:
+      - username: build
+        uid: 1001
+        gid: 1001
+    groups:
+      - groupname: build
+        gid: 1001
   contents:
     repositories:
       - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
@@ -24,7 +30,6 @@ environment:
     keyring:
       - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
     packages:
-      - alpine-baselayout
       - busybox
       - chezmoi
       - fish
@@ -34,7 +39,6 @@ pipeline:
       # Apply chezmoi to generate dotfiles for root
       mkdir -p "${{targets.destdir}}/root"
       chezmoi init --source . --destination "${{targets.destdir}}/root" --apply
-      chown -R 0:0 "${{targets.destdir}}/root"
 update:
   enabled: false
   exclude-reason: |
