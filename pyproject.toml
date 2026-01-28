@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.scripts]
-glab-ghq-cloneall = "scripts.glab_ghq_cloneall:main"
+ghq-glab-cloneall = "scripts.ghq_glab_cloneall:main"
 backup-pg = "scripts.backup_pg:cli"
 ocauth = "scripts.ocauth:main"
 httpserve = "scripts.httpserve:main"
