@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -47,11 +46,18 @@ def _fetch_paginated(
     return items
 
 
-def _fetch_all_repos(base_url: str, session: requests.Session) -> list[dict[str, Any]]:
+def _fetch_all_repos(
+    base_url: str, session: requests.Session, project_filter: tuple[str, ...]
+) -> list[dict[str, Any]]:
     """Fetch all repositories from all projects."""
     console.print("Fetching projects...")
     projects = _fetch_paginated(session, f"{base_url}/rest/api/1.0/projects")
     console.print(f"Found {len(projects)} projects")
+
+    if project_filter:
+        filter_set = {p.upper() for p in project_filter}
+        projects = [p for p in projects if p["key"].upper() in filter_set]
+        console.print(f"Filtered to {len(projects)} projects")
 
     all_repos: list[dict[str, Any]] = []
     for project in projects:
@@ -84,36 +90,35 @@ def _clone_repo(repo: dict[str, Any], dry_run: bool) -> tuple[bool | str, str]:
 
 @click.command()
 @click.option(
-    "--url",
-    envvar="BITBUCKET_URL",
-    required=True,
-    help="Bitbucket Server base URL (or set BITBUCKET_URL)",
+    "--url", envvar="BITBUCKET_URL", required=True, help="Bitbucket Server base URL"
 )
 @click.option(
-    "--dry-run",
-    is_flag=True,
-    help="Show what would be done without cloning",
+    "--username", envvar="BITBUCKET_USERNAME", required=True, help="Bitbucket username"
 )
 @click.option(
-    "--parallel",
-    default=1,
-    type=int,
-    help="Number of parallel clone operations (default: 1)",
+    "--token", envvar="BITBUCKET_TOKEN", required=True, help="Bitbucket token"
 )
-def main(url: str, dry_run: bool, parallel: int) -> None:
+@click.option(
+    "--project", "-p", multiple=True, help="Filter by project key (can be repeated)"
+)
+@click.option("--dry-run", is_flag=True, help="Show what would be done without cloning")
+@click.option(
+    "--parallel", default=1, type=int, help="Number of parallel clone operations"
+)
+def main(
+    url: str,
+    username: str,
+    token: str,
+    project: tuple[str, ...],
+    dry_run: bool,
+    parallel: int,
+) -> None:
     """Clone all Bitbucket Server repositories into ghq."""
-    username = os.environ.get("BITBUCKET_USERNAME")
-    token = os.environ.get("BITBUCKET_TOKEN")
-
-    if not username or not token:
-        console.print("[red]BITBUCKET_USERNAME and BITBUCKET_TOKEN required[/red]")
-        sys.exit(1)
-
     session = requests.Session()
     session.auth = (username, token)
 
     base_url = url.rstrip("/")
-    all_repos = _fetch_all_repos(base_url, session)
+    all_repos = _fetch_all_repos(base_url, session, project)
 
     if not all_repos:
         console.print("[yellow]No repositories found[/yellow]")
