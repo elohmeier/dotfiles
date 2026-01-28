@@ -1,7 +1,7 @@
 package:
   name: root-dotfiles
   version: "2026.01.28"
-  epoch: 7
+  epoch: 8
   description: "Dotfiles for root user (applied via chezmoi)"
   copyright:
     - license: MIT
