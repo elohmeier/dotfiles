@@ -200,6 +200,14 @@ vim.lsp.config["yamlls"] = {
   },
 }
 
+vim.lsp.config["ruby_lsp"] = {
+  cmd = { "ruby-lsp" },
+  filetypes = { "ruby", "eruby" },
+  root_markers = { "Gemfile", ".ruby-version", ".ruby-gemset", ".git" },
+  single_file_support = true,
+  offset_encoding = "utf-8",
+}
+
 vim.lsp.config["rust_analyzer"] = {
   cmd = { "rust-analyzer" },
   filetypes = { "rust" },
@@ -257,6 +265,7 @@ local servers_to_enable = {
   { name = "jsonnet_ls", config = vim.lsp.config.jsonnet_ls },
   { name = "luals", config = vim.lsp.config.luals },
   { name = "ruff_lsp", config = vim.lsp.config.ruff_lsp },
+  { name = "ruby_lsp", config = vim.lsp.config.ruby_lsp },
   { name = "rust_analyzer", config = vim.lsp.config.rust_analyzer },
   { name = "svelte", config = vim.lsp.config.svelte },
   { name = "taplo", config = vim.lsp.config.taplo },

@@ -27,6 +27,7 @@ return {
         "python",
         "readline",
         "regex",
+        "ruby",
         "rust",
         "svelte",
         "terraform",

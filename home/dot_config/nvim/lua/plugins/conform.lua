@@ -44,6 +44,7 @@ return {
       markdown = { "rumdl" },
       nix = { "nixfmt" },
       python = { "ruff_format", "ruff_fix" },
+      ruby = { "rubocop" },
       sh = { "shfmt" },
       svelte = { "dprint" },
       terraform = { "tofu_fmt" },
