@@ -1,7 +1,7 @@
 abbr --add -- cd.. 'cd ..'
-{{- if lookPath "nvim" }}
-abbr --add -- e nvim
-{{- end }}
+if command -q nvim
+    abbr --add -- e nvim
+end
 abbr --add -- g 'git status'
 abbr --add -- ga 'git add'
 abbr --add -- ga. 'git add .'
@@ -36,25 +36,44 @@ alias grep 'grep --color'
 alias lgg lazygit
 alias nbconvert 'jupyter nbconvert --to script --stdout'
 
-{{- if lookPath "eza" }}
-alias l 'eza -al'
-alias la 'eza -al'
-alias lg 'eza -al --git'
-alias ll 'eza -l'
-alias ls eza
-alias tree 'eza --tree'
-{{- else }}
-alias l 'ls -al'
-alias la 'ls -al'
-alias ll 'ls -l'
-{{- end }}
-{{- if lookPath "nvim" }}
-alias vi nvim
-alias vim nvim
-{{- end }}
+if command -q eza
+    alias l 'eza -al'
+    alias la 'eza -al'
+    alias lg 'eza -al --git'
+    alias ll 'eza -l'
+    alias ls eza
+    alias tree 'eza --tree'
+else
+    alias l 'ls -al'
+    alias la 'ls -al'
+    alias ll 'ls -l'
+end
+if command -q nvim
+    alias vi nvim
+    alias vim nvim
+end
 alias djust "just --justfile $HOME/.config/just/dotfiles.just"
 
 # Only use orb for nix if nix is not directly available but orb is
 if not command -q nix; and command -q orb
     alias nix 'orb -m nixos nix --extra-experimental-features "nix-command flakes"'
+end
+
+if command -q apk
+    alias au 'apk update'
+    alias aug 'apk update && apk upgrade'
+    alias ai 'apk add'
+    alias as 'apk search'
+end
+if command -q lbu
+    alias lc 'lbu commit'
+    alias lst 'lbu status'
+end
+if command -q podman
+    alias pp 'podman ps'
+    alias ppa 'podman ps -a'
+    alias pi 'podman images'
+    alias pl 'podman logs'
+    alias plf 'podman logs -f'
+    alias pe 'podman exec -it'
 end
