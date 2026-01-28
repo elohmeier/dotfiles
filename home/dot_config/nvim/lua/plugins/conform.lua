@@ -113,7 +113,7 @@ return {
       },
       puppet_fmt = {
         command = "puppet-fmt",
-        args = { "--indentation", "2" },
+        args = { "--indentation", "2", "--no-spacing" },
         stdin = true,
       },
       shfmt = {
