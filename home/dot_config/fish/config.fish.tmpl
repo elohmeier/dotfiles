@@ -36,6 +36,9 @@ if status is-interactive
   end
 
 {{- if .isWSL }}
+  # Use wslview as default browser so Python webbrowser.open() works
+  set -gx BROWSER wslview
+
   # Windows Terminal integration for WSL
   function storePathForWindowsTerminal --on-variable PWD
     if test -n "$WT_SESSION"

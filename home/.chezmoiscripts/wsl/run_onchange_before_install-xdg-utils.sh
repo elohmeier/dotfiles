@@ -7,4 +7,4 @@ if ! command -v apt-get &>/dev/null; then
 fi
 
 sudo apt-get update
-sudo apt-get install -y desktop-file-utils xdg-utils
+sudo apt-get install -y desktop-file-utils wslu xdg-utils
