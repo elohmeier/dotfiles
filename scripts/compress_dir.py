@@ -15,9 +15,10 @@ def get_dir_size(path: Path) -> int:
     return sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
 
 
-FD_BIN = shutil.which("fd")
-if not FD_BIN:
+_fd_bin = shutil.which("fd")
+if not _fd_bin:
     raise SystemExit("fd is required for compress-dir")
+FD_BIN = _fd_bin
 
 
 def fd_command(include_dirs: bool, exclude_git: bool = True) -> list[str]:
