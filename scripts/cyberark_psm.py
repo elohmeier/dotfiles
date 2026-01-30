@@ -6,7 +6,10 @@ import base64
 import hashlib
 import html
 import json
+import os
 import re
+import shlex
+import subprocess
 import tempfile
 import webbrowser
 from pathlib import Path
@@ -14,12 +17,16 @@ from pathlib import Path
 import questionary
 import requests
 import rich_click as click
+from pydantic_settings import BaseSettings
 from rich.console import Console
 from rich.table import Table
 
 console = Console(stderr=True)
 
+CONFIG_DIR = Path.home() / ".config" / "cyberark-psm"
+CONFIG_FILE = CONFIG_DIR / "config.json"
 CACHE_DIR = Path.home() / ".cache" / "cyberark-psm"
+ACCOUNTS_CACHE = CACHE_DIR / "accounts.json"
 
 _verbose = False
 
@@ -27,6 +34,45 @@ _verbose = False
 def log(msg: str) -> None:
     if _verbose:
         console.print(f"[dim]{msg}[/dim]")
+
+
+# --- Settings ---
+
+
+class Settings(BaseSettings):
+    url: str | None = None
+    user: str | None = None
+    password_cmd: str | None = None
+    component: str | None = None
+
+
+def _load_settings() -> Settings:
+    if CONFIG_FILE.exists():
+        return Settings.model_validate_json(CONFIG_FILE.read_text())
+    return Settings()
+
+
+def _save_settings(settings: Settings) -> None:
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    CONFIG_FILE.write_text(settings.model_dump_json(indent=2, exclude_none=True))
+
+
+def _resolve_password(password: str | None, settings: Settings) -> str | None:
+    if password:
+        return password
+    if settings.password_cmd:
+        log(f"Running password command: {settings.password_cmd}")
+        result = subprocess.run(
+            shlex.split(settings.password_cmd),
+            stdout=subprocess.PIPE,
+            text=True,
+            check=True,
+        )
+        return result.stdout.strip()
+    return None
+
+
+# --- API helpers ---
 
 
 def api_url(base: str, path: str) -> str:
@@ -67,7 +113,11 @@ def _login(url: str, user: str, password: str, insecure: bool) -> str:
         verify=not insecure,
     )
     if not resp.ok:
-        raise click.ClickException(f"Login failed: {resp.status_code} {resp.reason}")
+        detail = (resp.text or "")[:200].strip()
+        msg = f"Login failed: {resp.status_code} {resp.reason}"
+        if detail:
+            msg += f"\n{detail}"
+        raise click.ClickException(msg)
     log("Login successful")
     return resp.json()
 
@@ -126,12 +176,67 @@ def _search_accounts(
     return accounts
 
 
+# --- Account ID cache ---
+
+
+def _load_accounts_cache() -> dict[str, str]:
+    if ACCOUNTS_CACHE.exists():
+        return json.loads(ACCOUNTS_CACHE.read_text())
+    return {}
+
+
+def _save_accounts_cache(cache: dict[str, str]) -> None:
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    ACCOUNTS_CACHE.write_text(json.dumps(cache))
+
+
+def _resolve_account_id(session: requests.Session, url: str, id_or_query: str) -> str:
+    if re.fullmatch(r"[\d_]+", id_or_query):
+        log(f"Using {id_or_query} as account ID")
+        return id_or_query
+
+    # Check account ID cache
+    cache = _load_accounts_cache()
+    if id_or_query in cache:
+        account_id = cache[id_or_query]
+        log(f"Cached account ID for '{id_or_query}': {account_id}")
+        return account_id
+
+    accounts = _search_accounts(session, url, id_or_query)
+    if not accounts:
+        raise click.ClickException(f"No accounts found for '{id_or_query}'.")
+
+    if len(accounts) == 1:
+        account_id = accounts[0]["id"]
+        log(f"Auto-selected {account_id} ({accounts[0].get('userName', '')})")
+        cache[id_or_query] = account_id
+        _save_accounts_cache(cache)
+        return account_id
+
+    choices = [
+        questionary.Choice(
+            title=f"{a.get('userName', '')}@{a.get('address', '')} ({a.get('safeName', '')})",
+            value=a["id"],
+        )
+        for a in accounts
+    ]
+    account_id = questionary.select("Select account:", choices=choices).ask()
+    if not account_id:
+        raise click.ClickException("No account selected.")
+    cache[id_or_query] = account_id
+    _save_accounts_cache(cache)
+    return account_id
+
+
+# --- CLI ---
+
+
 @click.group()
 @click.option("--url", envvar="CYBERARK_URL", show_envvar=True, help="PVWA base URL.")
 @click.option(
     "-u",
     "--user",
-    envvar=["CYBERARK_USER", "USER"],
+    envvar="CYBERARK_USER",
     show_envvar=True,
     help="Username.",
 )
@@ -146,13 +251,69 @@ def _search_accounts(
 @click.option("-v", "--verbose", is_flag=True, help="Show detailed progress.")
 @click.pass_context
 def cli(
-    ctx, url: str | None, user: str, password: str | None, insecure: bool, verbose: bool
+    ctx,
+    url: str | None,
+    user: str | None,
+    password: str | None,
+    insecure: bool,
+    verbose: bool,
 ) -> None:
     """CyberArk PSM connection tool."""
     global _verbose
     _verbose = verbose
     ctx.ensure_object(dict)
-    ctx.obj.update(url=url, user=user, password=password, insecure=insecure)
+
+    settings = _load_settings()
+    url = url or settings.url
+    user = user or settings.user or os.environ.get("USER")
+    password = _resolve_password(password, settings)
+
+    ctx.obj.update(
+        url=url,
+        user=user,
+        password=password,
+        insecure=insecure,
+        settings=settings,
+    )
+
+
+@cli.command()
+@click.option("--url", "cfg_url", help="PVWA base URL.")
+@click.option("--user", "cfg_user", help="Username.")
+@click.option("--password-cmd", help="Shell command to get password.")
+@click.option("--component", help="Default PSM connection component.")
+@click.pass_context
+def config(
+    ctx,
+    cfg_url: str | None,
+    cfg_user: str | None,
+    password_cmd: str | None,
+    component: str | None,
+) -> None:
+    """Show or update stored configuration."""
+    settings = _load_settings()
+    updates = {
+        k: v
+        for k, v in {
+            "url": cfg_url,
+            "user": cfg_user,
+            "password_cmd": password_cmd,
+            "component": component,
+        }.items()
+        if v is not None
+    }
+    if updates:
+        merged = settings.model_dump()
+        merged.update(updates)
+        settings = Settings(**merged)
+        _save_settings(settings)
+        console.print("Configuration saved.")
+    table = Table(title=f"Config ({CONFIG_FILE})")
+    table.add_column("Key")
+    table.add_column("Value")
+    for k, v in settings.model_dump().items():
+        table.add_row(k, str(v) if v else "[dim]not set[/dim]")
+    console.print(table)
 
 
 @cli.command()
@@ -178,10 +339,6 @@ def search(ctx, query: str, limit: int, safe: str | None) -> None:
     console.print(table)
 
 
-def _looks_like_id(s: str) -> bool:
-    return bool(re.fullmatch(r"[\d_]+", s))
-
-
 def _build_autopost_html(psmgw_url: str, psmgw_request_b64: str) -> str:
     payload = json.loads(base64.b64decode(psmgw_request_b64))
     inputs = "\n".join(
@@ -202,7 +359,6 @@ def _build_autopost_html(psmgw_url: str, psmgw_request_b64: str) -> str:
 @click.option(
     "-c",
     "--component",
-    required=True,
     envvar="CYBERARK_COMPONENT",
     show_envvar=True,
     help="PSM connection component.",
@@ -219,31 +375,20 @@ def _build_autopost_html(psmgw_url: str, psmgw_request_b64: str) -> str:
 def connect(
     ctx,
     id_or_query: str,
-    component: str,
+    component: str | None,
     reason: str | None,
     params: tuple[str, ...],
 ) -> None:
     """Connect to account via PSM."""
+    component = component or ctx.obj["settings"].component
+    if not component:
+        raise click.UsageError(
+            "Missing option '-c' / '--component' (no default in config)."
+        )
+
     session = _get_session(ctx)
     url = ctx.obj["url"]
-
-    if _looks_like_id(id_or_query):
-        account_id = id_or_query
-        log(f"Using {account_id} as account ID")
-    else:
-        accounts = _search_accounts(session, url, id_or_query)
-        if not accounts:
-            raise click.ClickException("No accounts found.")
-        choices = [
-            questionary.Choice(
-                title=f"{a.get('userName', '')}@{a.get('address', '')} ({a.get('safeName', '')})",
-                value=a["id"],
-            )
-            for a in accounts
-        ]
-        account_id = questionary.select("Select account:", choices=choices).ask()
-        if not account_id:
-            raise click.ClickException("No account selected.")
+    account_id = _resolve_account_id(session, url, id_or_query)
 
     body: dict = {"ConnectionComponent": component}
     if reason:
