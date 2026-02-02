@@ -276,6 +276,48 @@ def _emit_profile_table(rows):
     console.print(table)
 
 
+def _label_summary(rows, value_limit):
+    counts = {}
+    examples = {}
+    for row in rows:
+        labels = row.get("sample_labels") or {}
+        for key, value in labels.items():
+            if key == "__name__":
+                continue
+            counts.setdefault(key, 0)
+            examples.setdefault(key, [])
+        for key in set(labels.keys()):
+            if key == "__name__":
+                continue
+            counts[key] += 1
+        for key, value in labels.items():
+            if key == "__name__":
+                continue
+            values = examples[key]
+            if value not in values and len(values) < value_limit:
+                values.append(str(value))
+    summary = [
+        {"label": key, "count": counts[key], "examples": examples[key]}
+        for key in counts
+    ]
+    summary.sort(key=lambda item: item["count"], reverse=True)
+    return summary
+
+
+def _emit_label_summary_table(summary):
+    table = Table(title="Label Summary")
+    table.add_column("Label")
+    table.add_column("Metrics")
+    table.add_column("Examples")
+    for item in summary:
+        table.add_row(
+            item["label"],
+            str(item["count"]),
+            ", ".join(item["examples"]),
+        )
+    console.print(table)
+
+
 def _filter_names(names, regex, match):
     if regex:
         pattern = re.compile(regex)
@@ -638,6 +680,19 @@ def sample_metrics(ctx, sample, stats, selector, show_latency, fail_fast, worker
     help="Include sample labels in the output table.",
 )
 @click.option(
+    "--labels-summary/--no-labels-summary",
+    default=True,
+    show_default=True,
+    help="Show a summary table of common labels with example values.",
+)
+@click.option(
+    "--labels-summary-limit",
+    type=int,
+    default=3,
+    show_default=True,
+    help="Max example values per label in the summary table.",
+)
+@click.option(
     "--compact",
     is_flag=True,
     help="Compact output (hide sample labels, reduce label keys, hide samples).",
@@ -729,6 +784,8 @@ def profile_metrics(
     label_keys_max,
     label_keys_count,
     show_sample_labels,
+    labels_summary,
+    labels_summary_limit,
     compact,
     group_by,
     labels,
@@ -779,7 +836,6 @@ def profile_metrics(
     group_by = tuple(group_by)
     selector_keys = _parse_selector_keys(selector)
     if compact:
-        show_sample_labels = False
         label_keys_max = min(label_keys_max, 2)
 
     def _fetch_row(idx, name):
@@ -818,8 +874,7 @@ def profile_metrics(
                 timeout=ctx.obj["timeout"],
             )
             sample_labels = sample_result[0].get("metric", {}) if sample_result else {}
-            if show_sample_labels:
-                row["sample_labels"] = sample_labels
+            row["sample_labels"] = sample_labels
             label_keys = sorted(
                 [key for key in sample_labels.keys() if key != "__name__"]
             )
@@ -976,6 +1031,9 @@ def profile_metrics(
 
     if ctx.obj["format"] == "table":
         _emit_profile_table(rows)
+        if labels_summary:
+            summary = _label_summary(rows, labels_summary_limit)
+            _emit_label_summary_table(summary)
     else:
         _emit_jsonl(rows)
 
