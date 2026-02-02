@@ -28,6 +28,7 @@ compress-dir = "scripts.compress_dir:main"
 git-remote-ssh = "scripts.git_remote_ssh:main"
 cyberark-psm = "scripts.cyberark_psm:main"
 grafana-users = "scripts.grafana_users:main"
+metrics-scout = "scripts.metrics_scout:main"
 
 [build-system]
 requires = ["uv_build>=0.9.4,<0.10.0"]
