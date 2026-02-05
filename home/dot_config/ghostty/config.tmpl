@@ -5,26 +5,13 @@
 theme = {{ template "theme" . }}
 unfocused-split-opacity = 0.8
 
-{{ if eq .displayConfig "external" }}
-# Dell (Home)
+font-family = Spleen 6x12
+font-size = 12
+
 # font-family = Spleen 8x16
 # font-size = 16
-font-family = Spleen 6x12
-font-size = 12
-{{ else if eq .displayConfig "external-lores" }}
-# Dell P2414H (Winsen)
-font-family = Spleen 6x12
-font-size = 12
-{{ else if eq .displayConfig "internal" }}
-# MacBook (mobile)
-font-family = IBM Plex Mono
-font-size = 12
-{{ end }}
 
-{{ if eq .displayConfig "external" "external-lores" }}
-# enable this for Spleen fonts (disable e.g. bold style)
 font-synthetic-style = false
-{{ end }}
 
 copy-on-select = true
 
