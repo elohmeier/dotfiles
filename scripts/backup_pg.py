@@ -1,6 +1,7 @@
 import base64
 import binascii
 import datetime
+import hashlib
 import os
 import subprocess
 import sys
@@ -213,6 +214,18 @@ def resolve_db_params(
     return cnpg_cluster, pod_name, db_name, db_user
 
 
+def _kubectl_base_cmd(kubeconfig: str, context: str, namespace: str) -> list[str]:
+    return [
+        "kubectl",
+        "--kubeconfig",
+        kubeconfig,
+        "--context",
+        context,
+        "-n",
+        namespace,
+    ]
+
+
 def kubectl_exec_dump(
     kubeconfig: str,
     context: str,
@@ -223,52 +236,117 @@ def kubectl_exec_dump(
     format_type: str = "c",
     compress_level: int = 6,
 ) -> bool:
-    """Use kubectl exec to run pg_dump directly in the pod and pipe output to local file."""
+    """Dump database on the pod to a temp file, then transfer via kubectl cp.
+
+    Avoids streaming binary data through kubectl exec stdout, which can
+    silently truncate large outputs due to SPDY/WebSocket buffering issues.
+    """
+    if format_type == "d":
+        console.print(
+            "[bold red]Error:[/bold red] Directory format ('d') is not supported."
+        )
+        return False
+
     console.print(
         f"Dumping database '{db_name}' from pod '{pod_name}' to {output_file}..."
     )
 
-    # Build pg_dump command to run inside the pod
-    pg_dump_args = [
-        "pg_dump",
-        "-d",
-        db_name,
-        "-F",
-        format_type,
-    ]
-
-    # Add compression level if using custom or tar format
+    # Build pg_dump command to run inside the pod, writing to a temp file
+    remote_tmp = f"/run/pg_dump_{db_name}_{os.getpid()}.backup"
+    pg_dump_cmd = f"pg_dump -d {db_name} -F {format_type}"
     if format_type in ["c", "t"] and compress_level is not None:
-        pg_dump_args.extend(["-Z", str(compress_level)])
+        pg_dump_cmd += f" -Z {compress_level}"
+    pg_dump_cmd += f" -f {remote_tmp}"
 
-    # Build kubectl exec command
-    kubectl_cmd = [
-        "kubectl",
-        "--kubeconfig",
-        kubeconfig,
-        "--context",
-        context,
-        "-n",
-        namespace,
-        "exec",
-        pod_name,
-        "--",
-    ] + pg_dump_args
+    kbase = _kubectl_base_cmd(kubeconfig, context, namespace)
+    output_path = Path(output_file)
+    temp_path = output_path.with_suffix(f"{output_path.suffix}.tmp")
 
     try:
-        # Run kubectl exec and redirect output to file
-        with open(output_file, "wb") as f:
-            subprocess.run(
-                kubectl_cmd,
-                stdout=f,
-                stderr=subprocess.PIPE,
-                check=True,
-                text=False,  # Binary mode for backup files
+        # Step 1: Run pg_dump on the pod, writing to a file there
+        console.print(f"  Running pg_dump on pod (writing to {remote_tmp})...")
+        dump_result = subprocess.run(
+            [*kbase, "exec", pod_name, "--", "bash", "-c", pg_dump_cmd],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True,
+            text=False,
+        )
+        if dump_result.stderr:
+            stderr_text = dump_result.stderr.decode("utf-8", errors="ignore").strip()
+            if stderr_text:
+                console.print(f"[dim]pg_dump stderr: {stderr_text}[/dim]")
+
+        # Step 2: Get the file size on the pod for later verification
+        size_result = subprocess.run(
+            [*kbase, "exec", pod_name, "--", "stat", "-c", "%s", remote_tmp],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True,
+            text=True,
+        )
+        remote_size = int(size_result.stdout.strip())
+        console.print(f"  Remote dump size: {remote_size / (1024 * 1024):.2f} MB")
+
+        # Step 3: Copy the file from the pod to local temp path
+        console.print("  Transferring backup via kubectl cp...")
+        cp_src = f"{namespace}/{pod_name}:{remote_tmp}"
+        subprocess.run(
+            [*kbase, "cp", cp_src, str(temp_path), "--retries=3"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True,
+            text=False,
+        )
+
+        # Step 4: Verify transferred file size matches remote
+        local_size = temp_path.stat().st_size
+        if local_size != remote_size:
+            console.print(
+                f"[bold red]Error:[/bold red] Size mismatch: remote={remote_size}, local={local_size}"
             )
+            temp_path.unlink(missing_ok=True)
+            return False
+        console.print(f"  Size verified: {local_size} bytes")
+
+        # Step 5: Verify archive TOC is readable
+        verify_result = subprocess.run(
+            ["pg_restore", "--list", str(temp_path)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            check=False,
+            text=False,
+        )
+        if verify_result.returncode != 0:
+            console.print(
+                "[bold red]Error:[/bold red] Backup verification failed with pg_restore --list."
+            )
+            if verify_result.stderr:
+                console.print(
+                    f"[red]Stderr:[/red]\n{verify_result.stderr.decode('utf-8', errors='ignore')}"
+                )
+            temp_path.unlink(missing_ok=True)
+            return False
+
+        # Step 6: Compute checksum and atomically publish
+        hasher = hashlib.sha256()
+        with temp_path.open("rb") as f:
+            for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                hasher.update(chunk)
+        checksum_path = output_path.with_suffix(f"{output_path.suffix}.sha256")
+        checksum_path.write_text(f"{hasher.hexdigest()}  {output_path.name}\n")
+
+        os.replace(temp_path, output_path)
+        dir_fd = os.open(output_path.parent, os.O_RDONLY)
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
 
         console.print(
             f"[green]Database dump completed successfully to {output_file}[/green]"
         )
+        console.print(f"[green]Checksum written to {checksum_path}[/green]")
         return True
 
     except subprocess.CalledProcessError as e:
@@ -277,12 +355,64 @@ def kubectl_exec_dump(
             console.print(
                 f"[red]Stderr:[/red]\n{e.stderr.decode('utf-8', errors='ignore')}"
             )
+        temp_path.unlink(missing_ok=True)
         return False
     except Exception as e:
         console.print(
             f"[bold red]Unexpected error during database dump:[/bold red] {e}"
         )
+        temp_path.unlink(missing_ok=True)
         return False
+    finally:
+        # Clean up remote temp file
+        try:
+            subprocess.run(
+                [*kbase, "exec", pod_name, "--", "rm", "-f", remote_tmp],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+        except Exception:
+            pass
+
+
+def compute_sha256(file_path: Path) -> str:
+    """Compute SHA256 for a file."""
+    hasher = hashlib.sha256()
+    with file_path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
+
+def verify_backup_checksum(backup_file: str) -> bool:
+    """Verify backup checksum against adjacent .sha256 sidecar."""
+    backup_path = Path(backup_file)
+    checksum_path = backup_path.with_suffix(f"{backup_path.suffix}.sha256")
+
+    if not checksum_path.exists():
+        console.print(
+            f"[bold red]Error:[/bold red] Checksum file not found: {checksum_path}"
+        )
+        return False
+
+    checksum_line = checksum_path.read_text().strip()
+    expected_checksum = checksum_line.split()[0] if checksum_line else ""
+    if not expected_checksum:
+        console.print(
+            f"[bold red]Error:[/bold red] Invalid checksum file format: {checksum_path}"
+        )
+        return False
+
+    actual_checksum = compute_sha256(backup_path)
+    if actual_checksum != expected_checksum:
+        console.print("[bold red]Error:[/bold red] Backup checksum mismatch.")
+        console.print(f"Expected: {expected_checksum}")
+        console.print(f"Actual:   {actual_checksum}")
+        return False
+
+    console.print(f"[green]Checksum verified successfully: {checksum_path}[/green]")
+    return True
 
 
 def kubectl_exec_restore(
@@ -872,9 +1002,9 @@ def cli(
 )
 @click.option(
     "--format",
-    type=click.Choice(["c", "p", "d", "t"]),
+    type=click.Choice(["c", "p", "t"]),
     default="c",
-    help="Backup format: c=custom, p=plain text, d=directory, t=tar.",
+    help="Backup format: c=custom, p=plain text, t=tar.",
 )
 @click.option(
     "--compress-level",
@@ -1052,9 +1182,14 @@ def backup(
     help="Path to the backup file to restore.",
     type=click.Path(exists=True),
 )
+@click.option(
+    "--verify-checksum/--no-verify-checksum",
+    default=True,
+    help="Verify backup checksum using adjacent .sha256 file before restoring.",
+)
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompts.")
 @click.pass_context
-def restore(ctx, backup_file, yes):
+def restore(ctx, backup_file, verify_checksum, yes):
     """Restores a PostgreSQL database from a backup file to a Kubernetes cluster."""
 
     # Get configuration from context
@@ -1096,6 +1231,7 @@ def restore(ctx, backup_file, yes):
     console.print(f"Database:      [cyan]{db_name}[/cyan]")
     console.print(f"App User:      [cyan]{db_user}[/cyan]")
     console.print(f"Backup File:   [cyan]{backup_file}[/cyan]")
+    console.print(f"Verify Checksum: [cyan]{verify_checksum}[/cyan]")
 
     console.print(
         f"\n[bold red]WARNING:[/bold red] This will [bold red]DROP and RECREATE[/bold red] the database '{db_name}'!"
@@ -1115,6 +1251,12 @@ def restore(ctx, backup_file, yes):
 
     # --- Perform Restore ---
     console.print("\n[bold blue]--- Starting Restore ---[/bold blue]")
+
+    if verify_checksum and not verify_backup_checksum(backup_file):
+        console.print(
+            "[bold red]Restore aborted due to checksum verification failure.[/bold red]"
+        )
+        sys.exit(1)
 
     success = kubectl_exec_restore(
         kubeconfig=kubeconfig,
