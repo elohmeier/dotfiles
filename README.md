@@ -61,4 +61,5 @@ Run packaged scripts directly with uv:
 
 ```bash
 uvx --from git+https://github.com/elohmeier/dotfiles httpserve
+pipx run --spec git+https://github.com/elohmeier/dotfiles httpserve
 ```

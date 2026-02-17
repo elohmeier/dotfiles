@@ -1,0 +1,20 @@
+function t -d "Create or attach to a tmux session"
+    set -l session (if test (count $argv) -gt 0; echo $argv[1]; else; echo main; end)
+    test -n "$TMUX"; and return 0
+{{- if eq .chezmoi.os "darwin" }}
+    if tmux has-session -t "$session" 2>/dev/null
+        tmux attach-session -t "$session"
+    else
+        if not security show-keychain-info ~/Library/Keychains/login.keychain-db &>/dev/null
+            security unlock-keychain ~/Library/Keychains/login.keychain-db; or return 1
+        end
+        tmux new-session -s "$session"
+    end
+{{- else }}
+    if tmux has-session -t "$session" 2>/dev/null
+        tmux attach-session -t "$session"
+    else
+        tmux new-session -s "$session"
+    end
+{{- end }}
+end
