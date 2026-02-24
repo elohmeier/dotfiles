@@ -1,19 +1,30 @@
 {{/* vim: set filetype=fish: */}}
+{{- $theme := includeTemplate "theme" . -}}
 if status is-interactive
   set -U fish_greeting
   set -gx EDITOR nvim
-  fish_config theme choose "{{ template "theme" . }}"
+  fish_config theme choose "{{ $theme }}"
+
+  # Ensure Homebrew is on PATH
+  if test -d /home/linuxbrew/.linuxbrew/bin
+    fish_add_path /home/linuxbrew/.linuxbrew/bin /home/linuxbrew/.linuxbrew/sbin
+  end
+  if test -d /opt/homebrew/bin
+    fish_add_path /opt/homebrew/bin /opt/homebrew/sbin
+  end
+  if test -d /usr/local/bin
+    fish_add_path /usr/local/bin /usr/local/sbin
+  end
 
   # Set PNPM_HOME based on OS and add to PATH
-  if test (uname) = "Darwin"
-    # macOS path
-    set -gx PNPM_HOME "$HOME/Library/pnpm"
-    # Add Homebrew rustup to PATH
-    fish_add_path (brew --prefix)/opt/rustup/bin
-  else
-    # Linux/other path
-    set -gx PNPM_HOME "$HOME/.local/share/pnpm"
-  end
+{{- if eq .chezmoi.os "darwin" }}
+  set -gx PNPM_HOME "$HOME/Library/pnpm"
+{{- if lookPath "brew" }}
+  fish_add_path (brew --prefix)/opt/rustup/bin
+{{- end }}
+{{- else }}
+  set -gx PNPM_HOME "$HOME/.local/share/pnpm"
+{{- end }}
 
   if not contains "$PNPM_HOME" $PATH
     set -gx PATH "$PNPM_HOME" $PATH
@@ -25,15 +36,17 @@ if status is-interactive
   end
 
   # Set bat theme
-  set -gx BAT_THEME "{{- template "theme" . -}}"
+  set -gx BAT_THEME "{{ $theme }}"
 
   # Set fzf theme
   set -gx FZF_DEFAULT_OPTS "$FZF_DEFAULT_OPTS --highlight-line --info=inline-right --ansi --layout=reverse --border=none {{ includeTemplate "fzf-theme" . }}"
 
   # Set LS_COLORS using vivid if available and not already set
-  if command -q vivid; and not set -q LS_COLORS
-    set -Ux LS_COLORS (vivid generate "$HOME/.config/vivid/themes/{{- template "theme" . -}}.yaml")
+{{- if lookPath "vivid" }}
+  if not set -q LS_COLORS
+    set -Ux LS_COLORS (vivid generate "$HOME/.config/vivid/themes/{{ $theme }}.yaml")
   end
+{{- end }}
 
 {{- if .isWSL }}
   # Use wslview as default browser so Python webbrowser.open() works
@@ -67,33 +80,33 @@ if status is-interactive
        return $_h_ret
   end
 
-  if command -q fzf
-    fzf_configure_bindings --directory=\ct
-  end
+{{- if lookPath "fzf" }}
+  fzf_configure_bindings --directory=\ct
+{{- end }}
 
-  if command -q zoxide
-    zoxide init fish | source
-  end
+{{- if lookPath "zoxide" }}
+  zoxide init fish | source
+{{- end }}
 
-  if command -q atuin
-    atuin init fish | source
-  end
+{{- if lookPath "atuin" }}
+  atuin init fish | source
+{{- end }}
 
-  if command -q direnv
-    direnv hook fish | source
-  end
+{{- if lookPath "direnv" }}
+  direnv hook fish | source
+{{- end }}
 
-  if command -q mise
-    mise activate fish | source
-  end
+{{- if lookPath "mise" }}
+  mise activate fish | source
+{{- end }}
 
-  if command -q rbenv
-    rbenv init - fish | source
-  end
+{{- if lookPath "rbenv" }}
+  rbenv init - fish | source
+{{- end }}
 
-  if command -q starship
-    starship init fish | source
-  end
+{{- if lookPath "starship" }}
+  starship init fish | source
+{{- end }}
 
 {{- if .customCABundle }}
   set -gx REQUESTS_CA_BUNDLE "{{ .customCABundle }}"

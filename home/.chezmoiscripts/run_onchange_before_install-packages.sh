@@ -6,12 +6,12 @@ command -v brew >/dev/null || exit 0
 
 echo "Installing packages..."
 
-brew bundle --file=/dev/stdin <<'EOF' || true
+brew bundle --file=/dev/stdin <<EOF || true
 brew "bat"
 brew "btop"
 brew "eza"
 brew "fd"
-brew "fish"
+$(command -v fish >/dev/null || printf 'brew "fish"\n')
 brew "fzf"
 brew "just"
 brew "ncdu"

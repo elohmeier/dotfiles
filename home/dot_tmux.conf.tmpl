@@ -1,8 +1,16 @@
 # Set default shell to fish
 {{ if eq .chezmoi.os "darwin" -}}
+{{- if (lookPath "/opt/homebrew/bin/fish") -}}
 set-option -g default-shell /opt/homebrew/bin/fish
+{{- else -}}
+set-option -g default-shell {{ lookPath "fish" }}
+{{- end -}}
 {{- else if eq .chezmoi.os "linux" -}}
+{{- if (lookPath "/home/linuxbrew/.linuxbrew/bin/fish") -}}
 set-option -g default-shell /home/linuxbrew/.linuxbrew/bin/fish
+{{- else -}}
+set-option -g default-shell {{ lookPath "fish" }}
+{{- end -}}
 {{- end }}
 
 # Split panes using Vim-like bindings (with current directory)

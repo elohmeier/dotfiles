@@ -1,6 +1,6 @@
 return {
   "dmtrKovalenko/fff.nvim",
-  build = "cargo build --release",
+  build = "OPENSSL_NO_VENDOR=1 cargo build --release",
   config = function()
     require("fff").setup({})
 
