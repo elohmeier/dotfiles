@@ -1,6 +1,6 @@
 #!/bin/sh
 command -v tic >/dev/null || exit 0
-tic -x - <<'EOF'
+tic -x -o ~/.terminfo - <<'EOF'
 xterm-ghostty|ghostty|Ghostty,
 	am, bce, ccc, hs, km, mc5i, mir, msgr, npc, xenl, AX, Su, Tc, XT, fullkbd,
 	colors#256, cols#80, it#8, lines#24, pairs#32767,
