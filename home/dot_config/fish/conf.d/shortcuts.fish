@@ -70,10 +70,10 @@ if command -q lbu
     alias lst 'lbu status'
 end
 if command -q podman
-    alias pp 'podman ps'
-    alias ppa 'podman ps -a'
-    alias pi 'podman images'
-    alias pl 'podman logs'
-    alias plf 'podman logs -f'
-    alias pe 'podman exec -it'
+    alias pdp 'podman ps'
+    alias pdpa 'podman ps -a'
+    alias pdi 'podman images'
+    alias pdl 'podman logs'
+    alias pdlf 'podman logs -f'
+    alias pde 'podman exec -it'
 end
