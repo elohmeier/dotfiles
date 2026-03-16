@@ -1,6 +1,10 @@
 {{/* vim: set filetype=fish: */}}
 {{- $theme := includeTemplate "theme" . -}}
 if status is-interactive
+  # Ghostty shell integration emits OSC 133 prompt markers; disable Fish's
+  # native duplicate to prevent newlines being swallowed when copying.
+  status features --no-mark-prompt
+
   set -U fish_greeting
   set -gx EDITOR nvim
   fish_config theme choose "{{ $theme }}"
