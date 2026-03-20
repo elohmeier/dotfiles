@@ -3,7 +3,7 @@
 if status is-interactive
   # Ghostty shell integration emits OSC 133 prompt markers; disable Fish's
   # native duplicate to prevent newlines being swallowed when copying.
-  status features --no-mark-prompt
+  set -gx fish_features $fish_features no-mark-prompt
 
   set -U fish_greeting
   set -gx EDITOR nvim
