@@ -3,4 +3,4 @@ idiomatic_version_file_enable_tools = []
 experimental = true
 
 [env]
-SOPS_AGE_KEY_FILE = "~/.config/sops/age/keys.txt"
+SOPS_AGE_KEY_FILE = "{{ .chezmoi.homeDir }}/.config/sops/age/keys.txt"
