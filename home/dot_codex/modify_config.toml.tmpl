@@ -1,0 +1,38 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# dependencies = ["tomli-w"]
+# ///
+import sys, tomllib, tomli_w
+
+desired = """\
+model_reasoning_effort = "medium"
+notify = ["bash", "-lc", "afplay /System/Library/Sounds/Bottle.aiff"]
+personality = "pragmatic"
+sandbox_mode = "workspace-write"
+
+[sandbox_workspace_write]
+writable_roots = ["{{ .chezmoi.homeDir }}/.cache"]
+
+[projects."{{ .chezmoi.homeDir }}/repos"]
+trust_level = "trusted"
+"""
+
+current = sys.stdin.buffer.read()
+if not current.strip():
+    print(tomli_w.dumps(tomllib.loads(desired)), end="")
+    sys.exit(0)
+
+current_d = tomllib.loads(current.decode())
+desired_d = tomllib.loads(desired)
+
+
+def deep_merge(base, override):
+    for k, v in override.items():
+        if k in base and isinstance(base[k], dict) and isinstance(v, dict):
+            deep_merge(base[k], v)
+        else:
+            base[k] = v
+
+
+deep_merge(current_d, desired_d)
+print(tomli_w.dumps(current_d), end="")
