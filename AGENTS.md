@@ -22,6 +22,17 @@ Chezmoi-managed dotfiles repository and Python scripts collection.
 - Valid themes: `tokyonight_day`, `tokyonight_night`, `cyberdream_light`, `cyberdream`
 - Use `{{ template "theme" . }}` in templates to get the validated theme name
 
+## Chezmoi Scripts
+
+Scripts in `home/.chezmoiscripts/` are organized by platform:
+
+- `home/.chezmoiscripts/` — cross-platform scripts
+- `home/.chezmoiscripts/darwin/` — macOS-only (ignored when not darwin)
+- `home/.chezmoiscripts/linux/` — Linux-only (ignored when not linux)
+- `home/.chezmoiscripts/wsl/` — WSL-only (ignored when `.isWSL` is false)
+
+Platform filtering is handled by `home/.chezmoiignore.tmpl`.
+
 ## Python
 
 - Use click or rich-click by default for Python scripts that need CLI argument parsing.
