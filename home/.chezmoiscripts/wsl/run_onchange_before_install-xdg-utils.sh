@@ -3,7 +3,7 @@
 set -uo pipefail
 
 if ! command -v apt-get &>/dev/null; then
-    exit 0
+	exit 0
 fi
 
 sudo apt-get update

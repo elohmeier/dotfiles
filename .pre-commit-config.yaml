@@ -37,3 +37,17 @@ repos:
         language: system
         types: [lua]
         files: ^home/dot_config/nvim/
+      - id: shfmt
+        name: Format shell scripts with shfmt
+        entry: shfmt -w
+        language: system
+        types: [shell]
+        files: ^home/\.chezmoiscripts/
+        stages: [pre-push]
+      - id: shellcheck
+        name: Lint shell scripts with shellcheck
+        entry: shellcheck
+        language: system
+        types: [shell]
+        files: ^home/\.chezmoiscripts/
+        stages: [pre-push]
