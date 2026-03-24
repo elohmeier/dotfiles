@@ -22,4 +22,12 @@ Applications/Firefox.app
 
 {{ if not (lookPath "fish") }}
 .config/fish/**
+{{- end }}
+
+{{ if not (lookPath "claude") }}
+.claude/**
+{{- end }}
+
+{{ if not (lookPath "codex") }}
+.codex/**
 {{- end -}}
