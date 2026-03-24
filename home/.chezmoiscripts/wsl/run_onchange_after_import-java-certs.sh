@@ -25,11 +25,14 @@ imported=0
 # Homebrew-managed OpenJDK instances
 if command -v brew >/dev/null; then
 	for jdk in "$(brew --prefix)"/opt/openjdk*/; do
-		cacerts="$jdk/lib/security/cacerts"
 		keytool="$jdk/bin/keytool"
-		[ -f "$cacerts" ] && [ -x "$keytool" ] || continue
-		import_certs "$cacerts" "$keytool"
-		imported=1
+		[ -x "$keytool" ] || continue
+		for cacerts in "$jdk/lib/security/cacerts" "$jdk/libexec/lib/security/cacerts"; do
+			[ -f "$cacerts" ] || continue
+			import_certs "$cacerts" "$keytool"
+			imported=1
+			break
+		done
 	done
 fi
 
