@@ -24,7 +24,7 @@ imported=0
 
 # Homebrew-managed OpenJDK instances
 if command -v brew >/dev/null; then
-	for jdk in "$(brew --prefix)"/opt/openjdk*/; do
+	for jdk in "$(brew --prefix)"/opt/openjdk*; do
 		keytool="$jdk/bin/keytool"
 		[ -x "$keytool" ] || continue
 		for cacerts in "$jdk/lib/security/cacerts" "$jdk/libexec/lib/security/cacerts"; do
