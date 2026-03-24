@@ -23,7 +23,11 @@ displayConfig = "internal"
 enableEmail = false
 enableSecrets = false
 
+{{- if and (eq .chezmoi.os "linux") (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
+customCABundle = "{{ .chezmoi.homeDir }}/.config/ssl/ca-certificates.crt"
+{{- else }}
 customCABundle = ""
+{{- end }}
 customPyPIIndex = ""
 
 isWSL = {{ and (eq .chezmoi.os "linux") (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}

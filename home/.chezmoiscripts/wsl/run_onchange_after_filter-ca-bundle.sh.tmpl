@@ -1,0 +1,31 @@
+#!/bin/sh
+# ca-bundle-hash: {{ output "sha256sum" "/etc/ssl/certs/ca-certificates.crt" | trim }}
+set -eu
+
+SRC="/etc/ssl/certs/ca-certificates.crt"
+DST="{{ .chezmoi.homeDir }}/.config/ssl/ca-certificates.crt"
+
+mkdir -p "$(dirname "$DST")"
+
+python3 - "$SRC" "$DST" <<'SCRIPT'
+import re, subprocess, sys
+
+src, dst = sys.argv[1], sys.argv[2]
+with open(src) as f:
+    bundle = f.read()
+
+certs = re.findall(r"(-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----)", bundle, re.DOTALL)
+clean = []
+excluded = 0
+for pem in certs:
+    r = subprocess.run(["openssl", "x509", "-text", "-noout"], input=pem, capture_output=True, text=True)
+    if "Certificate Policies: critical" in r.stdout:
+        excluded += 1
+    else:
+        clean.append(pem)
+
+with open(dst, "w") as f:
+    f.write("\n".join(clean) + "\n")
+
+print(f"CA bundle: kept {len(clean)}, excluded {excluded} certs with critical Certificate Policies")
+SCRIPT
