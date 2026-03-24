@@ -5,6 +5,8 @@ STOREPASS="changeit"
 import_certs() {
     cacerts=$1
     keytool=$2
+    count=0
+    echo "Importing certs into $cacerts"
     for cert in /etc/ssl/certs/*.pem; do
         [ -f "$cert" ] || continue
         alias=$(basename "$cert" .pem | tr '[:upper:]' '[:lower:]')
@@ -12,7 +14,10 @@ import_certs() {
         "$keytool" -import -trustcacerts -noprompt \
             -keystore "$cacerts" -storepass "$STOREPASS" \
             -alias "$alias" -file "$cert" 2>/dev/null || true
+        count=$((count + 1))
+        echo "  Added: $alias"
     done
+    echo "  $count new certificate(s) imported"
 }
 
 imported=0
