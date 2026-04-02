@@ -244,8 +244,7 @@ vim.lsp.config["rust_analyzer"] = {
 }
 
 -- Configure LSP logging to reduce log file size
--- Set log level to WARN to only log warnings and errors
-vim.lsp.set_log_level("WARN")
+vim.lsp.log.set_level(vim.log.levels.WARN)
 
 -- Helper function to check if command is executable
 local function is_executable(cmd)

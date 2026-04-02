@@ -1,3 +1,0 @@
-return {
-  "rafikdraoui/jj-diffconflicts",
-}
