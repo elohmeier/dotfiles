@@ -490,6 +490,23 @@ Config.later(function()
 end)
 
 Config.later(function()
+  add({ "https://github.com/3rd/image.nvim" })
+  require("image").setup({
+    backend = "kitty",
+    integrations = {
+      markdown = { enabled = true },
+      neorg = { enabled = false },
+      typst = { enabled = false },
+    },
+    max_width = 100,
+    max_height = 12,
+    max_height_window_percentage = math.huge,
+    max_width_window_percentage = math.huge,
+    window_overlap_clear_enabled = false,
+  })
+end)
+
+Config.later(function()
   vim.g.fff = { lazy_sync = true }
   add({ "https://github.com/dmtrKovalenko/fff.nvim" })
   require("fff.download").ensure_downloaded({}, function(ok)
