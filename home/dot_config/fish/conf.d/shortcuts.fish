@@ -69,6 +69,9 @@ if command -q lbu
     alias lc 'lbu commit'
     alias lst 'lbu status'
 end
+if test -f /usr/lib64/pkcs11/libtpm2_pkcs11.so
+    abbr --add -- sat 'ssh-add -s /usr/lib64/pkcs11/libtpm2_pkcs11.so'
+end
 if command -q podman
     alias pdp 'podman ps'
     alias pdpa 'podman ps -a'
