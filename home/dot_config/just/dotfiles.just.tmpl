@@ -23,42 +23,121 @@ install-extras:
     tap "oven-sh/bun"
     brew "atuin"
     brew "bash-language-server"
+{{- if not (lookPath "bat") }}
+    brew "bat"
+{{- end }}
+{{- if not (lookPath "btop") }}
+    brew "btop"
+{{- end }}
+    brew "cfssl"
+{{- if not (lookPath "curl") }}
+    brew "curl"
+{{- end }}
     brew "derailed/k9s/k9s"
     brew "dprint"
     brew "elohmeier/tap/jsonnet-language-server"
     brew "elohmeier/tap/ssh-to-age"
     brew "entr"
+{{- if not (lookPath "eza") }}
+    brew "eza"
+{{- end }}
     brew "f1bonacc1/tap/process-compose"
+{{- if not (lookPath "fd") }}
+    brew "fd"
+{{- end }}
+    brew "flux"
+{{- if not (lookPath "fzf") }}
+    brew "fzf"
+{{- end }}
+{{- if not (lookPath "gh") }}
     brew "gh"
+{{- end }}
+{{- if not (lookPath "git") }}
     brew "git"
+{{- end }}
     brew "git-delta"
     brew "git-lfs"
+    brew "gitleaks"
+{{- if not (lookPath "gpg") }}
     brew "gnupg"
+{{- end }}
+{{- if not (lookPath "go") }}
     brew "go"
+{{- end }}
     brew "go-jsonnet"
     brew "helm"
+    brew "jless"
     brew "jsonnet-bundler"
+{{- if not (lookPath "just") }}
+    brew "just"
+{{- end }}
+    brew "kubernetes-cli"
+    brew "kustomize"
     brew "lazygit"
     brew "lua-language-server"
+{{- if not (lookPath "make") }}
     brew "make"
+{{- end }}
     brew "minio-mc"
+{{- if not (lookPath "nvim") }}
     brew "neovim"
+{{- end }}
+    brew "nnn"
+{{- if not (lookPath "node") }}
+    brew "node"
+{{- end }}
     brew "opentofu"
     brew "oven-sh/bun/bun"
+    brew "packer"
+    brew "parqeye"
     brew "pnpm"
+{{- if not (lookPath "podman") }}
+    brew "podman"
+    brew "podman-compose"
+    brew "podman-tui"
+{{- end }}
+    brew "postgresql@18"
+{{- if not (lookPath "rg") }}
     brew "ripgrep"
+{{- end }}
+{{- if not (lookPath "rsync") }}
     brew "rsync"
+{{- end }}
+{{- if not (lookPath "ruby") }}
+    brew "ruby"
+{{- end }}
     brew "rustup"
+{{- if not (lookPath "shellcheck") }}
     brew "shellcheck"
+{{- end }}
     brew "shfmt"
+    brew "sops"
+    brew "elohmeier/tap/sqitch"
+    brew "stern"
     brew "stylua"
+    brew "syncthing"
+    brew "tabiew"
+    brew "talosctl"
     brew "taplo"
+    brew "timg"
     brew "tinymist"
     brew "typst"
     brew "typstyle"
+{{- if not (lookPath "uv") }}
+    brew "uv"
+{{- end }}
+    brew "vivid"
+{{- if not (lookPath "watch") }}
     brew "watch"
+{{- end }}
     brew "yazi"
     brew "yq"
+{{- if not (lookPath "zig") }}
+    brew "zig"
+{{- end }}
+{{- if not (lookPath "zoxide") }}
+    brew "zoxide"
+{{- end }}
 {{- if eq .chezmoi.os "darwin" }}
     brew "pinentry-mac"
     cask "db-browser-for-sqlite"
