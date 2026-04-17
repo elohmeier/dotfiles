@@ -1,3 +1,5 @@
+# Managed by chezmoi — edit in ~/.local/share/chezmoi/home/dot_tmux.conf.tmpl
+
 # Set default shell to fish
 {{ if eq .chezmoi.os "darwin" -}}
 {{- if (lookPath "/opt/homebrew/bin/fish") -}}
@@ -57,6 +59,9 @@ bind-key -T copy-mode-vi y send -X copy-selection-and-cancel
 
 # Enable mouse support
 set -g mouse on
+
+# Allow escape sequence passthrough (needed for image.nvim kitty protocol)
+set -g allow-passthrough on
 
 # Enable extended keys for modified key sequences
 set -g extended-keys on
