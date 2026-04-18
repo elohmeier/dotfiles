@@ -1,4 +1,4 @@
 {{- $fish := lookPath "fish" -}}
 {{ range (gitHubKeys "elohmeier") -}}
-{{- if $fish }}command="{{ $fish }} -l" {{ end }}{{ .Key }}
+{{- if $fish }}command="if [ -n \"$SSH_ORIGINAL_COMMAND\" ]; then eval \"$SSH_ORIGINAL_COMMAND\"; else exec {{ $fish }} -l; fi" {{ end }}{{ .Key }}
 {{ end -}}
