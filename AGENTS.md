@@ -33,6 +33,25 @@ Scripts in `home/.chezmoiscripts/` are organized by platform:
 
 Platform filtering is handled by `home/.chezmoiignore.tmpl`.
 
+## Agent Skills
+
+Vendored skill files live in `home/dot_agents/skills/` (deploys to `~/.agents/skills/`). This is the canonical location, compatible with the [vercel-labs/skills](https://github.com/vercel-labs/skills) CLI layout.
+
+Both `~/.claude/skills/` and `~/.codex/skills/` get chezmoi-templated symlinks pointing to `~/.agents/skills/<skill>`.
+
+```
+home/dot_agents/skills/              ← real files (source of truth)
+  agent-browser/  msgvault/  opendataloader-pdf/  paperless-utils/
+
+home/dot_claude/skills/              ← symlink_<skill>.tmpl → ~/.agents/skills/*
+home/dot_codex/skills/               ← symlink_<skill>.tmpl → ~/.agents/skills/*
+```
+
+To add a new skill:
+
+1. Add skill directory under `home/dot_agents/skills/<name>/SKILL.md`
+2. Create `home/dot_claude/skills/symlink_<name>.tmpl` and `home/dot_codex/skills/symlink_<name>.tmpl` containing `{{ .chezmoi.homeDir }}/.agents/skills/<name>`
+
 ## Python
 
 - Use click or rich-click by default for Python scripts that need CLI argument parsing.
