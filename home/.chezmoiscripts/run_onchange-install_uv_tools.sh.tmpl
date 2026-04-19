@@ -2,3 +2,5 @@
 
 command -v uv >/dev/null || exit 0
 uv tool install --force --upgrade "{{ .chezmoi.sourceDir }}/.." || true
+# required by jupytext.nvim plugin to convert .ipynb files
+uv tool install --upgrade jupytext || true
