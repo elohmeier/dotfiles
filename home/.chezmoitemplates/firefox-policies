@@ -69,6 +69,12 @@
       {
         "Placement": "toolbar",
         "Folder": "Cluster SVC",
+        "Title": "Hubble UI",
+        "URL": "http://hubble-ui.kube-system.svc.cluster.local"
+      },
+      {
+        "Placement": "toolbar",
+        "Folder": "Cluster SVC",
         "Title": "Convexio Admin",
         "URL": "http://apiserver.convexio.svc.cluster.local:8000/admin/"
       }
