@@ -1,4 +1,5 @@
 #!/bin/sh
+# pyproject: {{ output "sh" "-c" (printf "cd %s/.. && shasum -a 256 pyproject.toml uv.lock" .chezmoi.sourceDir) | sha256sum }}
 
 command -v uv >/dev/null || exit 0
 uv tool install --force --upgrade "{{ .chezmoi.sourceDir }}/.." || true

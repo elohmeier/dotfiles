@@ -1,3 +1,5 @@
+status is-interactive; or exit
+
 {{- if and .secretiveAvailable .secretiveSocketPath }}
 # Use Secretive as SSH agent (macOS)
 set -gx SSH_AUTH_SOCK {{ .secretiveSocketPath }}

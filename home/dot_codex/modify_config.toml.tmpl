@@ -1,8 +1,6 @@
-#!/usr/bin/env -S uv run --script
-# /// script
-# dependencies = ["tomli-w"]
-# ///
-import sys, tomllib, tomli_w
+#!/usr/bin/env python3
+import sys
+import tomllib
 
 desired = """\
 model_reasoning_effort = "medium"
@@ -26,6 +24,19 @@ current_d = tomllib.loads(current.decode())
 desired_d = tomllib.loads(desired)
 
 
+def contains(base, required):
+    return all(
+        k in base
+        and (contains(base[k], v) if isinstance(v, dict) else base[k] == v)
+        for k, v in required.items()
+    )
+
+
+if contains(current_d, desired_d):
+    sys.stdout.buffer.write(current)
+    sys.exit(0)
+
+
 def deep_merge(base, override):
     for k, v in override.items():
         if k in base and isinstance(base[k], dict) and isinstance(v, dict):
@@ -35,4 +46,28 @@ def deep_merge(base, override):
 
 
 deep_merge(current_d, desired_d)
-print(tomli_w.dumps(current_d), end="")
+
+
+def value(v):
+    if isinstance(v, bool):
+        return str(v).lower()
+    if isinstance(v, int | float):
+        return str(v)
+    if isinstance(v, str):
+        return repr(v).replace("'", '"')
+    if isinstance(v, list):
+        return "[" + ", ".join(value(x) for x in v) + "]"
+    raise TypeError(type(v))
+
+
+def dump(d, prefix=()):
+    for k, v in d.items():
+        if not isinstance(v, dict):
+            print(f"{value(k)} = {value(v)}")
+    for k, v in d.items():
+        if isinstance(v, dict):
+            print(f"\n[{'.'.join(value(p) for p in (*prefix, k))}]")
+            dump(v, (*prefix, k))
+
+
+dump(current_d)

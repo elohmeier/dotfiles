@@ -1,0 +1,18 @@
+{{- $fish := lookPath "fish" -}}
+{{- if $fish -}}
+#!/bin/sh
+# Always run: tools like nvim, bat, fzf, or vivid can be installed after the last apply.
+{{ $fish }} --no-config -c 'set -U fish_greeting; fish_config theme choose {{ template "theme" . }}'
+{{- with lookPath "nvim" }}
+{{ $fish }} --no-config -c 'set -Ux EDITOR {{ . }}'
+{{- end }}
+{{- if lookPath "bat" }}
+{{ $fish }} --no-config -c 'set -Ux BAT_THEME {{ template "theme" . }}'
+{{- end }}
+{{- if lookPath "fzf" }}
+{{ $fish }} --no-config -c 'set -Ux FZF_DEFAULT_OPTS "--highlight-line --info=inline-right --ansi --layout=reverse --border=none {{ includeTemplate "fzf-theme" . }}"'
+{{- end }}
+{{- with lookPath "vivid" }}
+{{ $fish }} --no-config -c 'set -Ux LS_COLORS ({{ . }} generate "{{ $.chezmoi.homeDir }}/.config/vivid/themes/{{ template "theme" $ }}.yaml")'
+{{- end }}
+{{- end }}

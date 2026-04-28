@@ -1,57 +1,30 @@
 {{/* vim: set filetype=fish: */}}
-{{- $theme := includeTemplate "theme" . -}}
+{{- $brew := lookPath "brew" -}}
 if status is-interactive
   # Ghostty shell integration emits OSC 133 prompt markers; disable Fish's
   # native duplicate to prevent newlines being swallowed when copying.
   set -gx fish_features $fish_features no-mark-prompt
 
-  set -U fish_greeting
-  set -gx EDITOR nvim
-  fish_config theme choose "{{ $theme }}"
+{{- if stat "/home/linuxbrew/.linuxbrew/bin" }}
+  fish_add_path /home/linuxbrew/.linuxbrew/bin /home/linuxbrew/.linuxbrew/sbin
+{{- end }}
+{{- if stat "/opt/homebrew/bin" }}
+  fish_add_path /opt/homebrew/bin /opt/homebrew/sbin
+{{- end }}
+{{- if stat "/usr/local/bin" }}
+  fish_add_path /usr/local/bin /usr/local/sbin
+{{- end }}
 
-  # Ensure Homebrew is on PATH
-  if test -d /home/linuxbrew/.linuxbrew/bin
-    fish_add_path /home/linuxbrew/.linuxbrew/bin /home/linuxbrew/.linuxbrew/sbin
-  end
-  if test -d /opt/homebrew/bin
-    fish_add_path /opt/homebrew/bin /opt/homebrew/sbin
-  end
-  if test -d /usr/local/bin
-    fish_add_path /usr/local/bin /usr/local/sbin
-  end
-
-  # Set PNPM_HOME based on OS and add to PATH
 {{- if eq .chezmoi.os "darwin" }}
   set -gx PNPM_HOME "$HOME/Library/pnpm"
   set -gx PYTEST_XDIST_AUTO_NUM_WORKERS 4
-{{- if lookPath "brew" }}
-  fish_add_path (brew --prefix)/opt/rustup/bin
+{{- if $brew }}
+  fish_add_path {{ trimSuffix "/bin/brew" $brew }}/opt/rustup/bin
 {{- end }}
 {{- else }}
   set -gx PNPM_HOME "$HOME/.local/share/pnpm"
 {{- end }}
-
-  if not contains "$PNPM_HOME" $PATH
-    set -gx PATH "$PNPM_HOME" $PATH
-  end
-
-  # Add ~/.local/bin to PATH
-  if not contains "$HOME/.local/bin" $PATH
-    set -gx PATH "$HOME/.local/bin" $PATH
-  end
-
-  # Set bat theme
-  set -gx BAT_THEME "{{ $theme }}"
-
-  # Set fzf theme
-  set -gx FZF_DEFAULT_OPTS "$FZF_DEFAULT_OPTS --highlight-line --info=inline-right --ansi --layout=reverse --border=none {{ includeTemplate "fzf-theme" . }}"
-
-  # Set LS_COLORS using vivid if available and not already set
-{{- if lookPath "vivid" }}
-  if not set -q LS_COLORS
-    set -Ux LS_COLORS (vivid generate "$HOME/.config/vivid/themes/{{ $theme }}.yaml")
-  end
-{{- end }}
+  fish_add_path "$PNPM_HOME" "$HOME/.local/bin"
 
 {{- if .isWSL }}
   # Use wslview as default browser so Python webbrowser.open() works
@@ -70,47 +43,28 @@ if status is-interactive
   end
 {{- end }}
 
-  source $__fish_config_dir/conf.d/shortcuts.fish
-
-  if test -f $__fish_config_dir/conf.d/fish-ssh-agent.fish
-    source $__fish_config_dir/conf.d/fish-ssh-agent.fish
-  end
-
-  function h
-       set _h_dir ($HOME/.local/bin/h $argv)
-       set _h_ret $status
-       if test "$_h_dir" != "$PWD"
-           cd "$_h_dir"
-       end
-       return $_h_ret
-  end
-
-{{- if lookPath "fzf" }}
-  fzf_configure_bindings --directory=\ct
+{{- with lookPath "zoxide" }}
+  {{ . }} init fish | source
 {{- end }}
 
-{{- if lookPath "zoxide" }}
-  zoxide init fish | source
+{{- with lookPath "atuin" }}
+  {{ . }} init fish | source
 {{- end }}
 
-{{- if lookPath "atuin" }}
-  atuin init fish | source
+{{- with lookPath "direnv" }}
+  {{ . }} hook fish | source
 {{- end }}
 
-{{- if lookPath "direnv" }}
-  direnv hook fish | source
+{{- with lookPath "mise" }}
+  {{ . }} activate fish | source
 {{- end }}
 
-{{- if lookPath "mise" }}
-  mise activate fish | source
+{{- with lookPath "rbenv" }}
+  {{ . }} init - fish | source
 {{- end }}
 
-{{- if lookPath "rbenv" }}
-  rbenv init - fish | source
-{{- end }}
-
-{{- if lookPath "starship" }}
-  starship init fish | source
+{{- with lookPath "starship" }}
+  {{ . }} init fish | source
 {{- end }}
 
 {{- if .customCABundle }}
@@ -129,13 +83,10 @@ if status is-interactive
 {{- end }}
 end
 
-# Source Nix profile if it exists
-if test -f /nix/var/nix/profiles/default/etc/profile.d/nix.fish
-  source /nix/var/nix/profiles/default/etc/profile.d/nix.fish
-end
+{{- if stat "/nix/var/nix/profiles/default/etc/profile.d/nix.fish" }}
+source /nix/var/nix/profiles/default/etc/profile.d/nix.fish
+{{- end }}
 
-{{- if eq .chezmoi.os "darwin" }}
-# Added by OrbStack: command-line tools and integration
-# This won't be added again if you remove it.
-source ~/.orbstack/shell/init2.fish 2>/dev/null || :
+{{- if and (eq .chezmoi.os "darwin") (stat (print .chezmoi.homeDir "/.orbstack/shell/init2.fish")) }}
+source ~/.orbstack/shell/init2.fish
 {{- end }}

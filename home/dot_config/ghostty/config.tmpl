@@ -24,8 +24,6 @@ scrollback-limit = 4294967295
 
 # Use Fish shell
 shell-integration = fish
-{{ if eq .chezmoi.os "darwin" -}}
-command = /opt/homebrew/bin/fish --login --interactive
-{{- else if eq .chezmoi.os "linux" -}}
-command = /home/linuxbrew/.linuxbrew/bin/fish --login --interactive
+{{ with lookPath "fish" -}}
+command = {{ . }} --login --interactive
 {{- end }}

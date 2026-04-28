@@ -55,6 +55,6 @@ To add a new skill:
 ## Python
 
 - Use click or rich-click by default for Python scripts that need CLI argument parsing.
-- Add new CLIs by dropping a module in `scripts/`, pointing a `[project.scripts]` entry in `pyproject.toml` at its `main`, and let `home/.chezmoiscripts/run_onchange-install_uv_tools.sh.tmpl` install them via `uv`.
+- Add new CLIs by dropping a module in `scripts/`, pointing a `[project.scripts]` entry in `pyproject.toml` at its `main`, and let `home/.chezmoiscripts/run_onchange_install_uv_tools.sh.tmpl` install them via `uv`.
 - Use `ruff format` for code formatting and `ruff check` for linting Python code.
 - After editing Python files, always run: `ruff format <file> && ruff check <file> && ty check <file>`
