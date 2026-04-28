@@ -23,6 +23,7 @@ if status is-interactive
   # Set PNPM_HOME based on OS and add to PATH
 {{- if eq .chezmoi.os "darwin" }}
   set -gx PNPM_HOME "$HOME/Library/pnpm"
+  set -gx PYTEST_XDIST_AUTO_NUM_WORKERS 4
 {{- if lookPath "brew" }}
   fish_add_path (brew --prefix)/opt/rustup/bin
 {{- end }}
