@@ -4,7 +4,7 @@ import tomllib
 
 desired = """\
 model_reasoning_effort = "medium"
-notify = ["bash", "-lc", "afplay /System/Library/Sounds/Bottle.aiff"]
+notify = ["bash", "-lc", "afplay {{ .chezmoi.homeDir }}/.local/share/sounds/workwork.mp3"]
 personality = "pragmatic"
 sandbox_mode = "workspace-write"
 
