@@ -1,0 +1,4 @@
+interface:
+  display_name: "Typst"
+  short_description: "Typst document authoring and layout"
+  default_prompt: "Use $typst to write, debug, or format a Typst document, template, table, math section, or layout."

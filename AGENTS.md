@@ -41,7 +41,7 @@ Both `~/.claude/skills/` and `~/.codex/skills/` get chezmoi-templated symlinks p
 
 ```
 home/dot_agents/skills/              ← real files (source of truth)
-  agent-browser/  msgvault/  opendataloader-pdf/  paperless-utils/
+  agent-browser/  fabric/  msgvault/  opendataloader-pdf/  paperless-utils/  typst/
 
 home/dot_claude/skills/              ← symlink_<skill>.tmpl → ~/.agents/skills/*
 home/dot_codex/skills/               ← symlink_<skill>.tmpl → ~/.agents/skills/*
