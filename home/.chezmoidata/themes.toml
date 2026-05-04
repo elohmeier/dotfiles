@@ -686,3 +686,23 @@ overdue = "bold rgb500"
 recurring = "rgb503"
 scheduled = "rgb055"
 tagged = "rgb503"
+
+# nnn: NNN_COLORS = 8 contexts (2 hex chars each, xterm-256), NNN_FCOLORS = 12 file-type pairs.
+# FCOLORS order: Block, Char, Dir, Exec, Reg, Hard, Sym, Miss, Orphan, Fifo, Sock, Unknown.
+# 00 = terminal default. Reference: https://user-images.githubusercontent.com/1482942/93023823-46a6ba80-f5e1-11ea-9ea3-6a3c757704f4.png
+
+[nnn.tokyonight_day]
+contexts = "#211f6382411fa163"
+fcolors = "1782214100631ff6a18263a1"
+
+[nnn.tokyonight_night]
+contexts = "#4b508dd7718dd3d7"
+fcolors = "50d74b71008d50f6d3d78dd3"
+
+[nnn.cyberdream]
+contexts = "#57d5dbde54d58dcb"
+fcolors = "57de575400d557f6d3de8dcb"
+
+[nnn.cyberdream_light]
+contexts = "#1fa2821c5b1fa17c"
+fcolors = "1f821f1c005b1ff6a1825b7c"
