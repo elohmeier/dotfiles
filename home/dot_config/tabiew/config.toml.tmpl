@@ -1,0 +1,9 @@
+{{- $map := dict
+    "tokyonight_day" "TokyoNightDay"
+    "tokyonight_night" "TokyoNightNight"
+    "cyberdream" "Vesper"
+    "cyberdream_light" "GithubLightDefault"
+-}}
+theme = "{{ index $map .theme }}"
+show_table_borders = true
+show_table_row_numbers = true
