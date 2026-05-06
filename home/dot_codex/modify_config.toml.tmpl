@@ -4,7 +4,9 @@ import tomllib
 
 desired = """\
 model_reasoning_effort = "medium"
+{{ if lookPath "afplay" -}}
 notify = ["bash", "-lc", "afplay {{ .chezmoi.homeDir }}/.local/share/sounds/workwork.mp3"]
+{{ end -}}
 personality = "pragmatic"
 sandbox_mode = "workspace-write"
 
@@ -22,6 +24,7 @@ if not current.strip():
 
 current_d = tomllib.loads(current.decode())
 desired_d = tomllib.loads(desired)
+managed = ["notify"]
 
 
 def contains(base, required):
@@ -32,9 +35,14 @@ def contains(base, required):
     )
 
 
-if contains(current_d, desired_d):
+if contains(current_d, desired_d) and all(
+    (k in desired_d) == (k in current_d) for k in managed
+):
     sys.stdout.buffer.write(current)
     sys.exit(0)
+
+for k in managed:
+    current_d.pop(k, None)
 
 
 def deep_merge(base, override):
