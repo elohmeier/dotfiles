@@ -4,9 +4,6 @@ import tomllib
 
 desired = """\
 model_reasoning_effort = "medium"
-{{ if lookPath "afplay" -}}
-notify = ["bash", "-lc", "afplay {{ .chezmoi.homeDir }}/.local/share/sounds/workwork.mp3"]
-{{ end -}}
 personality = "pragmatic"
 sandbox_mode = "workspace-write"
 
@@ -18,19 +15,14 @@ trust_level = "trusted"
 """
 
 current = sys.stdin.buffer.read()
-if not current.strip():
-    print(tomli_w.dumps(tomllib.loads(desired)), end="")
-    sys.exit(0)
-
-current_d = tomllib.loads(current.decode())
+current_d = tomllib.loads(current.decode()) if current.strip() else {}
 desired_d = tomllib.loads(desired)
 managed = ["notify"]
 
 
 def contains(base, required):
     return all(
-        k in base
-        and (contains(base[k], v) if isinstance(v, dict) else base[k] == v)
+        k in base and (contains(base[k], v) if isinstance(v, dict) else base[k] == v)
         for k, v in required.items()
     )
 
