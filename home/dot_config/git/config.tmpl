@@ -97,6 +97,7 @@ email = "{{ .email }}"
 name = "{{ .name }}"
 signingKey = "0x807BC3355DA0F069"
 
+{{ if get . "githubEmail" }}
 [includeIf "gitdir:~/repos/github.com/"]
     path = ~/.config/git/github.gitconfig
 
@@ -111,6 +112,7 @@ signingKey = "0x807BC3355DA0F069"
 
 [includeIf "gitdir:~/Sync/"]
     path = ~/.config/git/github.gitconfig
+{{ end }}
 
 [include]
     path = ~/.config/git/local.gitconfig

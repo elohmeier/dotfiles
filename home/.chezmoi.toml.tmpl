@@ -13,6 +13,7 @@ command = "fish"
 
 [data]
 email = "enno@nerdworks.de"
+githubEmail = "2536303+elohmeier@users.noreply.github.com"
 name = "Enno Richter"
 {{- if eq .chezmoi.os "darwin" }}
 displayConfig = {{ output (joinPath .chezmoi.sourceDir ".." "scripts" "get-display-config.sh") | quote }}
