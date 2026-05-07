@@ -30,6 +30,7 @@ compress-dir = "scripts.compress_dir:main"
 git-remote-ssh = "scripts.git_remote_ssh:main"
 cyberark-psm = "scripts.cyberark_psm:main"
 grafana-users = "scripts.grafana_users:main"
+grafana-dashboard-viewer = "scripts.grafana_dashboard_viewer:main"
 metrics-scout = "scripts.metrics_scout:main"
 git-survey = "scripts.git_survey:main"
 typst-watch = "scripts.typst_watch:main"
@@ -41,3 +42,9 @@ build-backend = "uv_build"
 [tool.uv.build-backend]
 module-name = "scripts"
 module-root = ""
+
+[dependency-groups]
+dev = [
+  "ruff>=0.15.12",
+  "ty>=0.0.34",
+]
