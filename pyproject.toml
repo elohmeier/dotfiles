@@ -34,6 +34,7 @@ grafana-dashboard-viewer = "scripts.grafana_dashboard_viewer:main"
 metrics-scout = "scripts.metrics_scout:main"
 git-survey = "scripts.git_survey:main"
 typst-watch = "scripts.typst_watch:main"
+foreman-job = "scripts.foreman_job:main"
 
 [build-system]
 requires = ["uv_build>=0.9.4,<0.13.0"]
