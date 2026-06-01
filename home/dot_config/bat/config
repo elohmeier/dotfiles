@@ -1,0 +1,8 @@
+# Managed by chezmoi — edit in ~/.local/share/chezmoi/home/dot_config/bat/config
+
+# Pager: less with mouse wheel scrolling for tmux.
+# -R  pass ANSI color escapes
+# -F  quit if content fits one screen (bat default)
+# --mouse           forward mouse wheel to less
+# --wheel-lines=3   smoother scroll step
+--pager="less -RF --mouse --wheel-lines=3"
