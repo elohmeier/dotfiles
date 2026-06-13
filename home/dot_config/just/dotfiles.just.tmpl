@@ -55,7 +55,6 @@ install-extras:
 {{- if not (lookPath "git") }}
     brew "git"
 {{- end }}
-    brew "git-delta"
     brew "git-lfs"
     brew "gitleaks"
 {{- if not (lookPath "gpg") }}
@@ -149,6 +148,8 @@ install-extras:
     cask "stats"
 {{- end }}
     EOF
+
+    npm install -g hunkdiff@latest
 
     echo "Extra packages installed successfully!"
 

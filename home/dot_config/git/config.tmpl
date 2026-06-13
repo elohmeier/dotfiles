@@ -17,19 +17,8 @@ gpgSign = false
 verbose = true
 
 [core]
-pager = "delta"
+pager = "{{ lookPath "hunk" | default "hunk" }} pager"
 
-[delta]
-features = "{{- template "theme" . -}}"
-navigate = true
-line-numbers = true
-side-by-side = false
-hyperlinks = true
-file-decoration-style = "blue ul"
-hunk-header-decoration-style = "blue box"
-whitespace-error-style = "22 reverse"
-
-{{ includeTemplate "git-delta-theme" . -}}
 [diff]
 algorithm = "histogram"
 colorMoved = "plain"
@@ -64,9 +53,6 @@ autocorrect = "prompt"
 
 [init]
 defaultBranch = "main"
-
-[interactive]
-diffFilter = "delta --color-only"
 
 [merge]
 conflictstyle = "zdiff3"

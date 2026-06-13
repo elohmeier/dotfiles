@@ -500,7 +500,7 @@ file_doc = "#5ef1ff"
 file_exec = "#5eff6c"
 file_dir = "#5ef1ff"
 
-[git_delta.tokyonight_day]
+[diff.tokyonight_day]
 line_numbers_minus = "#c25d64"
 line_numbers_plus = "#399a96"
 line_numbers_zero = "#a8aecb"
@@ -510,7 +510,7 @@ plus_emph_bg = "#57a7bc"
 plus_bg = "#aecde6"
 syntax_theme = "tokyonight_day"
 
-[git_delta.tokyonight_night]
+[diff.tokyonight_night]
 line_numbers_minus = "#b2555b"
 line_numbers_plus = "#266d6a"
 line_numbers_zero = "#3b4261"
@@ -520,7 +520,7 @@ plus_emph_bg = "#2c5a66"
 plus_bg = "#20303b"
 syntax_theme = "tokyonight_night"
 
-[git_delta.cyberdream]
+[diff.cyberdream]
 line_numbers_minus = "#ff6e5e"
 line_numbers_plus = "#5eff6c"
 line_numbers_zero = "#7b8496"
@@ -530,7 +530,7 @@ plus_emph_bg = "#2a4a2a"
 plus_bg = "#203c20"
 syntax_theme = "cyberdream"
 
-[git_delta.cyberdream_light]
+[diff.cyberdream_light]
 line_numbers_minus = "#d11500"
 line_numbers_plus = "#008b0c"
 line_numbers_zero = "#7b8496"

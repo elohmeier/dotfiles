@@ -144,8 +144,8 @@ fi
 # Show the diff
 echo "Showing differences ($DEFAULT_BRANCH -> HEAD):"
 echo "=================================="
-if command -v delta >/dev/null 2>&1; then
-    delta --no-gitconfig "$TEMP_DIR/main.yaml" "$TEMP_DIR/head.yaml" || true
+if command -v hunk >/dev/null 2>&1; then
+    hunk diff "$TEMP_DIR/main.yaml" "$TEMP_DIR/head.yaml" || true
 else
     diff -u "$TEMP_DIR/main.yaml" "$TEMP_DIR/head.yaml" || true
     echo ""
@@ -153,5 +153,5 @@ else
     echo "  - Lines removed from $DEFAULT_BRANCH"
     echo "  + Lines added in HEAD"
     echo ""
-    echo "Tip: Install 'delta' for better diff visualization."
+    echo "Tip: Install 'hunk' for better diff visualization."
 fi

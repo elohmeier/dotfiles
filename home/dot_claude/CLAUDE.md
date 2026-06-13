@@ -6,7 +6,7 @@ These tools are installed and available for use:
 
 **Core:** `bat`, `eza`, `fd`, `fzf`, `just`, `rg` (ripgrep), `sops`, `uv`, `zoxide`
 
-**Git:** `git`, `git-delta`, `git-lfs`, `gh`
+**Git:** `git`, `hunk`, `git-lfs`, `gh`
 
 **Languages/Runtimes:** `go`, `bun`, `pnpm`
 

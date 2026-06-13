@@ -1,0 +1,58 @@
+{{- $theme := includeTemplate "theme" . -}}
+{{- $base := index (dict "tokyonight_day" "paper" "tokyonight_night" "midnight" "cyberdream_light" "paper" "cyberdream" "graphite") $theme -}}
+{{- $labels := dict "tokyonight_day" "TokyoNight Day" "tokyonight_night" "TokyoNight Night" "cyberdream_light" "Cyberdream Light" "cyberdream" "Cyberdream" -}}
+{{- $d := index .diff $theme -}}
+{{- $f := index .fzf $theme -}}
+{{- $p := index .process_compose $theme -}}
+theme = "custom"
+mode = "auto"
+agent_notes = true
+
+[pager]
+mode = "stack"
+
+[custom_theme]
+base = "{{ $base }}"
+label = "{{ index $labels $theme }}"
+background = "{{ $p.bg }}"
+panel = "{{ $p.dialog_bg }}"
+panelAlt = "{{ $p.dialog_contrast }}"
+border = "{{ $p.border }}"
+accent = "{{ $p.proc_fg }}"
+accentMuted = "{{ $f.info }}"
+text = "{{ $p.fg }}"
+muted = "{{ $p.secondary }}"
+addedBg = "{{ $d.plus_bg }}"
+removedBg = "{{ $d.minus_bg }}"
+contextBg = "{{ $p.dialog_bg }}"
+addedContentBg = "{{ $d.plus_emph_bg }}"
+removedContentBg = "{{ $d.minus_emph_bg }}"
+contextContentBg = "{{ $p.dialog_contrast }}"
+addedSignColor = "{{ $p.proc_completed }}"
+removedSignColor = "{{ $p.proc_error }}"
+lineNumberBg = "{{ $f.gutter }}"
+lineNumberFg = "{{ $d.line_numbers_zero }}"
+selectedHunk = "{{ $f.bg_plus }}"
+badgeAdded = "{{ $p.proc_completed }}"
+badgeRemoved = "{{ $p.proc_error }}"
+badgeNeutral = "{{ $p.secondary }}"
+fileNew = "{{ $p.proc_completed }}"
+fileDeleted = "{{ $p.proc_error }}"
+fileRenamed = "{{ $p.proc_warning }}"
+fileModified = "{{ $p.stat_key }}"
+fileUntracked = "{{ $p.proc_fg }}"
+noteBorder = "{{ $f.marker }}"
+noteBackground = "{{ $p.dialog_contrast }}"
+noteTitleBackground = "{{ $f.bg_plus }}"
+noteTitleText = "{{ $p.fg }}"
+
+[custom_theme.syntax]
+default = "{{ $p.fg }}"
+keyword = "{{ $p.proc_fg }}"
+string = "{{ $p.proc_completed }}"
+comment = "{{ $p.secondary }}"
+number = "{{ $p.proc_warning }}"
+function = "{{ $p.help_fg }}"
+property = "{{ $p.help_key }}"
+type = "{{ $p.label_fg }}"
+punctuation = "{{ $p.secondary }}"

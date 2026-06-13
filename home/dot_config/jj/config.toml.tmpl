@@ -22,4 +22,4 @@ merge-tool-edits-conflict-markers = true
 [ui]
 default-command = "st"
 diff-formatter = ":git"
-pager = "delta"
+pager = ["{{ lookPath "hunk" | default "hunk" }}", "pager"]
