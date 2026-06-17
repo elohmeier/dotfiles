@@ -9,6 +9,11 @@ gui:
 {{ $themeContent | indent 4 }}
 {{- end }}
 
+git:
+  pagers:
+    - colorArg: always
+      pager: '{{ lookPath "delta" | default "delta" }} --paging=never --hyperlinks --hyperlinks-file-link-format="lazygit-edit://{path}:{line}"'
+
 customCommands:
   - key: <c-a>
     description: Pick AI commit
