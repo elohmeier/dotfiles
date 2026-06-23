@@ -2,7 +2,7 @@ local add = vim.pack.add
 
 -- Build hooks (must be registered before vim.pack.add calls)
 Config.on_packchanged("nvim-treesitter", { "install", "update" }, function()
-  require("nvim-treesitter.install").update({ with_sync = true })()
+  require("nvim-treesitter").update()
 end, ":TSUpdate")
 
 Config.on_packchanged("fff.nvim", { "install", "update" }, function()
@@ -97,48 +97,67 @@ Config.now_if_args(function()
   add({
     "https://github.com/nvim-treesitter/nvim-treesitter",
   })
-  require("nvim-treesitter").setup({
-    ensure_installed = {
-      "bash",
-      "beancount",
-      "c",
-      "git_config",
-      "git_rebase",
-      "gitattributes",
-      "gitcommit",
-      "gitignore",
-      "hcl",
-      "helm",
-      "javascript",
-      "jsdoc",
-      "json",
-      "jsonc",
-      "jsonnet",
-      "just",
-      "lua",
-      "make",
-      "markdown",
-      "nix",
-      "puppet",
-      "python",
-      "readline",
-      "regex",
-      "ruby",
-      "rust",
-      "svelte",
-      "terraform",
-      "toml",
-      "typescript",
-      "typst",
-      "vim",
-      "vimdoc",
-      "xml",
-      "yaml",
-    },
-    sync_install = false,
-    auto_install = true,
-    indent = { enable = true, disable = { "yaml" } },
-    highlight = { enable = true },
+
+  local langs = {
+    "bash",
+    "beancount",
+    "c",
+    "git_config",
+    "git_rebase",
+    "gitattributes",
+    "gitcommit",
+    "gitignore",
+    "hcl",
+    "helm",
+    "javascript",
+    "jsdoc",
+    "json",
+    "jsonnet",
+    "just",
+    "lua",
+    "make",
+    "markdown",
+    "nix",
+    "puppet",
+    "python",
+    "readline",
+    "regex",
+    "ruby",
+    "rust",
+    "svelte",
+    "terraform",
+    "toml",
+    "typescript",
+    "typst",
+    "vim",
+    "vimdoc",
+    "xml",
+    "yaml",
+  }
+
+  local installed = require("nvim-treesitter.config").get_installed("parsers")
+  local missing = vim.tbl_filter(function(l)
+    return not vim.tbl_contains(installed, l)
+  end, langs)
+  if #missing > 0 then
+    require("nvim-treesitter").install(missing)
+  end
+
+  local no_indent = { yaml = true }
+  vim.api.nvim_create_autocmd("FileType", {
+    callback = function(ev)
+      local ft = vim.bo[ev.buf].filetype
+      local lang = vim.treesitter.language.get_lang(ft)
+      if not lang then
+        return
+      end
+      if not pcall(vim.treesitter.start, ev.buf, lang) then
+        return
+      end
+      if not no_indent[ft] then
+        vim.bo[ev.buf].indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+      end
+    end,
   })
 end)
 
