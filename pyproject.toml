@@ -9,6 +9,7 @@ dependencies = [
   "rich",
   "rich-click",
   "click",
+  "httpx",
   "questionary",
   "PyYAML",
   "requests",
@@ -31,6 +32,7 @@ git-remote-ssh = "scripts.git_remote_ssh:main"
 cyberark-psm = "scripts.cyberark_psm:main"
 grafana-users = "scripts.grafana_users:main"
 grafana-dashboard-viewer = "scripts.grafana_dashboard_viewer:main"
+grafana-query = "scripts.grafana_query:main"
 metrics-scout = "scripts.metrics_scout:main"
 git-survey = "scripts.git_survey:main"
 typst-watch = "scripts.typst_watch:main"
