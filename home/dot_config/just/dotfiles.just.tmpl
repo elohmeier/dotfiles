@@ -2,10 +2,73 @@
 # Dotfiles task runner - run with: djust <recipe>
 
 default:
-  @just --justfile {{"{{"}}justfile(){{"}}"}} --list
+    @just --justfile {{"{{"}} justfile() {{"}}"}} --list
+
+# Install Neovim and its language tooling
+install-nvim:
+    #!/bin/bash
+    set -eufo pipefail
+
+    if ! command -v brew &> /dev/null; then
+        echo "Homebrew not found. Skipping package installation."
+        exit 1
+    fi
+
+    brew trust --tap elohmeier/tap hashicorp/tap
+    brew bundle --file=/dev/stdin <<'EOF'
+    tap "elohmeier/tap"
+    tap "hashicorp/tap"
+    brew "basedpyright"
+    brew "bash-language-server"
+    brew "clang-format"
+    brew "dprint"
+    brew "elohmeier/tap/jsonnet-language-server"
+    brew "fd"
+    brew "git"
+    brew "go-jsonnet"
+    brew "hashicorp/tap/packer"
+    brew "helm"
+    brew "helm-ls"
+    brew "imagemagick"
+    brew "just"
+    brew "lazygit"
+    brew "libxml2"
+    brew "lua-language-server"
+    brew "neovim"
+    brew "nixfmt"
+    brew "node"
+    brew "opentofu"
+    brew "ripgrep"
+    brew "ruby-lsp"
+    brew "ruff"
+    brew "rustup"
+    brew "shellcheck"
+    brew "shfmt"
+    brew "stylua"
+    brew "taplo"
+    brew "terraform-ls"
+    brew "tinymist"
+    brew "tree-sitter-cli"
+    brew "ty"
+    brew "typescript-language-server"
+    brew "typst"
+    brew "typstyle"
+    brew "uv"
+    brew "yaml-language-server"
+    EOF
+
+    npm install -g svelte-language-server
+    uv tool install --upgrade djade
+    uv tool install --upgrade jupytext
+    uv tool install --upgrade rumdl
+    "$(brew --prefix ruby)/bin/gem" install --user-install --bindir "$HOME/.local/bin" rubocop
+    rustup_bin="$(brew --prefix rustup)/bin"
+    "$rustup_bin/rustup" default stable
+    "$rustup_bin/rustup" component add rust-analyzer
+    "$rustup_bin/cargo" install --locked --root "$HOME/.local" puppet-fmt
 
 # Install extra development packages via Homebrew
-install-extras:
+install-extras: install-nvim
     #!/bin/bash
     set -eufo pipefail
 
@@ -22,7 +85,6 @@ install-extras:
     tap "f1bonacc1/tap"
     tap "oven-sh/bun"
     brew "atuin"
-    brew "bash-language-server"
 {{- if not (lookPath "bat") }}
     brew "bat"
 {{- end }}
@@ -34,15 +96,10 @@ install-extras:
     brew "curl"
 {{- end }}
     brew "derailed/k9s/k9s"
-    brew "dprint"
-    brew "elohmeier/tap/jsonnet-language-server"
     brew "elohmeier/tap/ssh-to-age"
     brew "entr"
 {{- if not (lookPath "eza") }}
     brew "eza"
-{{- end }}
-{{- if not (lookPath "fd") }}
-    brew "fd"
 {{- end }}
     brew "flux"
 {{- if not (lookPath "fzf") }}
@@ -50,9 +107,6 @@ install-extras:
 {{- end }}
 {{- if not (lookPath "gh") }}
     brew "gh"
-{{- end }}
-{{- if not (lookPath "git") }}
-    brew "git"
 {{- end }}
     brew "git-lfs"
     brew "gitleaks"
@@ -62,31 +116,16 @@ install-extras:
 {{- if not (lookPath "go") }}
     brew "go"
 {{- end }}
-    brew "go-jsonnet"
-    brew "helm"
     brew "jless"
     brew "jsonnet-bundler"
-{{- if not (lookPath "just") }}
-    brew "just"
-{{- end }}
     brew "kubernetes-cli"
     brew "kustomize"
-    brew "lazygit"
-    brew "lua-language-server"
 {{- if not (lookPath "make") }}
     brew "make"
 {{- end }}
     brew "minio-mc"
-{{- if not (lookPath "nvim") }}
-    brew "neovim"
-{{- end }}
     brew "nnn"
-{{- if not (lookPath "node") }}
-    brew "node"
-{{- end }}
-    brew "opentofu"
     brew "oven-sh/bun/bun"
-    brew "hashicorp/tap/packer"
     brew "parqeye"
     brew "pnpm"
 {{- if not (lookPath "podman") }}
@@ -95,35 +134,16 @@ install-extras:
     brew "podman-tui"
 {{- end }}
     brew "postgresql@18"
-{{- if not (lookPath "rg") }}
-    brew "ripgrep"
-{{- end }}
 {{- if not (lookPath "rsync") }}
     brew "rsync"
 {{- end }}
-{{- if not (lookPath "ruby") }}
-    brew "ruby"
-{{- end }}
-    brew "rustup"
-{{- if not (lookPath "shellcheck") }}
-    brew "shellcheck"
-{{- end }}
-    brew "shfmt"
     brew "sops"
     brew "elohmeier/tap/sqitch"
     brew "stern"
-    brew "stylua"
     brew "syncthing"
     brew "tabiew"
     brew "talosctl"
-    brew "taplo"
     brew "timg"
-    brew "tinymist"
-    brew "typst"
-    brew "typstyle"
-{{- if not (lookPath "uv") }}
-    brew "uv"
-{{- end }}
     brew "vivid"
 {{- if not (lookPath "watch") }}
     brew "watch"
