@@ -2,8 +2,9 @@
 # Set up hibernation on Fedora Atomic / Bluefin (rpm-ostree + btrfs + LUKS).
 #
 # Creates a btrfs swapfile sized for hibernation, registers it in fstab,
-# disables zram, configures kernel resume= args via rpm-ostree, and applies
-# SELinux labels so logind can traverse the swap directory.
+# disables zram, configures kernel resume= args via rpm-ostree, applies
+# SELinux labels so logind can traverse the swap directory, and configures
+# lid-close to suspend-then-hibernate with a configurable suspend window.
 #
 # Idempotent: safe to re-run. Does not reboot — prints instructions instead.
 #
@@ -11,6 +12,7 @@
 #   SWAP_DIR=/var/swap        Directory (subvolume) holding the swapfile
 #   SWAP_FILE=swapfile        Filename inside SWAP_DIR
 #   SWAP_SIZE_GIB=<n>         Override default size (RAM + 4 GiB)
+#   HIBERNATE_DELAY=30min     systemd HibernateDelaySec= value
 
 set -euo pipefail
 
@@ -52,22 +54,25 @@ main() {
 	swap_gib="$(compute_swap_size)"
 	info "Will use ${swap_gib} GiB swap (RAM=$(ram_gib) GiB, image_size=$(image_size_mib) MiB)"
 
-	info "Step 1/6: Creating swap subvolume and file at ${SWAP_PATH}..."
+	info "Step 1/7: Creating swap subvolume and file at ${SWAP_PATH}..."
 	create_swapfile "$swap_gib"
 
-	info "Step 2/6: Applying SELinux label (swapfile_t)..."
+	info "Step 2/7: Applying SELinux label (swapfile_t)..."
 	apply_selinux_label
 
-	info "Step 3/6: Enabling swap and registering in /etc/fstab..."
+	info "Step 3/7: Enabling swap and registering in /etc/fstab..."
 	enable_swap
 
-	info "Step 4/6: Disabling zram so hibernation uses the disk swap..."
+	info "Step 4/7: Disabling zram so hibernation uses the disk swap..."
 	disable_zram
 
-	info "Step 5/6: Configuring kernel resume= args via rpm-ostree..."
+	info "Step 5/7: Configuring lid handling + suspend-then-hibernate delay..."
+	configure_sleep_behavior
+
+	info "Step 6/7: Configuring kernel resume= args via rpm-ostree..."
 	configure_kargs
 
-	info "Step 6/6: Verifying configuration..."
+	info "Step 7/7: Verifying configuration..."
 	verify_config
 
 	cat <<EOF
@@ -80,7 +85,9 @@ Next steps:
   2. After reboot, verify:
        cat /proc/cmdline    # should contain resume= and resume_offset=
        swapon --show        # should show ${SWAP_PATH}, no zram
-  3. Test hibernation:
+  3. Test the full flow (suspends now, hibernates after the delay):
+       sudo systemctl suspend-then-hibernate
+     Or hibernate directly:
        sudo systemctl hibernate
 
 If hibernate still fails with SELinux denials after reboot, collect them
@@ -189,6 +196,54 @@ disable_zram() {
 	echo '# zram disabled to allow hibernation (managed by setup-hibernation.sh)' |
 		sudo tee "$conf" >/dev/null
 	ok "wrote empty override to ${conf} (takes effect at next boot)"
+}
+
+configure_sleep_behavior() {
+	local logind_conf=/etc/systemd/logind.conf.d/hibernate.conf
+	local sleep_conf=/etc/systemd/sleep.conf.d/hibernate-delay.conf
+	local hibernate_delay="${HIBERNATE_DELAY:-30min}"
+	local desired_logind desired_sleep
+
+	desired_logind="$(
+		cat <<-EOF
+			[Login]
+			HandleLidSwitch=suspend-then-hibernate
+			HandleLidSwitchExternalPower=suspend-then-hibernate
+			HandleLidSwitchDocked=ignore
+		EOF
+	)"
+	desired_sleep="$(
+		cat <<-EOF
+			[Sleep]
+			HibernateDelaySec=${hibernate_delay}
+		EOF
+	)"
+
+	if write_if_changed "$logind_conf" "$desired_logind"; then
+		ok "wrote ${logind_conf}"
+		sudo systemctl restart systemd-logind
+		ok "restarted systemd-logind"
+	else
+		ok "${logind_conf} already up to date"
+	fi
+
+	if write_if_changed "$sleep_conf" "$desired_sleep"; then
+		ok "wrote ${sleep_conf} (HibernateDelaySec=${hibernate_delay})"
+	else
+		ok "${sleep_conf} already up to date (HibernateDelaySec=${hibernate_delay})"
+	fi
+
+	if systemd-inhibit --list 2>/dev/null | grep -E 'handle-lid-switch' | grep -qiE 'gnome|gsd'; then
+		warn "GNOME holds a handle-lid-switch inhibitor; lid action may not trigger logind's handler"
+		warn "  'systemctl suspend-then-hibernate' still works manually"
+	fi
+}
+
+write_if_changed() {
+	local path="$1" desired="$2"
+	[[ -f "$path" ]] && [[ "$(cat "$path" 2>/dev/null)" == "$desired" ]] && return 1
+	sudo install -d "$(dirname "$path")"
+	printf '%s\n' "$desired" | sudo tee "$path" >/dev/null
 }
 
 configure_kargs() {
