@@ -31,6 +31,14 @@ customCABundle = ""
 {{- end }}
 customPyPIIndex = ""
 
+{{- $pushoverUserKey := promptStringOnce . "pushoverUserKey" "Pushover user key (blank to disable Codex notifications)" }}
+pushoverUserKey = {{ $pushoverUserKey | quote }}
+{{- if $pushoverUserKey }}
+pushoverApiToken = {{ promptStringOnce . "pushoverApiToken" "Pushover application API token" | quote }}
+{{- else }}
+pushoverApiToken = ""
+{{- end }}
+
 isWSL = {{ and (eq .chezmoi.os "linux") (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
 
 {{- if eq .chezmoi.os "darwin" }}

@@ -31,3 +31,7 @@ Applications/Firefox.app
 {{ if not (lookPath "codex") }}
 .codex/**
 {{- end -}}
+
+{{ if not (and (index . "pushoverUserKey") (index . "pushoverApiToken")) }}
+.local/bin/codex-pushover-notify
+{{- end }}
