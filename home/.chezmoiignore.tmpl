@@ -33,5 +33,5 @@ Applications/Firefox.app
 {{- end -}}
 
 {{ if not (and (index . "pushoverUserKey") (index . "pushoverApiToken")) }}
-.local/bin/codex-pushover-notify
+.local/bin/agent-pushover-notify
 {{- end }}

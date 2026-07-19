@@ -7,7 +7,7 @@ model_reasoning_effort = "medium"
 personality = "pragmatic"
 sandbox_mode = "workspace-write"
 {{- if and (index . "pushoverUserKey") (index . "pushoverApiToken") }}
-notify = ["{{ .chezmoi.homeDir }}/.local/bin/codex-pushover-notify"]
+notify = ["{{ .chezmoi.homeDir }}/.local/bin/agent-pushover-notify", "Codex"]
 {{- end }}
 
 [sandbox_workspace_write]

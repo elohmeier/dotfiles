@@ -31,7 +31,7 @@ customCABundle = ""
 {{- end }}
 customPyPIIndex = ""
 
-{{- $pushoverUserKey := promptStringOnce . "pushoverUserKey" "Pushover user key (blank to disable Codex notifications)" }}
+{{- $pushoverUserKey := promptStringOnce . "pushoverUserKey" "Pushover user key (blank to disable agent notifications)" }}
 pushoverUserKey = {{ $pushoverUserKey | quote }}
 {{- if $pushoverUserKey }}
 pushoverApiToken = {{ promptStringOnce . "pushoverApiToken" "Pushover application API token" | quote }}
