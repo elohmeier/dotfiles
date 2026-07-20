@@ -5,5 +5,5 @@ agent=$1
     --form-string 'token={{ .pushoverApiToken }}' \
     --form-string 'user={{ .pushoverUserKey }}' \
     --form-string "title=$agent finished" \
-    --form-string "message=Finished work in ${PWD##*/}." \
+    --form-string "message=Finished work in ${PWD##*/} on {{ .chezmoi.username }}@{{ .chezmoi.hostname }}." \
     https://api.pushover.net/1/messages.json >/dev/null
