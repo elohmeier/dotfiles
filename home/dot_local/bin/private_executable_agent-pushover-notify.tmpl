@@ -1,9 +1,10 @@
 {{- $curl := lookPath "curl" -}}
 #!{{ lookPath "sh" }}
 agent=$1
+message=${2:-Finished work}
 {{ $curl }} -fsS \
     --form-string 'token={{ .pushoverApiToken }}' \
     --form-string 'user={{ .pushoverUserKey }}' \
     --form-string "title=$agent finished" \
-    --form-string "message=Finished work in ${PWD##*/} on {{ .chezmoi.username }}@{{ .chezmoi.hostname }}." \
+    --form-string "message=$message in ${PWD##*/} on {{ .chezmoi.username }}@{{ .chezmoi.hostname }}." \
     https://api.pushover.net/1/messages.json >/dev/null

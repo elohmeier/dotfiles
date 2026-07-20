@@ -1,0 +1,14 @@
+{{- if and (index . "pushoverUserKey") (index . "pushoverApiToken") }}
+function alert --description "Send a Pushover alert for the preceding command"
+    set -l command_status $status
+    set -l commandline (string join " " -- $argv)
+    if test -z "$commandline"
+        set commandline (status current-commandline | string replace -r '\s*(;|&&|\|\|)\s*(and\s+|or\s+)?alert\s*$' '')
+        test -n "$commandline"; or set commandline $history[1]
+    end
+    set -l result finished
+    test $command_status -eq 0; or set result "failed ($command_status)"
+    {{ .chezmoi.homeDir }}/.local/bin/agent-pushover-notify Shell "$commandline $result"
+    return $command_status
+end
+{{- end }}
