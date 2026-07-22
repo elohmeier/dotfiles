@@ -1,4 +1,4 @@
-{{- $theme := .theme | default "tokyonight_day" -}}
+{{- $theme := includeTemplate "theme" . -}}
 {{- if hasPrefix "tokyonight" $theme -}}
 vim.pack.add({ 'https://github.com/folke/tokyonight.nvim' })
 require('tokyonight').setup({ style = '{{ trimPrefix "tokyonight_" $theme }}' })

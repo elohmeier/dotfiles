@@ -8,7 +8,7 @@ repos:
     hooks:
       - id: ruff
         name: Check and fix Python code with Ruff
-        args: [--fix, --exit-zero]
+        args: [--fix]
         files: .*\.py$
         stages: [pre-push]
       - id: ruff-format
@@ -50,4 +50,11 @@ repos:
         language: system
         types: [shell]
         files: ^home/\.chezmoiscripts/
+        stages: [pre-push]
+      - id: ty
+        name: Type-check Python code with ty
+        entry: uv run ty check scripts
+        language: system
+        pass_filenames: false
+        files: .*\.py$
         stages: [pre-push]

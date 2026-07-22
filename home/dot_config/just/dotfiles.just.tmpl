@@ -4,6 +4,10 @@
 default:
     @just --justfile {{"{{"}} justfile() {{"}}"}} --list
 
+# Install or update agent skills for Claude Code and Codex
+install-skills:
+    "{{ lookPath "npx" | default "npx" }}" --yes skills add elohmeier/skills --skill '*' --agent claude-code --agent codex --global --yes
+
 # Install Neovim and its language tooling
 install-nvim:
     #!/bin/bash
@@ -63,6 +67,7 @@ install-nvim:
     uv tool install --upgrade rumdl
     "$(brew --prefix ruby)/bin/gem" install --user-install --bindir "$HOME/.local/bin" rubocop
     rustup_bin="$(brew --prefix rustup)/bin"
+    export PATH="$rustup_bin:$PATH"
     "$rustup_bin/rustup" default stable
     "$rustup_bin/rustup" component add rust-analyzer
     "$rustup_bin/cargo" install --locked --root "$HOME/.local" puppet-fmt

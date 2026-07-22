@@ -1,5 +1,10 @@
+{{- $bat := lookPath "bat" -}}
 #!/bin/sh
 # Rebuild bat cache when themes change
-# Hash: {{ include (printf "dot_config/bat/themes/%s.tmTheme" .theme) | sha256sum }}
+# Hash: {{ include (printf "dot_config/bat/themes/%s.tmTheme" (includeTemplate "theme" .)) | sha256sum }}
 
-command -v bat >/dev/null && bat cache --build >/dev/null 2>&1 || true
+{{ if $bat -}}
+"{{ $bat }}" cache --build >/dev/null
+{{ else -}}
+exit 0
+{{ end -}}

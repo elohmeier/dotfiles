@@ -1,4 +1,5 @@
 {{/* vim: set filetype=fish: */}}
-{{- $t := index .nnn .theme }}
+{{- $theme := includeTemplate "theme" . -}}
+{{- $t := index .nnn $theme }}
 set -gx NNN_COLORS '{{ $t.contexts }}'
 set -gx NNN_FCOLORS '{{ $t.fcolors }}'

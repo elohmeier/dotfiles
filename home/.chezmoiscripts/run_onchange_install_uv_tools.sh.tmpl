@@ -1,7 +1,0 @@
-#!/bin/sh
-# pyproject: {{ output "sh" "-c" (printf "cd %s/.. && sha256sum pyproject.toml uv.lock 2>/dev/null || shasum -a 256 pyproject.toml uv.lock" .chezmoi.sourceDir) | sha256sum }}
-
-command -v uv >/dev/null || exit 0
-uv tool install --force --upgrade "{{ .chezmoi.sourceDir }}/.." || true
-# required by jupytext.nvim plugin to convert .ipynb files
-uv tool install --upgrade jupytext || true

@@ -1,0 +1,26 @@
+{{- $brew := lookPath "brew" -}}
+#!/bin/sh
+{{ if not $brew -}}
+exit 0
+{{ else -}}
+set -u
+
+echo "Installing packages..."
+
+"{{ $brew }}" bundle --file=/dev/stdin <<EOF
+brew "bat"
+brew "btop"
+brew "eza"
+brew "fd"
+{{- if not (lookPath "fish") }}
+brew "fish"
+{{- end }}
+brew "fzf"
+brew "just"
+brew "ncdu"
+brew "sops"
+brew "uv"
+brew "vivid"
+brew "zoxide"
+EOF
+{{ end -}}

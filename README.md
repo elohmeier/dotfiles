@@ -63,3 +63,11 @@ Run packaged scripts directly with uv:
 uvx --from git+https://github.com/elohmeier/dotfiles httpserve
 pipx run --spec git+https://github.com/elohmeier/dotfiles httpserve
 ```
+
+## Agent Skills
+
+Install or update the skills from [elohmeier/skills](https://github.com/elohmeier/skills) for Claude Code and Codex:
+
+```bash
+djust install-skills
+```

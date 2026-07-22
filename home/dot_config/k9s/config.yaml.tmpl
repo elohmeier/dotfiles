@@ -1,4 +1,6 @@
+{{- $theme := includeTemplate "theme" . -}}
+{{- $skin := index (dict "tokyonight_day" "tokyonight_day" "tokyonight_night" "tokyonight_storm" "cyberdream_light" "cyberdream-light" "cyberdream" "cyberdream") $theme -}}
 # vim: ft=yaml
 k9s:
   ui:
-    skin: '{{- template "theme" . -}}'
+    skin: '{{ $skin }}'

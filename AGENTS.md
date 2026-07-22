@@ -21,6 +21,7 @@ Chezmoi-managed dotfiles repository and Python scripts collection.
 
 - Valid themes: `tokyonight_day`, `tokyonight_night`, `cyberdream_light`, `cyberdream`
 - Use `{{ template "theme" . }}` in templates to get the validated theme name
+- Use `includeTemplate "theme" .` when the validated name is needed in an expression
 
 ## Chezmoi Scripts
 
@@ -35,26 +36,11 @@ Platform filtering is handled by `home/.chezmoiignore.tmpl`.
 
 ## Agent Skills
 
-Vendored skill files live in `home/dot_agents/skills/` (deploys to `~/.agents/skills/`). This is the canonical location, compatible with the [vercel-labs/skills](https://github.com/vercel-labs/skills) CLI layout.
-
-Both `~/.claude/skills/` and `~/.codex/skills/` get chezmoi-templated symlinks pointing to `~/.agents/skills/<skill>`.
-
-```
-home/dot_agents/skills/              ← real files (source of truth)
-  agent-browser/  fabric/  msgvault/  opendataloader-pdf/  typst/
-
-home/dot_claude/skills/              ← symlink_<skill>.tmpl → ~/.agents/skills/*
-home/dot_codex/skills/               ← symlink_<skill>.tmpl → ~/.agents/skills/*
-```
-
-To add a new skill:
-
-1. Add skill directory under `home/dot_agents/skills/<name>/SKILL.md`
-2. Create `home/dot_claude/skills/symlink_<name>.tmpl` and `home/dot_codex/skills/symlink_<name>.tmpl` containing `{{ .chezmoi.homeDir }}/.agents/skills/<name>`
+Agent skills live in the dedicated [elohmeier/skills](https://github.com/elohmeier/skills) repository and are installed globally for Claude Code and Codex with `djust install-skills`. Do not vendor skills or agent-specific skill symlinks in this repository.
 
 ## Python
 
 - Use click or rich-click by default for Python scripts that need CLI argument parsing.
-- Add new CLIs by dropping a module in `scripts/`, pointing a `[project.scripts]` entry in `pyproject.toml` at its `main`, and let `home/.chezmoiscripts/run_onchange_install_uv_tools.sh.tmpl` install them via `uv`.
+- Add new CLIs by dropping a module in `scripts/`, pointing a `[project.scripts]` entry in `pyproject.toml` at its `main`, and let `home/.chezmoiscripts/run_onchange_after_install-uv-tools.sh.tmpl` install them via `uv`.
 - Use `uv run ruff format` for code formatting and `uv run ruff check` for linting Python code (`ruff` and `ty` are dev dependencies).
 - After editing Python files, always run: `uv run ruff format <file> && uv run ruff check <file> && uv run ty check <file>`

@@ -40,10 +40,11 @@ def upload() -> str:
         return "No file uploaded"
 
     file = request.files["zipfile"]
-    if file.filename == "":
+    filename = file.filename
+    if not filename:
         return "No file selected"
 
-    if not file.filename.endswith(".zip"):
+    if not filename.endswith(".zip"):
         return "Only ZIP files allowed"
 
     with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp_file:
