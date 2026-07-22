@@ -35,8 +35,10 @@ customPyPIIndex = ""
 pushoverUserKey = {{ $pushoverUserKey | quote }}
 {{- if $pushoverUserKey }}
 pushoverApiToken = {{ promptStringOnce . "pushoverApiToken" "Pushover application API token" | quote }}
+pushoverEncryptionKey = {{ promptStringOnce . "pushoverEncryptionKey" "Pushover E2EE key (64 hex characters, blank to disable)" | quote }}
 {{- else }}
 pushoverApiToken = ""
+pushoverEncryptionKey = ""
 {{- end }}
 
 isWSL = {{ and (eq .chezmoi.os "linux") (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}

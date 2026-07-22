@@ -1,5 +1,10 @@
 {{- $curl := lookPath "curl" -}}
 {{- $jq := lookPath "jq" -}}
+{{- $openssl := lookPath "openssl" -}}
+{{- $gzip := lookPath "gzip" -}}
+{{- $xxd := lookPath "xxd" -}}
+{{- $tr := lookPath "tr" -}}
+{{- $awk := lookPath "awk" -}}
 #!{{ lookPath "sh" }}
 agent=$1
 summarize() {
@@ -10,9 +15,25 @@ case $agent in
     Claude) message=$(summarize) ;;
     *) message=${2:-Finished work} ;;
 esac
+title="$agent finished"
+message="$message in ${PWD##*/} on {{ .chezmoi.username }}@{{ .chezmoi.hostname }}."
+{{ if index . "pushoverEncryptionKey" -}}
+key={{ index . "pushoverEncryptionKey" | quote }}
+encrypt() {
+    iv=$({{ $openssl }} rand -hex 16)
+    ciphertext=$(printf %s "$1" | {{ $gzip }} -9 | {{ $openssl }} enc -aes-256-cbc -K "$key" -iv "$iv" | {{ $xxd }} -p | {{ $tr }} -d '\n')
+    hmac=$(printf %s "$iv$ciphertext" | {{ $xxd }} -r -p | {{ $openssl }} dgst -sha256 -mac HMAC -macopt "hexkey:$key" | {{ $awk }} '{print $NF}')
+    printf %s "$iv$ciphertext$hmac" | {{ $xxd }} -r -p | {{ $openssl }} base64 -A
+}
+title=$(encrypt "$title")
+message=$(encrypt "$message")
+{{ end -}}
 {{ $curl }} -fsS \
     --form-string 'token={{ .pushoverApiToken }}' \
     --form-string 'user={{ .pushoverUserKey }}' \
-    --form-string "title=$agent finished" \
-    --form-string "message=$message in ${PWD##*/} on {{ .chezmoi.username }}@{{ .chezmoi.hostname }}." \
+    --form-string "title=$title" \
+    --form-string "message=$message" \
+{{- if index . "pushoverEncryptionKey" }} \
+    --form-string 'encrypted=1' \
+{{- end }}
     https://api.pushover.net/1/messages.json >/dev/null
