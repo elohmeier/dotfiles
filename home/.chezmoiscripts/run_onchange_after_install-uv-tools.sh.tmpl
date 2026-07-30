@@ -1,5 +1,9 @@
 #!/bin/sh
-# pyproject: {{ include "../pyproject.toml" | sha256sum }} {{ include "../uv.lock" | sha256sum }}
+# package sources:
+{{ range glob (joinPath .chezmoi.sourceDir "../scripts/**/*.py") -}}
+# {{ base . }}: {{ include . | sha256sum }}
+{{ end -}}
+# metadata: {{ include "../pyproject.toml" | sha256sum }} {{ include "../uv.lock" | sha256sum }}
 
 command -v uv >/dev/null
 uv tool install --force --upgrade "{{ .chezmoi.sourceDir }}/.."
