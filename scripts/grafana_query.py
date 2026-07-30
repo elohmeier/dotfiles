@@ -1190,8 +1190,7 @@ def run_proxy_server(
                 stats, title, endpoint, exposed, console.size.width
             ),
             refresh_per_second=2,
-            screen=False,
-            transient=False,
+            screen=True,
             redirect_stdout=False,
             redirect_stderr=False,
         ) as live:
