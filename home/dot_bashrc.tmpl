@@ -1,3 +1,6 @@
+{{ with lookPath "brew" -}}
+export PATH="{{ dir . }}:$PATH"
+{{ end -}}
 export PATH="$HOME/go/bin:$PATH"
 
 {{- if eq .chezmoi.os "darwin" }}
