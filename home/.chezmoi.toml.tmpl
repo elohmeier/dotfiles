@@ -15,11 +15,8 @@ command = "fish"
 email = "enno@nerdworks.de"
 githubEmail = "2536303+elohmeier@users.noreply.github.com"
 name = "Enno Richter"
-{{- if eq .chezmoi.os "darwin" }}
-displayConfig = {{ output (joinPath .chezmoi.sourceDir ".." "scripts" "get-display-config.sh") | quote }}
-{{- else }}
-displayConfig = "internal"
-{{- end }}
+ghosttyFontFamily = {{ promptChoiceOnce . "ghosttyFontFamily" "Ghostty font family" (list "Spleen 6x12" "Spleen 8x16") "Spleen 6x12" | quote }}
+ghosttyFontSize = {{ promptIntOnce . "ghosttyFontSize" "Ghostty font size" 12 }}
 
 enableEmail = false
 enableSecrets = false
