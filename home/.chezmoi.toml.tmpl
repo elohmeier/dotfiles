@@ -12,21 +12,21 @@ recipient = "age1e6gdd6c0nf5p47jhcq8dvrcyu4vmrzvg2kd75thsgyl7pzqemunq9mfl7e"
 command = "fish"
 
 [data]
-email = "enno@nerdworks.de"
-githubEmail = "2536303+elohmeier@users.noreply.github.com"
-name = "Enno Richter"
+email = {{ promptStringOnce . "email" "Email" "enno@nerdworks.de" | quote }}
+githubEmail = {{ promptStringOnce . "githubEmail" "GitHub email (blank to disable)" "2536303+elohmeier@users.noreply.github.com" | quote }}
+name = {{ promptStringOnce . "name" "Name" "Enno Richter" | quote }}
 ghosttyFontFamily = {{ promptChoiceOnce . "ghosttyFontFamily" "Ghostty font family" (list "Spleen 6x12" "Spleen 8x16") "Spleen 6x12" | quote }}
 ghosttyFontSize = {{ promptIntOnce . "ghosttyFontSize" "Ghostty font size" 12 }}
 
-enableEmail = false
-enableSecrets = false
+enableEmail = {{ promptBoolOnce . "enableEmail" "Enable email configuration" false }}
+enableSecrets = {{ promptBoolOnce . "enableSecrets" "Enable secrets" false }}
 
 {{- if and (eq .chezmoi.os "linux") (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
 customCABundle = "{{ .chezmoi.homeDir }}/.config/ssl/ca-certificates.crt"
 {{- else }}
 customCABundle = ""
 {{- end }}
-customPyPIIndex = ""
+customPyPIIndex = {{ promptStringOnce . "customPyPIIndex" "Custom PyPI index (blank to disable)" | quote }}
 
 {{- $pushoverUserKey := promptStringOnce . "pushoverUserKey" "Pushover user key (blank to disable agent notifications)" }}
 pushoverUserKey = {{ $pushoverUserKey | quote }}
@@ -51,8 +51,7 @@ secretiveAvailable = false
 secretiveSocketPath = ""
 {{- end }}
 
-# available themes: "tokyonight_day", "tokyonight_night", "cyberdream_light", "cyberdream" (dark)
-theme = "tokyonight_day"
+theme = {{ promptChoiceOnce . "theme" "Theme" (list "tokyonight_day" "tokyonight_night" "cyberdream_light" "cyberdream") "tokyonight_day" | quote }}
 
 [secret]
 command = "{{ joinPath .chezmoi.sourceDir ".." "scripts" "chesops.sh" }}"
