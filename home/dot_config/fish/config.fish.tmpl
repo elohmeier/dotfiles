@@ -1,5 +1,9 @@
 {{/* vim: set filetype=fish: */}}
 {{- $brew := lookPath "brew" -}}
+{{- with lookPath "nvim" }}
+set -gx EDITOR {{ . }}
+{{- end }}
+
 if status is-interactive
   # Ghostty shell integration emits OSC 133 prompt markers; disable Fish's
   # native duplicate to prevent newlines being swallowed when copying.
