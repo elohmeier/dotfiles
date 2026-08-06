@@ -1,0 +1,8 @@
+{{- with lookPath "tmux" -}}
+#!/bin/sh
+# Config: {{ include "dot_tmux.conf.tmpl" | sha256sum }}
+# Theme: {{ includeTemplate "tmux-theme" $ | sha256sum }}
+# Inputs: fish={{ lookPath "fish" }} isWSL={{ $.isWSL }}
+
+"{{ . }}" source-file {{ joinPath $.chezmoi.homeDir ".tmux.conf" | quote }} 2>/dev/null || true
+{{- end }}
