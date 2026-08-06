@@ -1,9 +1,15 @@
 format = """
+$hostname\
 $kubernetes\
 $directory\
 $git_branch\
 $git_status\
 $character"""
+
+[hostname]
+ssh_only = true
+format = '[$hostname ]($style)'
+style = "green"
 
 [directory]
 truncation_length = 3
