@@ -52,6 +52,7 @@ secretiveSocketPath = ""
 {{- end }}
 
 theme = {{ promptChoiceOnce . "theme" "Theme" (list "tokyonight_day" "tokyonight_night" "cyberdream_light" "cyberdream") "tokyonight_day" | quote }}
+machineAccent = {{ promptChoiceOnce . "machineAccent" "Machine accent" (list "default" "red" "yellow" "green" "purple") "default" | quote }}
 
 [secret]
 command = "{{ joinPath .chezmoi.sourceDir ".." "scripts" "chesops.sh" }}"

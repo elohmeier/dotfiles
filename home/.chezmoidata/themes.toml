@@ -53,6 +53,12 @@ status_left_bg = "#0057d1"
 window_activity_fg = "#16181a"
 window_fg = "#7b8496"
 
+[tmux.host_accent]
+red = "#ff6e5e"
+yellow = "#f1ff5e"
+green = "#5eff6c"
+purple = "#bd5eff"
+
 [lazygit.tokyonight_day]
 bold = true
 activeBorder = "#b15c00"
