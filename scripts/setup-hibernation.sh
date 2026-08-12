@@ -12,7 +12,7 @@
 #   SWAP_DIR=/var/swap        Directory (subvolume) holding the swapfile
 #   SWAP_FILE=swapfile        Filename inside SWAP_DIR
 #   SWAP_SIZE_GIB=<n>         Override default size (RAM + 4 GiB)
-#   HIBERNATE_DELAY=30min     systemd HibernateDelaySec= value
+#   HIBERNATE_DELAY=24h       systemd HibernateDelaySec= value
 
 set -euo pipefail
 
@@ -201,7 +201,7 @@ disable_zram() {
 configure_sleep_behavior() {
 	local logind_conf=/etc/systemd/logind.conf.d/hibernate.conf
 	local sleep_conf=/etc/systemd/sleep.conf.d/hibernate-delay.conf
-	local hibernate_delay="${HIBERNATE_DELAY:-30min}"
+	local hibernate_delay="${HIBERNATE_DELAY:-24h}"
 	local desired_logind desired_sleep
 
 	desired_logind="$(
