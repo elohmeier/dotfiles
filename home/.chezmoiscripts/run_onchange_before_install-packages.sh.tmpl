@@ -1,8 +1,7 @@
 {{- $brew := lookPath "brew" -}}
+{{- $apk := lookPath "apk" -}}
 #!/bin/sh
-{{ if not $brew -}}
-exit 0
-{{ else -}}
+{{ if $brew -}}
 set -u
 
 echo "Installing packages..."
@@ -23,4 +22,12 @@ brew "uv"
 brew "vivid"
 brew "zoxide"
 EOF
+{{ else if $apk -}}
+set -u
+
+echo "Installing packages..."
+
+"{{ $apk }}" add bat btop eza fd fish fzf git just ncdu python3 sops uv vivid zoxide
+{{ else -}}
+exit 0
 {{ end -}}
