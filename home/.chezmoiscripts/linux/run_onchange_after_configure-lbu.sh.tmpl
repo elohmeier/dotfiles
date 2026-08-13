@@ -1,0 +1,13 @@
+{{- $lbu := lookPath "lbu" -}}
+{{- if and (lookPath "apk") $lbu -}}
+#!/bin/sh
+
+"{{ $lbu }}" exclude \
+    "{{ .chezmoi.homeDir }}/.cache" \
+    "{{ .chezmoi.homeDir }}/.codex" \
+    "{{ .chezmoi.homeDir }}/.local/share/uv" \
+    "{{ .chezmoi.homeDir }}/.ssh/agent"
+"{{ $lbu }}" include \
+    "{{ .chezmoi.homeDir }}/.codex/auth.json" \
+    "{{ .chezmoi.homeDir }}/.codex/config.toml"
+{{- end }}
