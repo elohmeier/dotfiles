@@ -5,6 +5,8 @@ set -gx EDITOR {{ . }}
 {{- end }}
 
 if status is-interactive
+  set -g fish_greeting
+
   # Ghostty shell integration emits OSC 133 prompt markers; disable Fish's
   # native duplicate to prevent newlines being swallowed when copying.
   set -gx fish_features $fish_features no-mark-prompt
