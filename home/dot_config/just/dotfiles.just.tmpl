@@ -4,6 +4,17 @@
 default:
     @just --justfile {{"{{"}} justfile() {{"}}"}} --list
 
+{{- if and (lookPath "apk") (lookPath "lbu") }}
+diskless-swap-on:
+    diskless-swap on
+
+diskless-swap-off:
+    diskless-swap off
+
+diskless-swap-status:
+    diskless-swap status
+{{- end }}
+
 # Install or update agent skills for Claude Code and Codex
 install-skills:
     "{{ lookPath "npx" | default "npx" }}" --yes skills add elohmeier/skills --skill '*' --agent claude-code --agent codex --global --yes

@@ -25,7 +25,7 @@ set -g status-right-length "100"
 set -g status-left-style NONE
 set -g status-right-style NONE
 set -g status-left "#[fg={{ $t.status_left_fg }},bg={{ $t.status_left_bg }},bold] #S #[fg={{ $t.status_left_bg }},bg={{ $t.status_bg }},nobold,nounderscore,noitalics]"
-set -g status-right "#[fg={{ $t.mode_bg }},bg={{ $t.status_bg }},nobold,nounderscore,noitalics]#[fg={{ $t.mode_fg }},bg={{ $t.mode_bg }}]{{ if $rootTmpfs }} tmpfs #({{ lookPath "df" }} -h / | {{ lookPath "awk" }} 'END { print $4 }') {{ end }}%Y-%m-%d  %H:%M #[fg={{ $t.mode_fg }},bg={{ $t.mode_bg }},nobold,nounderscore,noitalics]#[fg={{ $hostFg }},bg={{ $hostBg }},bold] #h "
+set -g status-right "#[fg={{ $t.mode_bg }},bg={{ $t.status_bg }},nobold,nounderscore,noitalics]#[fg={{ $t.mode_fg }},bg={{ $t.mode_bg }}]{{ if $rootTmpfs }} tmpfs #({{ lookPath "df" }} -h / | {{ lookPath "awk" }} 'END { print $4 }')#({{ lookPath "awk" }} 'NR > 1 { if ($1 ~ /zram/) { zu += $4; zt += $3 } else { su += $4; st += $3 } } END { if (zt) printf \" zram %%dM/%%dM\", zu / 1024, zt / 1024; if (st) printf \" sd %%dM/%%dM\", su / 1024, st / 1024 }' /proc/swaps) load #({{ lookPath "awk" }} '{ print $1 }' /proc/loadavg) {{ end }}%Y-%m-%d  %H:%M #[fg={{ $t.mode_fg }},bg={{ $t.mode_bg }},nobold,nounderscore,noitalics]#[fg={{ $hostFg }},bg={{ $hostBg }},bold] #h "
 setw -g window-status-activity-style "underscore,fg={{ $t.window_activity_fg }},bg={{ $t.status_bg }}"
 setw -g window-status-separator ""
 setw -g window-status-style "NONE,fg={{ $t.window_fg }},bg={{ $t.status_bg }}"
