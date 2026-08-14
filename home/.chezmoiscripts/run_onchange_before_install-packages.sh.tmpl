@@ -27,7 +27,7 @@ set -u
 
 echo "Installing packages..."
 
-"{{ $apk }}" add bat btop eza fd fish fzf git just ncdu python3 sops uv vivid zoxide
+"{{ $apk }}" add bat btop curl eza fd fish fzf git just ncdu python3 ripgrep sops uv vivid zoxide
 {{ else -}}
 exit 0
 {{ end -}}
