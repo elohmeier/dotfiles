@@ -1,6 +1,11 @@
 function t -d "Create or attach to a tmux session"
     set -l session (if test (count $argv) -gt 0; echo $argv[1]; else; echo main; end)
     test -n "$TMUX"; and return 0
+    if test -n "$SSH_AUTH_SOCK"
+        ln -sfn "$SSH_AUTH_SOCK" ~/.ssh/agent
+        set -gx SSH_AUTH_SOCK "$HOME/.ssh/agent"
+        tmux set-environment -t "$session" SSH_AUTH_SOCK "$SSH_AUTH_SOCK" 2>/dev/null
+    end
     if tmux has-session -t "$session" 2>/dev/null
         tmux attach-session -t "$session"
     else

@@ -7,6 +7,11 @@ export PATH="$HOME/go/bin:$PATH"
 t() {
     local session="${1:-main}"
     [ -n "$TMUX" ] && return 0
+    if [ -n "$SSH_AUTH_SOCK" ]; then
+        ln -sfn "$SSH_AUTH_SOCK" ~/.ssh/agent
+        export SSH_AUTH_SOCK="$HOME/.ssh/agent"
+        tmux set-environment -t "$session" SSH_AUTH_SOCK "$SSH_AUTH_SOCK" 2>/dev/null
+    fi
     if tmux has-session -t "$session" 2>/dev/null; then
         tmux attach-session -t "$session"
     else
@@ -20,6 +25,11 @@ t() {
 t() {
     local session="${1:-main}"
     [ -n "$TMUX" ] && return 0
+    if [ -n "$SSH_AUTH_SOCK" ]; then
+        ln -sfn "$SSH_AUTH_SOCK" ~/.ssh/agent
+        export SSH_AUTH_SOCK="$HOME/.ssh/agent"
+        tmux set-environment -t "$session" SSH_AUTH_SOCK "$SSH_AUTH_SOCK" 2>/dev/null
+    fi
     tmux has-session -t "$session" 2>/dev/null && tmux attach-session -t "$session" || tmux new-session -s "$session"
 }
 {{- end }}
