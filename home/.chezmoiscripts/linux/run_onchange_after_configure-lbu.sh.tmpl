@@ -16,7 +16,7 @@
 mkdir -p /etc/lbu/pre-package.d
 cat >/etc/lbu/pre-package.d/exclude-pio <<'EOF'
 #!/bin/sh
-find {{ .chezmoi.homeDir | quote }} -type d -name .pio -prune -exec {{ $lbu | quote }} exclude {} +
+find {{ .chezmoi.homeDir | quote }} -type d \( -name .pio -o -name __pycache__ \) -prune -exec {{ $lbu | quote }} exclude {} +
 EOF
 chmod +x /etc/lbu/pre-package.d/exclude-pio
 {{- end }}
