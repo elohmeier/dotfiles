@@ -6,6 +6,7 @@
     "{{ .chezmoi.homeDir }}/.cache" \
     "{{ .chezmoi.homeDir }}/.codex" \
     "{{ .chezmoi.homeDir }}/.local/share/uv" \
+    "{{ .chezmoi.homeDir }}/.npm" \
     "{{ .chezmoi.homeDir }}/.platformio" \
     "{{ .chezmoi.homeDir }}/.ssh/agent"
 "{{ $lbu }}" include \
@@ -13,10 +14,22 @@
     "{{ .chezmoi.homeDir }}/.codex/config.toml" \
     "{{ .chezmoi.homeDir }}/.codex/themes"
 
+sed -Ei '\#^-{{ trimPrefix "/" .chezmoi.homeDir }}/(\.(cache|codex|npm|platformio)/|\.local/share/uv/|\.ssh/agent/)#d' \
+    /etc/apk/protected_paths.d/lbu.list
+
 mkdir -p /etc/lbu/pre-package.d
-cat >/etc/lbu/pre-package.d/exclude-pio <<'EOF'
+rm -f /etc/lbu/pre-package.d/exclude-pio
+cat >/etc/lbu/pre-package.d/exclude-generated <<'EOF'
 #!/bin/sh
-find {{ .chezmoi.homeDir | quote }} -type d \( -name .pio -o -name __pycache__ \) -prune -exec {{ $lbu | quote }} exclude {} +
+find {{ .chezmoi.homeDir | quote }} \
+    \( -path {{ printf "%s/.cache" .chezmoi.homeDir | quote }} \
+    -o -path {{ printf "%s/.codex" .chezmoi.homeDir | quote }} \
+    -o -path {{ printf "%s/.local/share/uv" .chezmoi.homeDir | quote }} \
+    -o -path {{ printf "%s/.npm" .chezmoi.homeDir | quote }} \
+    -o -path {{ printf "%s/.platformio" .chezmoi.homeDir | quote }} \
+    -o -path {{ printf "%s/.ssh/agent" .chezmoi.homeDir | quote }} \) -prune -o \
+    -type d \( -name .pio -o -name .svelte-kit -o -name __pycache__ -o -name node_modules \) \
+    -prune -exec {{ $lbu | quote }} exclude {} +
 EOF
-chmod +x /etc/lbu/pre-package.d/exclude-pio
+chmod +x /etc/lbu/pre-package.d/exclude-generated
 {{- end }}
