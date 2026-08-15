@@ -26,6 +26,7 @@ start() {
 }
 EOF
 chmod +x /etc/init.d/device-hostname
+lbu include /etc/init.d/device-hostname
 rc-update add device-hostname boot
 rc-service device-hostname start
 {{- end }}
