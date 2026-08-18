@@ -8,7 +8,7 @@ import re
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, Iterable, Literal
+from typing import Any, Iterable
 from urllib.parse import urlsplit
 
 import rich_click as click
@@ -17,7 +17,6 @@ from rich.progress import Progress
 
 console = Console()
 
-Remote = Literal["ssh", "https"]
 SKIP_RE = re.compile(
     r"(^|[-_/])([a-z0-9]*dummy[a-z0-9]*|[a-z0-9]*test[a-z0-9]*|deletion[-_]scheduled)([-_/]|$)",
     re.I,
@@ -119,28 +118,30 @@ def _host_netloc(host: str) -> str:
     return urlsplit(host if "://" in host else f"https://{host}").netloc
 
 
-def _repo_url(repo: dict[str, Any], remote: Remote, clone_host: str) -> str:
-    """Return the requested clone URL."""
-    url = repo["http_url_to_repo" if remote == "https" else "ssh_url_to_repo"]
-    if remote != "https":
-        return url
-
-    parts = urlsplit(url)
-    return f"{parts.scheme}://{_host_netloc(clone_host)}{parts.path}"
+def _repo_url(repo: dict[str, Any], host: str) -> str:
+    """Return the HTTPS clone URL for host."""
+    path = urlsplit(repo["http_url_to_repo"]).path
+    return f"https://{_host_netloc(host)}{path}"
 
 
-def _api_url(repo: dict[str, Any], remote: Remote, host: str) -> str | None:
+def _repo_path(repo: dict[str, Any], clone_host: str, ghq_root: str) -> str | None:
+    """Return the existing ghq path for clone_host."""
+    path = os.path.join(
+        ghq_root,
+        _host_netloc(clone_host),
+        repo["path_with_namespace"],
+    )
+    return path if os.path.exists(os.path.join(path, ".git")) else None
+
+
+def _api_url(repo: dict[str, Any], host: str) -> str:
     """Return the HTTPS URL for the configured GitLab host."""
-    if remote != "https":
-        return None
-
-    parts = urlsplit(repo["http_url_to_repo"])
-    return f"{parts.scheme}://{_host_netloc(host)}{parts.path}"
+    return _repo_url(repo, host)
 
 
-def _clone_env(remote: Remote, host: str, clone_host: str) -> dict[str, str] | None:
+def _clone_env(host: str, clone_host: str) -> dict[str, str] | None:
     """Return env that maps clone_host URLs to host URLs for git."""
-    if remote != "https" or _host_netloc(host) == _host_netloc(clone_host):
+    if _host_netloc(host) == _host_netloc(clone_host):
         return None
 
     return os.environ | {
@@ -150,36 +151,56 @@ def _clone_env(remote: Remote, host: str, clone_host: str) -> dict[str, str] | N
     }
 
 
-def _set_origin_to_api_url(repo: dict[str, Any], remote: Remote, host: str) -> None:
-    """Keep remotes usable after ghq placed the repo under clone_host."""
-    api_url = _api_url(repo, remote, host)
-    if not api_url:
-        return
-
-    ghq_result = subprocess.run(
-        ["ghq", "list", "-p", "-e", repo["path_with_namespace"]],
+def _set_origin_to_api_url(
+    repo_path: str, repo: dict[str, Any], host: str
+) -> bool | str:
+    """Keep origin usable after ghq placed the repo under clone_host."""
+    result = subprocess.run(
+        [
+            "git",
+            "-C",
+            repo_path,
+            "remote",
+            "set-url",
+            "origin",
+            _api_url(repo, host),
+        ],
         capture_output=True,
         text=True,
     )
-    repo_path = ghq_result.stdout.strip().splitlines()
-    if ghq_result.returncode == 0 and repo_path:
-        subprocess.run(
-            ["git", "-C", repo_path[0], "remote", "set-url", "origin", api_url],
-            capture_output=True,
-        )
+    return (
+        True
+        if result.returncode == 0
+        else result.stderr.strip() or result.stdout.strip() or False
+    )
 
 
-def _clone_repo(
+def _sync_repo(
     repo: dict[str, Any],
     dry_run: bool,
-    remote: Remote,
     host: str,
-    clone_host: str,
+    ghq_root: str,
 ) -> tuple[bool | str, str]:
-    """Clone a single repository via ghq."""
-    repo_url = _repo_url(repo, remote, clone_host)
+    """Clone a repository or fetch its remote branches without pulling."""
     name = repo["path_with_namespace"]
-    command = ["ghq", "get", "--update", repo_url]
+    clone_host = _host_netloc(repo["http_url_to_repo"])
+    repo_path = _repo_path(repo, clone_host, ghq_root)
+    command = (
+        [
+            "git",
+            "-C",
+            repo_path,
+            "fetch",
+            "--prune",
+            "--no-tags",
+            "--no-prune-tags",
+            "--no-recurse-submodules",
+            _api_url(repo, host),
+            "+refs/heads/*:refs/remotes/origin/*",
+        ]
+        if repo_path
+        else ["ghq", "get", "--no-recursive", _repo_url(repo, clone_host)]
+    )
 
     if dry_run:
         return f"Would run: {' '.join(command)}", name
@@ -187,33 +208,31 @@ def _clone_repo(
     result = subprocess.run(
         command,
         capture_output=True,
-        env=_clone_env(remote, host, clone_host),
+        env=None if repo_path else _clone_env(host, clone_host),
         text=True,
     )
     if result.returncode != 0:
         return result.stderr.strip() or result.stdout.strip() or False, name
-    _set_origin_to_api_url(repo, remote, host)
-    return True, name
+    repo_path = repo_path or _repo_path(repo, clone_host, ghq_root)
+    return (
+        _set_origin_to_api_url(repo_path, repo, host)
+        if repo_path
+        else "ghq did not create the expected checkout",
+        name,
+    )
 
 
 @click.command()
 @click.option(
     "--dry-run",
     is_flag=True,
-    help="Show what would be done without cloning",
+    help="Show what would be done",
 )
 @click.option(
     "--parallel",
     default=1,
     type=int,
-    help="Number of parallel clone operations (default: 1)",
-)
-@click.option(
-    "--remote",
-    type=click.Choice(["ssh", "https"]),
-    default="ssh",
-    show_default=True,
-    help="Clone URL type to pass to ghq",
+    help="Number of parallel repository operations (default: 1)",
 )
 @click.option(
     "--include-dummy-test",
@@ -223,25 +242,16 @@ def _clone_repo(
 @click.option(
     "--host",
     envvar="GITLAB_HOST",
-    default="gitlab-proxy.example.com",
-    show_default=True,
+    required=True,
     help="GitLab host for glab API calls and HTTPS git access",
-)
-@click.option(
-    "--clone-host",
-    default="gitlab.services.example.it",
-    show_default=True,
-    help="GitLab host to keep in ghq paths and HTTPS remotes",
 )
 def main(
     dry_run: bool,
     parallel: int,
-    remote: Remote,
     include_dummy_test: bool,
     host: str,
-    clone_host: str,
 ) -> None:
-    """Clone all accessible GitLab repositories into ghq."""
+    """Clone or fetch all accessible GitLab repositories in ghq."""
     all_repos = _fetch_repositories(host)
     if not all_repos:
         console.print("[yellow]No repositories found[/yellow]")
@@ -250,6 +260,7 @@ def main(
     console.print(f"Found {len(all_repos)} repositories total")
     filtered_repos = _filter_group_repositories(all_repos, include_dummy_test)
     _ensure_ghq_is_available()
+    ghq_root = subprocess.check_output(["ghq", "root"], text=True).strip()
 
     with Progress() as progress:
         task = progress.add_task("Processing repos...", total=len(filtered_repos))
@@ -259,7 +270,7 @@ def main(
                 name = repo["path_with_namespace"]
                 progress.update(task, description=f"Processing {name}")
 
-                result, repo_name = _clone_repo(repo, dry_run, remote, host, clone_host)
+                result, repo_name = _sync_repo(repo, dry_run, host, ghq_root)
                 if dry_run:
                     console.print(f"[dim]{result}[/dim]")
                 elif result is not True:
@@ -269,9 +280,7 @@ def main(
         else:
             with ThreadPoolExecutor(max_workers=parallel) as executor:
                 futures = {
-                    executor.submit(
-                        _clone_repo, repo, dry_run, remote, host, clone_host
-                    ): repo
+                    executor.submit(_sync_repo, repo, dry_run, host, ghq_root): repo
                     for repo in filtered_repos
                 }
 
