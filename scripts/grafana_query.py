@@ -1,4 +1,4 @@
-"""Query Grafana datasources and expose optional local API facades."""
+"""Query Grafana datasources and alerting resources, with local API facades."""
 
 from __future__ import annotations
 
@@ -62,6 +62,33 @@ ELASTICSEARCH_POST_READ_SUFFIXES = frozenset(
         "/_terms_enum",
         "/_validate/query",
     }
+)
+SHOW_APP_RESOURCES = {
+    "alert-rules": "/apis/rules.alerting.grafana.app/v0alpha1/namespaces/{namespace}/alertrules",
+    "contact-points": "/apis/notifications.alerting.grafana.app/v1beta1/namespaces/{namespace}/receivers",
+    "inhibition-rules": "/apis/notifications.alerting.grafana.app/v1beta1/namespaces/{namespace}/inhibitionrules",
+    "mute-timings": "/apis/notifications.alerting.grafana.app/v1beta1/namespaces/{namespace}/timeintervals",
+    "notification-policies": "/apis/notifications.alerting.grafana.app/v1beta1/namespaces/{namespace}/routingtrees",
+    "recording-rules": "/apis/rules.alerting.grafana.app/v0alpha1/namespaces/{namespace}/recordingrules",
+    "rule-sequences": "/apis/rules.alerting.grafana.app/v0alpha1/namespaces/{namespace}/rulesequences",
+    "templates": "/apis/notifications.alerting.grafana.app/v1beta1/namespaces/{namespace}/templategroups",
+}
+SHOW_FIXED_RESOURCES = {
+    "active-alerts": "/api/alertmanager/grafana/api/v2/alerts",
+    "contact-point-status": "/api/alertmanager/grafana/config/api/v1/receivers",
+    "silences": "/api/alertmanager/grafana/api/v2/silences",
+}
+SHOW_RESOURCE_ALIASES = {
+    "endpoints": "contact-points",
+    "notification-rules": "notification-policies",
+}
+SHOW_RESOURCES = tuple(
+    sorted(
+        SHOW_APP_RESOURCES.keys()
+        | SHOW_FIXED_RESOURCES.keys()
+        | SHOW_RESOURCE_ALIASES.keys()
+        | {"folders", "teams"}
+    )
 )
 console = Console(stderr=True)
 
@@ -560,6 +587,121 @@ def cmd_metrics(c: httpx.Client, args: Any) -> int:
     shown = len(names)
     suffix = f" (of {total})" if shown < total else ""
     print(f"\n{shown} metric(s){suffix}", file=sys.stderr)
+    return 0
+
+
+def cmd_alert_rules(c: httpx.Client, args: Any) -> int:
+    if args.panel_id is not None and not args.dashboard_uid:
+        raise click.UsageError("alert-rules: --panel-id requires --dashboard-uid")
+
+    params: list[tuple[str, str | int | float | None]] = [
+        (key, value)
+        for key, values in (
+            ("rule_group", args.group),
+            ("rule_name", args.rule),
+            ("rule_uid", args.uid),
+            ("datasource_uid", args.datasource_uid),
+            ("state", args.state),
+            ("health", args.health),
+            ("rule_matcher", args.label_matcher),
+        )
+        for value in values
+    ]
+    params.extend(
+        (key, value)
+        for key, value in (
+            ("folder_uid", args.folder_uid),
+            ("search.rule_name", args.title),
+            ("search.rule_group", args.search_group),
+            ("search.folder", args.search_folder),
+            ("receiver_name", args.receiver),
+            ("rule_type", args.rule_type),
+            ("dashboard_uid", args.dashboard_uid),
+            ("panel_id", args.panel_id),
+            ("plugins", args.plugins),
+            ("group_limit", args.group_limit),
+            ("rule_limit", args.rule_limit),
+            ("group_next_token", args.next_token),
+            ("limit_alerts", args.limit_alerts),
+        )
+        if value is not None
+    )
+    r = c.get(
+        "/api/prometheus/grafana/api/v1/rules",
+        params=params,
+        extensions=REQUEST_EXTENSIONS,
+    )
+    if r.status_code >= 400:
+        print(f"HTTP {r.status_code}", file=sys.stderr)
+        print(r.text, file=sys.stderr)
+        return 1
+    body = r.json()
+    print(json.dumps(body, indent=2, ensure_ascii=False))
+    return 0 if body.get("status") == "success" else 1
+
+
+def cmd_show(c: httpx.Client, args: Any) -> int:
+    resource = SHOW_RESOURCE_ALIASES.get(args.resource, args.resource)
+    params: list[tuple[str, str | int | float | None]] = []
+    if resource in SHOW_APP_RESOURCES:
+        path = SHOW_APP_RESOURCES[resource].format(
+            namespace=quote(args.namespace, safe="")
+        )
+        if args.name:
+            path += f"/{quote(args.name, safe='')}"
+        else:
+            params.append(("limit", args.limit))
+            for key, value in (
+                ("continue", args.continue_token),
+                ("fieldSelector", args.field_selector),
+                ("labelSelector", args.label_selector),
+            ):
+                if value:
+                    params.append((key, value))
+    elif resource == "teams":
+        if (
+            args.name
+            or args.continue_token
+            or args.field_selector
+            or args.label_selector
+        ):
+            raise click.UsageError("show teams: use --query, --page, and --limit")
+        path = "/api/teams/search"
+        params = [("page", args.page), ("perpage", args.limit)]
+        if args.query:
+            params.append(("query", args.query))
+    elif resource == "folders":
+        if (
+            args.query
+            or args.continue_token
+            or args.field_selector
+            or args.label_selector
+        ):
+            raise click.UsageError("show folders: use --name for a folder UID")
+        path = "/api/folders"
+        if args.name:
+            path += f"/{quote(args.name, safe='')}"
+        else:
+            params = [("limit", args.limit)]
+    else:
+        if any(
+            (
+                args.name,
+                args.query,
+                args.continue_token,
+                args.field_selector,
+                args.label_selector,
+            )
+        ):
+            raise click.UsageError(f"show {resource}: filters are not supported")
+        path = SHOW_FIXED_RESOURCES[resource]
+
+    r = c.get(path, params=params, extensions=REQUEST_EXTENSIONS)
+    if r.status_code >= 400:
+        print(f"HTTP {r.status_code}", file=sys.stderr)
+        print(r.text, file=sys.stderr)
+        return 1
+    print(json.dumps(r.json(), indent=2, ensure_ascii=False))
     return 0
 
 
@@ -1415,7 +1557,7 @@ def cli(
     verify: bool,
     timeout: float,
 ) -> None:
-    """Query Grafana datasources and expose optional local API facades."""
+    """Query Grafana datasources and alerting resources, with API facades."""
     grafana_client = client(url, token, host, sni_hostname, verify, timeout)
     ctx.obj = grafana_client
     ctx.call_on_close(grafana_client.close)
@@ -1470,6 +1612,121 @@ def metrics_command(
             ),
         )
     )
+
+
+@cli.command("alert-rules")
+@click.option("--folder-uid", help="Exact folder UID.")
+@click.option("--group", multiple=True, help="Exact rule-group name; repeatable.")
+@click.option("--rule", multiple=True, help="Exact rule title; repeatable.")
+@click.option("--uid", multiple=True, help="Exact rule UID; repeatable.")
+@click.option("--title", help="Case-insensitive rule-title substring.")
+@click.option("--search-group", help="Case-insensitive group-name substring.")
+@click.option("--search-folder", help="Case-insensitive folder-name substring.")
+@click.option("--receiver", help="Receiver/contact-point name.")
+@click.option("--datasource-uid", multiple=True, help="Datasource UID; repeatable.")
+@click.option(
+    "--state",
+    multiple=True,
+    type=click.Choice(
+        (
+            "normal",
+            "inactive",
+            "pending",
+            "alerting",
+            "firing",
+            "nodata",
+            "error",
+            "recovering",
+        )
+    ),
+    help="Rule state; repeatable.",
+)
+@click.option(
+    "--health",
+    multiple=True,
+    type=click.Choice(("ok", "error", "nodata")),
+    help="Rule health; repeatable.",
+)
+@click.option(
+    "--type",
+    "rule_type",
+    type=click.Choice(("alerting", "recording")),
+    help="Rule type.",
+)
+@click.option("--dashboard-uid", help="Dashboard UID.")
+@click.option("--panel-id", type=int, help="Panel ID; requires --dashboard-uid.")
+@click.option(
+    "--label-matcher",
+    multiple=True,
+    help='JSON rule-label matcher, e.g. {"type":0,"name":"severity","value":"critical"}; repeatable.',
+)
+@click.option("--plugins", type=click.Choice(("hide", "only")))
+@click.option("--group-limit", type=click.IntRange(min=0))
+@click.option("--rule-limit", type=click.IntRange(min=0))
+@click.option("--next-token", help="groupNextToken from a previous response.")
+@click.option(
+    "--limit-alerts",
+    type=click.IntRange(min=0),
+    default=0,
+    show_default=True,
+    help="Maximum alert instances per rule.",
+)
+@click.pass_obj
+def alert_rules_command(
+    c: httpx.Client,
+    folder_uid: str | None,
+    group: tuple[str, ...],
+    rule: tuple[str, ...],
+    uid: tuple[str, ...],
+    title: str | None,
+    search_group: str | None,
+    search_folder: str | None,
+    receiver: str | None,
+    datasource_uid: tuple[str, ...],
+    state: tuple[str, ...],
+    health: tuple[str, ...],
+    rule_type: str | None,
+    dashboard_uid: str | None,
+    panel_id: int | None,
+    label_matcher: tuple[str, ...],
+    plugins: str | None,
+    group_limit: int | None,
+    rule_limit: int | None,
+    next_token: str | None,
+    limit_alerts: int,
+) -> None:
+    """Query Grafana-managed alert rules and their runtime state."""
+    run_command(cmd_alert_rules(c, SimpleNamespace(**locals())))
+
+
+@cli.command("show")
+@click.argument("resource", type=click.Choice(SHOW_RESOURCES))
+@click.option("--namespace", default="default", show_default=True)
+@click.option(
+    "--name",
+    help="Exact App Platform resource name, or folder UID.",
+)
+@click.option("--limit", type=click.IntRange(min=1), default=1000, show_default=True)
+@click.option("--continue-token", help="App Platform list continuation token.")
+@click.option("--field-selector", help="App Platform field selector.")
+@click.option("--label-selector", help="App Platform label selector.")
+@click.option("--query", help="Team-name search query.")
+@click.option("--page", type=click.IntRange(min=1), default=1, show_default=True)
+@click.pass_obj
+def show_command(
+    c: httpx.Client,
+    resource: str,
+    namespace: str,
+    name: str | None,
+    limit: int,
+    continue_token: str | None,
+    field_selector: str | None,
+    label_selector: str | None,
+    query: str | None,
+    page: int,
+) -> None:
+    """Show an allow-listed read-only Grafana resource as JSON."""
+    run_command(cmd_show(c, SimpleNamespace(**locals())))
 
 
 @cli.command("query")
