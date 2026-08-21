@@ -1,25 +1,318 @@
 from __future__ import annotations
 
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from http.server import ThreadingHTTPServer
 from io import StringIO
 import json
 from types import SimpleNamespace
 import threading
 import unittest
+from unittest.mock import patch
 
 import httpx
+from click.exceptions import UsageError
 from rich.console import Console
 
 from scripts.grafana_query import (
     GrafanaQueryApiProxyHandler,
     ProxyStats,
     RequestSample,
+    cmd_alert_rule_create,
+    cmd_alert_rule_delete,
+    cmd_alert_rule_edit,
+    cmd_alert_rule_patch,
     cmd_alert_rules,
     cmd_show,
+    client,
     percentile,
     render_dashboard,
 )
+
+
+def alert_rule(
+    name: str = "rule-1",
+    resource_version: str = "7",
+    provenance: str = "",
+) -> dict:
+    return {
+        "apiVersion": "rules.alerting.grafana.app/v0alpha1",
+        "kind": "AlertRule",
+        "metadata": {
+            "name": name,
+            "namespace": "default",
+            "uid": "server-generated-uid",
+            "resourceVersion": resource_version,
+            "labels": {
+                "grafana.app/folder": "folder-1",
+                "grafana.com/group": "group-1",
+            },
+            "annotations": {
+                "grafana.app/folder": "folder-1",
+                "grafana.app/updatedBy": "user-1",
+                "grafana.app/updatedTimestamp": "2026-08-20T10:00:00Z",
+                "grafana.com/provenance": provenance,
+            },
+        },
+        "spec": {
+            "title": "Original title",
+            "trigger": {"interval": "1m"},
+            "noDataState": "NoData",
+            "execErrState": "Error",
+            "expressions": {
+                "A": {
+                    "relativeTimeRange": {"from": "10m0s", "to": "0s"},
+                    "datasourceUID": "prometheus-1",
+                    "model": {"refId": "A"},
+                },
+                "C": {
+                    "queryType": "expression",
+                    "model": {"refId": "C", "type": "threshold"},
+                    "source": True,
+                },
+            },
+        },
+        "status": {"operatorStates": {}},
+    }
+
+
+class ClientTest(unittest.TestCase):
+    def test_configures_basic_auth(self) -> None:
+        with patch("scripts.grafana_query.httpx.Client") as client_class:
+            client(
+                "https://grafana.invalid",
+                None,
+                "alice",
+                "secret",
+                None,
+                None,
+                True,
+                60,
+            )
+
+        auth = client_class.call_args.kwargs["auth"]
+        request = next(auth.sync_auth_flow(httpx.Request("GET", "https://x.invalid")))
+        self.assertEqual(request.headers["Authorization"], "Basic YWxpY2U6c2VjcmV0")
+
+    def test_rejects_mixed_or_incomplete_auth(self) -> None:
+        with self.assertRaisesRegex(UsageError, "cannot be combined"):
+            client(
+                "https://grafana.invalid",
+                "token",
+                "alice",
+                "secret",
+                None,
+                None,
+                True,
+                60,
+            )
+        with self.assertRaisesRegex(UsageError, "requires both"):
+            client(
+                "https://grafana.invalid",
+                None,
+                "alice",
+                None,
+                None,
+                None,
+                True,
+                60,
+            )
+
+
+class AlertRuleManagementTest(unittest.TestCase):
+    def test_create_uses_grouped_provisioning_api_and_returns_app_rule(self) -> None:
+        requests: list[httpx.Request] = []
+
+        def respond(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return httpx.Response(201, json=alert_rule())
+
+        grafana = httpx.Client(
+            base_url="https://grafana.invalid",
+            transport=httpx.MockTransport(respond),
+        )
+        try:
+            with (
+                patch(
+                    "scripts.grafana_query.load_document",
+                    return_value=alert_rule(),
+                ),
+                redirect_stdout(StringIO()),
+                redirect_stderr(StringIO()),
+            ):
+                result = cmd_alert_rule_create(
+                    grafana,
+                    SimpleNamespace(
+                        namespace="default",
+                        file="rule.yaml",
+                        dry_run=False,
+                        yes=True,
+                        allow_managed=False,
+                    ),
+                )
+        finally:
+            grafana.close()
+
+        self.assertEqual(result, 0)
+        self.assertEqual([r.method for r in requests], ["POST", "GET"])
+        self.assertEqual(requests[0].url.path, "/api/v1/provisioning/alert-rules")
+        self.assertEqual(requests[0].headers["X-Disable-Provenance"], "true")
+        body = json.loads(requests[0].content)
+        self.assertEqual(body["uid"], "rule-1")
+        self.assertEqual(body["folderUID"], "folder-1")
+        self.assertEqual(body["ruleGroup"], "group-1")
+        self.assertEqual(body["condition"], "C")
+        self.assertEqual(body["data"][0]["relativeTimeRange"]["from"], 600)
+        self.assertEqual(body["data"][1]["datasourceUid"], "__expr__")
+
+    def test_create_dry_run_sends_no_request(self) -> None:
+        requests: list[httpx.Request] = []
+
+        def respond(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return httpx.Response(500)
+
+        grafana = httpx.Client(
+            base_url="https://grafana.invalid",
+            transport=httpx.MockTransport(respond),
+        )
+        try:
+            with (
+                patch("scripts.grafana_query.load_document", return_value=alert_rule()),
+                redirect_stdout(StringIO()),
+                redirect_stderr(StringIO()),
+            ):
+                result = cmd_alert_rule_create(
+                    grafana,
+                    SimpleNamespace(
+                        namespace="default",
+                        file="rule.yaml",
+                        dry_run=True,
+                        yes=False,
+                        allow_managed=False,
+                    ),
+                )
+        finally:
+            grafana.close()
+
+        self.assertEqual(result, 0)
+        self.assertEqual(requests, [])
+
+    def test_edit_preserves_resource_version_and_shows_diff(self) -> None:
+        requests: list[httpx.Request] = []
+        current = alert_rule()
+
+        def respond(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            if request.method == "GET":
+                return httpx.Response(200, json=current)
+            return httpx.Response(200, json=current)
+
+        def edit_rule(text: str, extension: str) -> str:
+            self.assertEqual(extension, ".json")
+            body = json.loads(text)
+            body["spec"]["title"] = "Updated title"
+            return json.dumps(body, indent=2) + "\n"
+
+        grafana = httpx.Client(
+            base_url="https://grafana.invalid",
+            transport=httpx.MockTransport(respond),
+        )
+        output = StringIO()
+        try:
+            with (
+                patch("scripts.grafana_query.click.edit", side_effect=edit_rule),
+                redirect_stdout(StringIO()),
+                redirect_stderr(output),
+            ):
+                result = cmd_alert_rule_edit(
+                    grafana,
+                    SimpleNamespace(
+                        namespace="default",
+                        name="rule-1",
+                        dry_run=False,
+                        yes=True,
+                        allow_managed=False,
+                    ),
+                )
+        finally:
+            grafana.close()
+
+        self.assertEqual(result, 0)
+        self.assertEqual([r.method for r in requests], ["GET", "PUT"])
+        body = json.loads(requests[-1].content)
+        self.assertEqual(body["metadata"]["resourceVersion"], "7")
+        self.assertEqual(body["spec"]["title"], "Updated title")
+        self.assertNotIn("uid", body["metadata"])
+        self.assertNotIn("status", body)
+        self.assertIn("Original title", output.getvalue())
+        self.assertIn("Updated title", output.getvalue())
+
+    def test_merge_patch_adds_resource_version(self) -> None:
+        requests: list[httpx.Request] = []
+
+        def respond(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return httpx.Response(200, json=alert_rule())
+
+        grafana = httpx.Client(
+            base_url="https://grafana.invalid",
+            transport=httpx.MockTransport(respond),
+        )
+        try:
+            with (
+                patch(
+                    "scripts.grafana_query.load_document",
+                    return_value={"spec": {"title": "Updated title"}},
+                ),
+                redirect_stdout(StringIO()),
+            ):
+                result = cmd_alert_rule_patch(
+                    grafana,
+                    SimpleNamespace(
+                        namespace="default",
+                        name="rule-1",
+                        file="patch.yaml",
+                        patch_type="merge",
+                        field_manager="grafana-query",
+                        force=False,
+                        dry_run=True,
+                        yes=False,
+                        allow_managed=False,
+                    ),
+                )
+        finally:
+            grafana.close()
+
+        self.assertEqual(result, 0)
+        self.assertEqual([r.method for r in requests], ["GET"])
+
+    def test_refuses_managed_rule(self) -> None:
+        requests: list[httpx.Request] = []
+
+        def respond(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return httpx.Response(200, json=alert_rule(provenance="file"))
+
+        grafana = httpx.Client(
+            base_url="https://grafana.invalid",
+            transport=httpx.MockTransport(respond),
+        )
+        try:
+            with self.assertRaisesRegex(UsageError, "provenance file"):
+                cmd_alert_rule_delete(
+                    grafana,
+                    SimpleNamespace(
+                        namespace="default",
+                        name="rule-1",
+                        dry_run=False,
+                        yes=True,
+                        allow_managed=False,
+                    ),
+                )
+        finally:
+            grafana.close()
+
+        self.assertEqual([r.method for r in requests], ["GET"])
 
 
 class ProxyStatsTest(unittest.TestCase):

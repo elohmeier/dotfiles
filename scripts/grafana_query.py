@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import copy
 import contextlib
 from collections import Counter, deque
 from dataclasses import dataclass, field
+import difflib
 import errno
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -20,6 +22,7 @@ from typing import Any, cast
 
 import httpx
 import rich_click as click
+import yaml
 from click.exceptions import Exit
 from rich import box
 from rich.console import Console, Group
@@ -82,6 +85,48 @@ SHOW_RESOURCE_ALIASES = {
     "endpoints": "contact-points",
     "notification-rules": "notification-policies",
 }
+ALERT_RULE_API_VERSION = "rules.alerting.grafana.app/v0alpha1"
+ALERT_RULE_KIND = "AlertRule"
+ALERT_RULES_APP_PATH = (
+    "/apis/rules.alerting.grafana.app/v0alpha1/namespaces/{namespace}/alertrules"
+)
+ALERT_RULE_PROVISIONING_PATH = "/api/v1/provisioning/alert-rules"
+ALERT_RULE_FOLDER_KEY = "grafana.app/folder"
+ALERT_RULE_GROUP_KEY = "grafana.com/group"
+ALERT_RULE_PATCH_CONTENT_TYPES = {
+    "apply": "application/apply-patch+yaml",
+    "json": "application/json-patch+json",
+    "merge": "application/merge-patch+json",
+}
+ALERT_RULE_MANAGER_ANNOTATIONS = frozenset(
+    {
+        "grafana.app/managedBy",
+        "grafana.app/managerAllowsEdits",
+        "grafana.app/managerId",
+        "grafana.app/managerSuspended",
+        "grafana.com/provenance",
+    }
+)
+ALERT_RULE_SERVER_METADATA_FIELDS = frozenset(
+    {
+        "creationTimestamp",
+        "deletionGracePeriodSeconds",
+        "deletionTimestamp",
+        "generation",
+        "managedFields",
+        "selfLink",
+        "uid",
+    }
+)
+ALERT_RULE_SERVER_ANNOTATIONS = frozenset(
+    {
+        "grafana.app/createdBy",
+        "grafana.app/updatedBy",
+        "grafana.app/updatedTimestamp",
+        "grafana.com/updatedBy",
+        "grafana.com/updateTimestamp",
+    }
+)
 SHOW_RESOURCES = tuple(
     sorted(
         SHOW_APP_RESOURCES.keys()
@@ -470,12 +515,25 @@ def request_route(path: str) -> str:
 def client(
     url: str,
     token: str | None,
+    username: str | None,
+    password: str | None,
     host: str | None,
     sni_hostname: str | None,
     verify: bool,
     timeout: float,
 ) -> httpx.Client:
     global REQUEST_EXTENSIONS
+    if token and (username is not None or password is not None):
+        raise click.UsageError("--token cannot be combined with basic authentication")
+    if (username is None) != (password is None):
+        raise click.UsageError(
+            "basic authentication requires both --username and --password"
+        )
+    auth = (
+        httpx.BasicAuth(username, password)
+        if username is not None and password is not None
+        else None
+    )
     REQUEST_EXTENSIONS = {"sni_hostname": sni_hostname} if sni_hostname else {}
     headers = {}
     if token:
@@ -485,6 +543,7 @@ def client(
     return httpx.Client(
         base_url=url.rstrip("/"),
         headers=headers,
+        auth=auth,
         verify=verify,
         timeout=timeout,
     )
@@ -703,6 +762,540 @@ def cmd_show(c: httpx.Client, args: Any) -> int:
         return 1
     print(json.dumps(r.json(), indent=2, ensure_ascii=False))
     return 0
+
+
+def alert_rule_path(namespace: str, name: str | None = None) -> str:
+    path = ALERT_RULES_APP_PATH.format(namespace=quote(namespace, safe=""))
+    return f"{path}/{quote(name, safe='')}" if name else path
+
+
+def load_document(path: str) -> Any:
+    raw = sys.stdin.read() if path == "-" else open(path, encoding="utf-8").read()
+    try:
+        return yaml.safe_load(raw)
+    except yaml.YAMLError as e:
+        raise click.UsageError(f"invalid JSON/YAML in {path}: {e}") from e
+
+
+def print_response(r: httpx.Response) -> int:
+    if r.status_code >= 400:
+        print(f"HTTP {r.status_code}", file=sys.stderr)
+        print(r.text, file=sys.stderr)
+        return 1
+    if not r.content:
+        return 0
+    try:
+        body = r.json()
+    except json.JSONDecodeError:
+        print(r.text)
+    else:
+        print(json.dumps(body, indent=2, ensure_ascii=False))
+    return 0
+
+
+def fetch_alert_rule(
+    c: httpx.Client, namespace: str, name: str
+) -> tuple[dict[str, Any] | None, int]:
+    r = c.get(
+        alert_rule_path(namespace, name),
+        extensions=REQUEST_EXTENSIONS,
+    )
+    if r.status_code >= 400:
+        return None, print_response(r)
+    body = r.json()
+    if not isinstance(body, dict):
+        raise click.ClickException("Grafana returned a non-object alert rule")
+    return cast(dict[str, Any], body), 0
+
+
+def prepare_alert_rule(
+    source: Any,
+    namespace: str,
+    name: str | None = None,
+    current: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if not isinstance(source, dict):
+        raise click.UsageError("alert rule must be a JSON/YAML object")
+    rule = copy.deepcopy(cast(dict[str, Any], source))
+    if rule.get("apiVersion") != ALERT_RULE_API_VERSION:
+        raise click.UsageError(
+            f"alert rule apiVersion must be {ALERT_RULE_API_VERSION}"
+        )
+    if rule.get("kind") != ALERT_RULE_KIND:
+        raise click.UsageError(f"alert rule kind must be {ALERT_RULE_KIND}")
+    if not isinstance(rule.get("spec"), dict):
+        raise click.UsageError("alert rule spec must be an object")
+
+    metadata = rule.get("metadata")
+    if not isinstance(metadata, dict):
+        raise click.UsageError("alert rule metadata must be an object")
+    metadata = cast(dict[str, Any], metadata)
+    source_name = metadata.get("name")
+    if name and source_name not in (None, name):
+        raise click.UsageError(
+            f"alert rule metadata.name {source_name!r} does not match {name!r}"
+        )
+    metadata["name"] = name or source_name
+    if not isinstance(metadata["name"], str) or not metadata["name"]:
+        raise click.UsageError("alert rule metadata.name is required")
+    source_namespace = metadata.get("namespace")
+    if source_namespace not in (None, namespace):
+        raise click.UsageError(
+            f"alert rule metadata.namespace {source_namespace!r} does not match {namespace!r}"
+        )
+    metadata["namespace"] = namespace
+
+    for metadata_field in ALERT_RULE_SERVER_METADATA_FIELDS:
+        metadata.pop(metadata_field, None)
+    rule.pop("status", None)
+    annotations = metadata.setdefault("annotations", {})
+    if not isinstance(annotations, dict):
+        raise click.UsageError("alert rule metadata.annotations must be an object")
+    for annotation in ALERT_RULE_SERVER_ANNOTATIONS:
+        annotations.pop(annotation, None)
+
+    if current is None:
+        metadata.pop("resourceVersion", None)
+        return rule
+
+    current_metadata = current.get("metadata", {})
+    if not isinstance(current_metadata, dict):
+        raise click.ClickException("Grafana returned invalid alert-rule metadata")
+    if "resourceVersion" not in metadata and current_metadata.get("resourceVersion"):
+        metadata["resourceVersion"] = current_metadata["resourceVersion"]
+    current_annotations = current_metadata.get("annotations", {})
+    if not isinstance(current_annotations, dict):
+        raise click.UsageError("alert rule metadata.annotations must be an object")
+    for key in ALERT_RULE_MANAGER_ANNOTATIONS:
+        if key in current_annotations:
+            annotations.setdefault(key, current_annotations[key])
+    return rule
+
+
+_PROM_DURATION_RE = re.compile(
+    r"^(?:(?P<y>[0-9]+)y)?(?:(?P<w>[0-9]+)w)?(?:(?P<d>[0-9]+)d)?"
+    r"(?:(?P<h>[0-9]+)h)?(?:(?P<m>[0-9]+)m)?(?:(?P<s>[0-9]+)s)?$"
+)
+_PROM_DURATION_UNIT_SECONDS = {
+    "y": 365 * 24 * 60 * 60,
+    "w": 7 * 24 * 60 * 60,
+    "d": 24 * 60 * 60,
+    "h": 60 * 60,
+    "m": 60,
+    "s": 1,
+}
+
+
+def parse_prom_duration_seconds(value: Any, field_name: str) -> int:
+    if value == "0":
+        return 0
+    if not isinstance(value, str) or not value:
+        raise click.UsageError(f"{field_name} must be a Prometheus duration")
+    match = _PROM_DURATION_RE.fullmatch(value)
+    if match is None or not any(match.groupdict().values()):
+        raise click.UsageError(
+            f"{field_name} has invalid Prometheus duration {value!r}"
+        )
+    return sum(
+        int(amount) * _PROM_DURATION_UNIT_SECONDS[unit]
+        for unit, amount in match.groupdict().items()
+        if amount is not None
+    )
+
+
+def app_alert_rule_to_provisioning(rule: dict[str, Any]) -> dict[str, Any]:
+    metadata = cast(dict[str, Any], rule["metadata"])
+    spec = cast(dict[str, Any], rule["spec"])
+    annotations = metadata.get("annotations", {})
+    labels = metadata.get("labels", {})
+    if not isinstance(annotations, dict) or not isinstance(labels, dict):
+        raise click.UsageError("alert rule metadata labels/annotations must be objects")
+
+    folder_uid = annotations.get(ALERT_RULE_FOLDER_KEY) or labels.get(
+        ALERT_RULE_FOLDER_KEY
+    )
+    if not isinstance(folder_uid, str) or not folder_uid:
+        raise click.UsageError(
+            f"alert rule metadata must set {ALERT_RULE_FOLDER_KEY!r}"
+        )
+    group = labels.get(ALERT_RULE_GROUP_KEY)
+    if not isinstance(group, str) or not group:
+        raise click.UsageError(
+            f"alert rule metadata.labels must set {ALERT_RULE_GROUP_KEY!r}"
+        )
+
+    expressions = spec.get("expressions")
+    if not isinstance(expressions, dict) or not expressions:
+        raise click.UsageError("alert rule spec.expressions must be a non-empty object")
+    condition: str | None = None
+    data: list[dict[str, Any]] = []
+    for ref_id, expression_value in expressions.items():
+        if not isinstance(ref_id, str) or not ref_id:
+            raise click.UsageError(
+                "alert rule expression IDs must be non-empty strings"
+            )
+        if not isinstance(expression_value, dict):
+            raise click.UsageError(
+                f"alert rule expression {ref_id!r} must be an object"
+            )
+        expression = cast(dict[str, Any], expression_value)
+        if expression.get("source") is True:
+            if condition is not None:
+                raise click.UsageError(
+                    f"multiple alert rule expressions are marked source: "
+                    f"{condition!r} and {ref_id!r}"
+                )
+            condition = ref_id
+        relative_range = expression.get("relativeTimeRange", {})
+        if not isinstance(relative_range, dict):
+            raise click.UsageError(
+                f"alert rule expression {ref_id!r} relativeTimeRange must be an object"
+            )
+        data.append(
+            {
+                "refId": ref_id,
+                "queryType": expression.get("queryType", ""),
+                "relativeTimeRange": {
+                    "from": parse_prom_duration_seconds(
+                        relative_range.get("from", "0s"),
+                        f"expression {ref_id} relativeTimeRange.from",
+                    ),
+                    "to": parse_prom_duration_seconds(
+                        relative_range.get("to", "0s"),
+                        f"expression {ref_id} relativeTimeRange.to",
+                    ),
+                },
+                "datasourceUid": expression.get("datasourceUID", "__expr__"),
+                "model": expression.get("model", {}),
+            }
+        )
+    if condition is None:
+        raise click.UsageError(
+            "exactly one alert rule expression must set source: true"
+        )
+
+    no_data_states = {
+        "Ok": "OK",
+        "NoData": "NoData",
+        "Alerting": "Alerting",
+        "KeepLast": "KeepLast",
+    }
+    exec_err_states = {
+        "Ok": "OK",
+        "Error": "Error",
+        "Alerting": "Alerting",
+        "KeepLast": "KeepLast",
+    }
+    no_data_state = spec.get("noDataState", "NoData")
+    exec_err_state = spec.get("execErrState", "Error")
+    if no_data_state not in no_data_states:
+        raise click.UsageError(f"invalid alert rule noDataState {no_data_state!r}")
+    if exec_err_state not in exec_err_states:
+        raise click.UsageError(f"invalid alert rule execErrState {exec_err_state!r}")
+
+    body: dict[str, Any] = {
+        "uid": metadata["name"],
+        "folderUID": folder_uid,
+        "ruleGroup": group,
+        "title": spec.get("title", ""),
+        "condition": condition,
+        "data": data,
+        "noDataState": no_data_states[no_data_state],
+        "execErrState": exec_err_states[exec_err_state],
+        "for": spec.get("for", "0s"),
+        "annotations": spec.get("annotations", {}),
+        "labels": spec.get("labels", {}),
+        "isPaused": spec.get("paused", False),
+    }
+    if "keepFiringFor" in spec:
+        body["keep_firing_for"] = spec["keepFiringFor"]
+    if "missingSeriesEvalsToResolve" in spec:
+        body["missingSeriesEvalsToResolve"] = spec["missingSeriesEvalsToResolve"]
+
+    notification_settings = spec.get("notificationSettings")
+    if notification_settings is not None:
+        if not isinstance(notification_settings, dict):
+            raise click.UsageError(
+                "alert rule spec.notificationSettings must be an object"
+            )
+        if notification_settings.get("type") != "SimplifiedRouting":
+            raise click.UsageError(
+                "create supports only SimplifiedRouting notification settings"
+            )
+        field_names = {
+            "receiver": "receiver",
+            "groupBy": "group_by",
+            "groupWait": "group_wait",
+            "groupInterval": "group_interval",
+            "repeatInterval": "repeat_interval",
+            "muteTimeIntervals": "mute_time_intervals",
+            "activeTimeIntervals": "active_time_intervals",
+        }
+        body["notification_settings"] = {
+            target: notification_settings[source]
+            for source, target in field_names.items()
+            if source in notification_settings
+        }
+    return body
+
+
+def alert_rule_manager(rule: dict[str, Any]) -> str | None:
+    metadata = rule.get("metadata", {})
+    annotations = metadata.get("annotations", {}) if isinstance(metadata, dict) else {}
+    if not isinstance(annotations, dict):
+        return None
+    manager = annotations.get("grafana.app/managedBy")
+    provenance = annotations.get("grafana.com/provenance")
+    if manager:
+        return f"managed by {manager}"
+    if provenance:
+        return f"provenance {provenance}"
+    return None
+
+
+def check_alert_rule_manager(rule: dict[str, Any], allow_managed: bool) -> None:
+    manager = alert_rule_manager(rule)
+    if manager and not allow_managed:
+        raise click.UsageError(
+            f"alert rule is {manager}; pass --allow-managed to modify it"
+        )
+
+
+def mutate_alert_rule(
+    c: httpx.Client,
+    method: str,
+    path: str,
+    content: bytes | None,
+    content_type: str | None,
+    prompt: str,
+    dry_run: bool,
+    yes: bool,
+    strict: bool = True,
+    extra_params: dict[str, str | bool] | None = None,
+) -> int:
+    params: dict[str, str | bool] = dict(extra_params or {})
+    if strict:
+        params["fieldValidation"] = "Strict"
+    headers = {"Content-Type": content_type} if content_type else None
+
+    if dry_run:
+        print(
+            "Dry run: local validation passed; no write request sent.", file=sys.stderr
+        )
+        return 0
+
+    if not yes and not click.confirm(prompt):
+        print("Cancelled.", file=sys.stderr)
+        return 0
+    response = c.request(
+        method,
+        path,
+        params=params,
+        content=content,
+        headers=headers,
+        extensions=REQUEST_EXTENSIONS,
+    )
+    return print_response(response)
+
+
+def json_content(body: Any) -> bytes:
+    return json.dumps(body, ensure_ascii=False).encode()
+
+
+def cmd_alert_rule_get(c: httpx.Client, args: Any) -> int:
+    rule, result = fetch_alert_rule(c, args.namespace, args.name)
+    if rule is not None:
+        print(json.dumps(rule, indent=2, ensure_ascii=False))
+    return result
+
+
+def cmd_alert_rule_create(c: httpx.Client, args: Any) -> int:
+    rule = prepare_alert_rule(load_document(args.file), args.namespace)
+    check_alert_rule_manager(rule, args.allow_managed)
+    name = cast(dict[str, Any], rule["metadata"])["name"]
+    body = app_alert_rule_to_provisioning(rule)
+    if args.dry_run:
+        print(
+            "Dry run: local validation passed; no write request sent.", file=sys.stderr
+        )
+        return 0
+    if not args.yes and not click.confirm(f"Create alert rule {name}?"):
+        print("Cancelled.", file=sys.stderr)
+        return 0
+    response = c.post(
+        ALERT_RULE_PROVISIONING_PATH,
+        content=json_content(body),
+        headers={
+            "Content-Type": "application/json",
+            "X-Disable-Provenance": "true",
+        },
+        extensions=REQUEST_EXTENSIONS,
+    )
+    if response.status_code >= 400:
+        return print_response(response)
+    created, result = fetch_alert_rule(c, args.namespace, name)
+    if created is not None:
+        print(json.dumps(created, indent=2, ensure_ascii=False))
+    return result
+
+
+def cmd_alert_rule_replace(c: httpx.Client, args: Any) -> int:
+    current, result = fetch_alert_rule(c, args.namespace, args.name)
+    if current is None:
+        return result
+    check_alert_rule_manager(current, args.allow_managed)
+    rule = prepare_alert_rule(
+        load_document(args.file),
+        args.namespace,
+        args.name,
+        current,
+    )
+    check_alert_rule_manager(rule, args.allow_managed)
+    return mutate_alert_rule(
+        c,
+        "PUT",
+        alert_rule_path(args.namespace, args.name),
+        json_content(rule),
+        "application/json",
+        f"Replace alert rule {args.name}?",
+        args.dry_run,
+        args.yes,
+    )
+
+
+def prepare_alert_rule_patch(
+    source: Any,
+    patch_type: str,
+    namespace: str,
+    name: str,
+    current: dict[str, Any],
+) -> bytes:
+    metadata = current.get("metadata", {})
+    resource_version = (
+        metadata.get("resourceVersion") if isinstance(metadata, dict) else None
+    )
+    if patch_type == "json":
+        if not isinstance(source, list):
+            raise click.UsageError("JSON patch must be an array")
+        patch = copy.deepcopy(source)
+        if resource_version:
+            patch.insert(
+                0,
+                {
+                    "op": "test",
+                    "path": "/metadata/resourceVersion",
+                    "value": resource_version,
+                },
+            )
+        return json_content(patch)
+    if patch_type == "merge":
+        if not isinstance(source, dict):
+            raise click.UsageError("merge patch must be an object")
+        patch = copy.deepcopy(source)
+        patch_metadata = patch.setdefault("metadata", {})
+        if not isinstance(patch_metadata, dict):
+            raise click.UsageError("merge patch metadata must be an object")
+        if resource_version:
+            patch_metadata.setdefault("resourceVersion", resource_version)
+        return json_content(patch)
+    rule = prepare_alert_rule(source, namespace, name)
+    return yaml.safe_dump(rule, sort_keys=False).encode()
+
+
+def cmd_alert_rule_patch(c: httpx.Client, args: Any) -> int:
+    if args.force and args.patch_type != "apply":
+        raise click.UsageError("--force is supported only with --type apply")
+    current, result = fetch_alert_rule(c, args.namespace, args.name)
+    if current is None:
+        return result
+    check_alert_rule_manager(current, args.allow_managed)
+    content = prepare_alert_rule_patch(
+        load_document(args.file),
+        args.patch_type,
+        args.namespace,
+        args.name,
+        current,
+    )
+    params: dict[str, str | bool] = {}
+    if args.patch_type == "apply":
+        params["fieldManager"] = args.field_manager
+        if args.force:
+            params["force"] = True
+    return mutate_alert_rule(
+        c,
+        "PATCH",
+        alert_rule_path(args.namespace, args.name),
+        content,
+        ALERT_RULE_PATCH_CONTENT_TYPES[args.patch_type],
+        f"Patch alert rule {args.name}?",
+        args.dry_run,
+        args.yes,
+        extra_params=params,
+    )
+
+
+def cmd_alert_rule_edit(c: httpx.Client, args: Any) -> int:
+    current, result = fetch_alert_rule(c, args.namespace, args.name)
+    if current is None:
+        return result
+    check_alert_rule_manager(current, args.allow_managed)
+    rule = prepare_alert_rule(current, args.namespace, args.name, current)
+    original = json.dumps(rule, indent=2, ensure_ascii=False) + "\n"
+    edited = click.edit(original, extension=".json")
+    if edited is None:
+        print("No changes.", file=sys.stderr)
+        return 0
+    try:
+        edited_rule = prepare_alert_rule(
+            json.loads(edited),
+            args.namespace,
+            args.name,
+            current,
+        )
+    except json.JSONDecodeError as e:
+        raise click.UsageError(f"invalid edited JSON: {e}") from e
+    check_alert_rule_manager(edited_rule, args.allow_managed)
+    if edited_rule == rule:
+        print("No changes.", file=sys.stderr)
+        return 0
+
+    updated = json.dumps(edited_rule, indent=2, ensure_ascii=False) + "\n"
+    sys.stderr.writelines(
+        difflib.unified_diff(
+            original.splitlines(keepends=True),
+            updated.splitlines(keepends=True),
+            fromfile=f"{args.name}.before.json",
+            tofile=f"{args.name}.after.json",
+        )
+    )
+    return mutate_alert_rule(
+        c,
+        "PUT",
+        alert_rule_path(args.namespace, args.name),
+        json_content(edited_rule),
+        "application/json",
+        f"Update alert rule {args.name}?",
+        args.dry_run,
+        args.yes,
+    )
+
+
+def cmd_alert_rule_delete(c: httpx.Client, args: Any) -> int:
+    current, result = fetch_alert_rule(c, args.namespace, args.name)
+    if current is None:
+        return result
+    check_alert_rule_manager(current, args.allow_managed)
+    return mutate_alert_rule(
+        c,
+        "DELETE",
+        alert_rule_path(args.namespace, args.name),
+        None,
+        None,
+        f"Delete alert rule {args.name}?",
+        args.dry_run,
+        args.yes,
+        strict=False,
+    )
 
 
 def cmd_query(c: httpx.Client, args: Any) -> int:
@@ -1519,6 +2112,18 @@ def cmd_query_api(c: httpx.Client, args: Any) -> int:
     help="Bearer token.",
 )
 @click.option(
+    "--username",
+    envvar="GRAFANA_USERNAME",
+    show_envvar=True,
+    help="HTTP basic-auth username.",
+)
+@click.option(
+    "--password",
+    envvar="GRAFANA_PASSWORD",
+    show_envvar=True,
+    help="HTTP basic-auth password.",
+)
+@click.option(
     "--host",
     envvar="GRAFANA_HOST",
     show_envvar=True,
@@ -1552,13 +2157,17 @@ def cli(
     ctx: click.Context,
     url: str,
     token: str | None,
+    username: str | None,
+    password: str | None,
     host: str | None,
     sni_hostname: str | None,
     verify: bool,
     timeout: float,
 ) -> None:
     """Query Grafana datasources and alerting resources, with API facades."""
-    grafana_client = client(url, token, host, sni_hostname, verify, timeout)
+    grafana_client = client(
+        url, token, username, password, host, sni_hostname, verify, timeout
+    )
     ctx.obj = grafana_client
     ctx.call_on_close(grafana_client.close)
 
@@ -1697,6 +2306,160 @@ def alert_rules_command(
 ) -> None:
     """Query Grafana-managed alert rules and their runtime state."""
     run_command(cmd_alert_rules(c, SimpleNamespace(**locals())))
+
+
+@cli.group("alert-rule")
+def alert_rule_group() -> None:
+    """Get, create, edit, patch, replace, or delete alert rules."""
+
+
+@alert_rule_group.command("get")
+@click.argument("name")
+@click.option("--namespace", default="default", show_default=True)
+@click.pass_obj
+def alert_rule_get_command(c: httpx.Client, name: str, namespace: str) -> None:
+    """Get one editable App Platform alert rule as JSON."""
+    run_command(cmd_alert_rule_get(c, SimpleNamespace(**locals())))
+
+
+@alert_rule_group.command("create")
+@click.argument(
+    "file",
+    type=click.Path(exists=True, dir_okay=False, allow_dash=True),
+)
+@click.option("--namespace", default="default", show_default=True)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Validate locally without sending a write request.",
+)
+@click.option("--yes", is_flag=True, help="Skip the confirmation prompt.")
+@click.option("--allow-managed", is_flag=True)
+@click.pass_obj
+def alert_rule_create_command(
+    c: httpx.Client,
+    file: str,
+    namespace: str,
+    dry_run: bool,
+    yes: bool,
+    allow_managed: bool,
+) -> None:
+    """Create a grouped alert rule from a JSON or YAML App Platform resource."""
+    run_command(cmd_alert_rule_create(c, SimpleNamespace(**locals())))
+
+
+@alert_rule_group.command("replace")
+@click.argument("name")
+@click.argument(
+    "file",
+    type=click.Path(exists=True, dir_okay=False, allow_dash=True),
+)
+@click.option("--namespace", default="default", show_default=True)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Validate locally without sending a write request.",
+)
+@click.option("--yes", is_flag=True, help="Skip the confirmation prompt.")
+@click.option("--allow-managed", is_flag=True)
+@click.pass_obj
+def alert_rule_replace_command(
+    c: httpx.Client,
+    name: str,
+    file: str,
+    namespace: str,
+    dry_run: bool,
+    yes: bool,
+    allow_managed: bool,
+) -> None:
+    """Replace an alert rule from a JSON or YAML App Platform resource."""
+    run_command(cmd_alert_rule_replace(c, SimpleNamespace(**locals())))
+
+
+@alert_rule_group.command("patch")
+@click.argument("name")
+@click.argument(
+    "file",
+    type=click.Path(exists=True, dir_okay=False, allow_dash=True),
+)
+@click.option(
+    "--type",
+    "patch_type",
+    type=click.Choice(tuple(ALERT_RULE_PATCH_CONTENT_TYPES)),
+    default="merge",
+    show_default=True,
+)
+@click.option("--field-manager", default="grafana-query", show_default=True)
+@click.option("--force", is_flag=True, help="Take field ownership for apply patches.")
+@click.option("--namespace", default="default", show_default=True)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Validate locally without sending a write request.",
+)
+@click.option("--yes", is_flag=True, help="Skip the confirmation prompt.")
+@click.option("--allow-managed", is_flag=True)
+@click.pass_obj
+def alert_rule_patch_command(
+    c: httpx.Client,
+    name: str,
+    file: str,
+    patch_type: str,
+    field_manager: str,
+    force: bool,
+    namespace: str,
+    dry_run: bool,
+    yes: bool,
+    allow_managed: bool,
+) -> None:
+    """Patch an alert rule with merge, JSON, or server-side apply."""
+    run_command(cmd_alert_rule_patch(c, SimpleNamespace(**locals())))
+
+
+@alert_rule_group.command("edit")
+@click.argument("name")
+@click.option("--namespace", default="default", show_default=True)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Validate locally without sending a write request.",
+)
+@click.option("--yes", is_flag=True, help="Skip the confirmation prompt.")
+@click.option("--allow-managed", is_flag=True)
+@click.pass_obj
+def alert_rule_edit_command(
+    c: httpx.Client,
+    name: str,
+    namespace: str,
+    dry_run: bool,
+    yes: bool,
+    allow_managed: bool,
+) -> None:
+    """Edit one alert rule in $EDITOR, show a diff, and update it."""
+    run_command(cmd_alert_rule_edit(c, SimpleNamespace(**locals())))
+
+
+@alert_rule_group.command("delete")
+@click.argument("name")
+@click.option("--namespace", default="default", show_default=True)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Validate locally without sending a write request.",
+)
+@click.option("--yes", is_flag=True, help="Skip the confirmation prompt.")
+@click.option("--allow-managed", is_flag=True)
+@click.pass_obj
+def alert_rule_delete_command(
+    c: httpx.Client,
+    name: str,
+    namespace: str,
+    dry_run: bool,
+    yes: bool,
+    allow_managed: bool,
+) -> None:
+    """Delete one alert rule."""
+    run_command(cmd_alert_rule_delete(c, SimpleNamespace(**locals())))
 
 
 @cli.command("show")
