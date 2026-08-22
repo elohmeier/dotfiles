@@ -1,0 +1,1 @@
+{"hooks":{ {{- if and (index . "pushoverUserKey") (index . "pushoverApiToken") }}"Stop":[{"hooks":[{"type":"command","command":{{ printf "%s/.local/bin/agent-pushover-notify Codex" .chezmoi.homeDir | toJson }},"async":true}]}]{{- end }} }}

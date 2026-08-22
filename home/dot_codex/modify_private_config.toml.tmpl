@@ -6,9 +6,6 @@ desired = """\
 personality = "pragmatic"
 sandbox_mode = "workspace-write"
 allow_login_shell = false
-{{- if and (index . "pushoverUserKey") (index . "pushoverApiToken") }}
-notify = ["{{ .chezmoi.homeDir }}/.local/bin/agent-pushover-notify", "Codex"]
-{{- end }}
 
 [tui]
 theme = "{{ template "theme" . }}"

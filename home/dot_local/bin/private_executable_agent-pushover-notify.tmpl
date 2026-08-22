@@ -11,7 +11,7 @@ summarize() {
     {{ $jq }} -r '(.["last-assistant-message"] // .last_assistant_message // "Finished work") | gsub("\\s+"; " ") | if length > 240 then .[:237] + "..." else . end'
 }
 case $agent in
-    Codex) message=$(printf %s "$2" | summarize) ;;
+    Codex) message=$([ "$#" -gt 1 ] && printf %s "$2" | summarize || summarize) ;;
     Claude) message=$(summarize) ;;
     *) message=${2:-Finished work} ;;
 esac
