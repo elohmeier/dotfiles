@@ -1,7 +1,7 @@
 {{ with lookPath "brew" -}}
 export PATH="{{ dir . }}:$PATH"
 {{ end -}}
-export PATH="$HOME/go/bin:$PATH"
+export PATH="$HOME/.cargo/bin:$HOME/go/bin:$PATH"
 
 {{- if eq .chezmoi.os "darwin" }}
 t() {

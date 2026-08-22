@@ -30,7 +30,7 @@ if status is-interactive
 {{- else }}
   set -gx PNPM_HOME "$HOME/.local/share/pnpm"
 {{- end }}
-  fish_add_path "$PNPM_HOME" "$HOME/.local/bin" "$HOME/go/bin"
+  fish_add_path "$HOME/.cargo/bin" "$PNPM_HOME" "$HOME/.local/bin" "$HOME/go/bin"
 
 {{- if .isWSL }}
   # Use wslview as default browser so Python webbrowser.open() works
