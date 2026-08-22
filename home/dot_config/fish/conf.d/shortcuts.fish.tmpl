@@ -71,7 +71,7 @@ alias djust "just --justfile $HOME/.config/just/dotfiles.just"
     alias lst 'lbu status'
 {{- end }}
 {{- if stat "/usr/lib64/pkcs11/libtpm2_pkcs11.so" }}
-    abbr --add -- sat 'ssh-add -s /usr/lib64/pkcs11/libtpm2_pkcs11.so'
+    abbr --add -- ssh-add-tpm 'ssh-add -s /usr/lib64/pkcs11/libtpm2_pkcs11.so'
 {{- end }}
 {{- if lookPath "podman" }}
     alias pdp 'podman ps'
