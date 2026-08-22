@@ -53,6 +53,7 @@ CLIENT_DISCONNECT_ERRNOS = {
     errno.EPIPE,
 }
 DEFAULT_QUERY_API_MAX_BODY_BYTES = 4 * 1024 * 1024
+FOLDER_SEARCH_PAGE_SIZE = 1000
 ELASTICSEARCH_POST_READ_SUFFIXES = frozenset(
     {
         "/_count",
@@ -761,6 +762,170 @@ def cmd_show(c: httpx.Client, args: Any) -> int:
         print(r.text, file=sys.stderr)
         return 1
     print(json.dumps(r.json(), indent=2, ensure_ascii=False))
+    return 0
+
+
+def fetch_folder_search(c: httpx.Client, dashboards: bool) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    item_types = ["dash-folder"]
+    if dashboards:
+        item_types.append("dash-db")
+    for item_type in item_types:
+        page = 1
+        while True:
+            params: list[tuple[str, str | int | float | None]] = [
+                ("type", item_type),
+                ("limit", FOLDER_SEARCH_PAGE_SIZE),
+                ("page", page),
+            ]
+            response = c.get(
+                "/api/search",
+                params=params,
+                extensions=REQUEST_EXTENSIONS,
+            )
+            if response.status_code >= 400:
+                raise click.ClickException(
+                    f"Grafana folder search failed with HTTP "
+                    f"{response.status_code}: {response.text}"
+                )
+            page_items = response.json()
+            if not isinstance(page_items, list):
+                raise click.ClickException("Grafana folder search returned a non-list")
+            items.extend(item for item in page_items if isinstance(item, dict))
+            if len(page_items) < FOLDER_SEARCH_PAGE_SIZE:
+                break
+            page += 1
+    return items
+
+
+def build_folder_tree(
+    items: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, dict[str, Any]]]:
+    nodes: dict[str, dict[str, Any]] = {
+        item["uid"]: {
+            "uid": item["uid"],
+            "title": item.get("title", item["uid"]),
+            "url": item.get("url"),
+            "parentUid": item.get("folderUid"),
+            "children": [],
+            "dashboards": [],
+        }
+        for item in items
+        if item.get("type") == "dash-folder" and isinstance(item.get("uid"), str)
+    }
+    roots: list[dict[str, Any]] = []
+    for node in nodes.values():
+        parent = nodes.get(node["parentUid"])
+        if parent:
+            cast(list[dict[str, Any]], parent["children"]).append(node)
+        else:
+            roots.append(node)
+
+    root_dashboards: list[dict[str, Any]] = []
+    for item in items:
+        if item.get("type") != "dash-db" or not isinstance(item.get("uid"), str):
+            continue
+        dashboard = {
+            "uid": item["uid"],
+            "title": item.get("title", item["uid"]),
+            "url": item.get("url"),
+            "tags": item.get("tags", []),
+        }
+        parent_uid = item.get("folderUid")
+        parent = nodes.get(parent_uid) if isinstance(parent_uid, str) else None
+        if parent:
+            cast(list[dict[str, Any]], parent["dashboards"]).append(dashboard)
+        else:
+            root_dashboards.append(dashboard)
+
+    def sort_node(node: dict[str, Any]) -> None:
+        node["children"].sort(key=lambda child: child["title"].casefold())
+        node["dashboards"].sort(key=lambda item: item["title"].casefold())
+        for child in node["children"]:
+            sort_node(child)
+
+    roots.sort(key=lambda node: node["title"].casefold())
+    root_dashboards.sort(key=lambda item: item["title"].casefold())
+    for root in roots:
+        sort_node(root)
+    return roots, root_dashboards, nodes
+
+
+def export_folder_node(node: dict[str, Any], depth: int | None) -> dict[str, Any]:
+    next_depth = None if depth is None else depth - 1
+    children = (
+        [export_folder_node(child, next_depth) for child in node["children"]]
+        if depth is None or depth > 0
+        else []
+    )
+    return {
+        "uid": node["uid"],
+        "title": node["title"],
+        "url": node["url"],
+        "parentUid": node["parentUid"],
+        "children": children,
+        "dashboards": node["dashboards"],
+    }
+
+
+def render_folder_node(
+    node: dict[str, Any],
+    depth: int | None,
+    prefix: str = "",
+    connector: str = "",
+) -> list[str]:
+    lines = [f"{prefix}{connector}{node['title']} [{node['uid']}]"]
+    children = node["children"] if depth is None or depth > 0 else []
+    entries = [("folder", child) for child in children] + [
+        ("dashboard", dashboard) for dashboard in node["dashboards"]
+    ]
+    next_depth = None if depth is None else depth - 1
+    child_prefix = prefix + (
+        "    " if connector == "└── " else "│   " if connector else ""
+    )
+    for index, (kind, item) in enumerate(entries):
+        last = index == len(entries) - 1
+        branch = "└── " if last else "├── "
+        if kind == "folder":
+            lines.extend(render_folder_node(item, next_depth, child_prefix, branch))
+        else:
+            lines.append(
+                f"{child_prefix}{branch}dashboard: {item['title']} [{item['uid']}]"
+            )
+    return lines
+
+
+def cmd_folders(c: httpx.Client, args: Any) -> int:
+    roots, root_dashboards, nodes = build_folder_tree(
+        fetch_folder_search(c, args.dashboards)
+    )
+    if args.uid:
+        root = nodes.get(args.uid)
+        if root is None:
+            raise click.ClickException(f"folder UID {args.uid!r} was not found")
+        roots = [root]
+        root_dashboards = []
+
+    if args.json_output:
+        print(
+            json.dumps(
+                {
+                    "folders": [export_folder_node(root, args.depth) for root in roots],
+                    "dashboards": root_dashboards,
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
+        return 0
+
+    lines = [line for root in roots for line in render_folder_node(root, args.depth)]
+    if root_dashboards:
+        lines.append("General")
+        for index, item in enumerate(root_dashboards):
+            branch = "└── " if index == len(root_dashboards) - 1 else "├── "
+            lines.append(f"{branch}dashboard: {item['title']} [{item['uid']}]")
+    print("\n".join(lines) if lines else "No folders found.")
     return 0
 
 
@@ -2490,6 +2655,27 @@ def show_command(
 ) -> None:
     """Show an allow-listed read-only Grafana resource as JSON."""
     run_command(cmd_show(c, SimpleNamespace(**locals())))
+
+
+@cli.command("folders")
+@click.option("--uid", help="Show only this folder subtree.")
+@click.option(
+    "--depth",
+    type=click.IntRange(min=0),
+    help="Maximum child-folder depth; omit for the complete subtree.",
+)
+@click.option("--dashboards", is_flag=True, help="Include dashboards as leaves.")
+@click.option("--json", "json_output", is_flag=True, help="Output nested JSON.")
+@click.pass_obj
+def folders_command(
+    c: httpx.Client,
+    uid: str | None,
+    depth: int | None,
+    dashboards: bool,
+    json_output: bool,
+) -> None:
+    """Explore the dashboard folder hierarchy."""
+    run_command(cmd_folders(c, SimpleNamespace(**locals())))
 
 
 @cli.command("query")

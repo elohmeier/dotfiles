@@ -22,6 +22,7 @@ from scripts.grafana_query import (
     cmd_alert_rule_edit,
     cmd_alert_rule_patch,
     cmd_alert_rules,
+    cmd_folders,
     cmd_show,
     client,
     percentile,
@@ -499,6 +500,135 @@ class ShowTest(unittest.TestCase):
             dict(request.url.params),
             {"page": "2", "perpage": "25", "query": "platform"},
         )
+
+
+class FoldersTest(unittest.TestCase):
+    def test_renders_paginated_folder_tree_with_dashboards(self) -> None:
+        requests: list[httpx.Request] = []
+        pages = {
+            ("dash-folder", 1): [
+                {
+                    "uid": "root",
+                    "title": "Root",
+                    "type": "dash-folder",
+                    "folderUid": None,
+                    "url": "/dashboards/f/root/root",
+                },
+                {
+                    "uid": "child",
+                    "title": "Child",
+                    "type": "dash-folder",
+                    "folderUid": "root",
+                    "url": "/dashboards/f/child/child",
+                },
+            ],
+            ("dash-db", 1): [
+                {
+                    "uid": "dashboard-1",
+                    "title": "Overview",
+                    "type": "dash-db",
+                    "folderUid": "child",
+                    "url": "/d/dashboard-1/overview",
+                    "tags": ["test"],
+                }
+            ],
+        }
+
+        def respond(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return httpx.Response(
+                200,
+                json=pages.get(
+                    (
+                        request.url.params["type"],
+                        int(request.url.params["page"]),
+                    ),
+                    [],
+                ),
+            )
+
+        client = httpx.Client(
+            base_url="https://grafana.invalid",
+            transport=httpx.MockTransport(respond),
+        )
+        output = StringIO()
+        try:
+            with (
+                patch("scripts.grafana_query.FOLDER_SEARCH_PAGE_SIZE", 2),
+                redirect_stdout(output),
+            ):
+                result = cmd_folders(
+                    client,
+                    SimpleNamespace(
+                        uid=None,
+                        depth=None,
+                        dashboards=True,
+                        json_output=False,
+                    ),
+                )
+        finally:
+            client.close()
+
+        self.assertEqual(result, 0)
+        self.assertEqual(
+            output.getvalue(),
+            "Root [root]\n"
+            "└── Child [child]\n"
+            "    └── dashboard: Overview [dashboard-1]\n",
+        )
+        self.assertEqual(len(requests), 3)
+        self.assertEqual(requests[0].url.path, "/api/search")
+        self.assertEqual(requests[0].url.params["type"], "dash-folder")
+        self.assertEqual(requests[2].url.params["type"], "dash-db")
+
+    def test_outputs_depth_limited_json_subtree(self) -> None:
+        items = [
+            {
+                "uid": "root",
+                "title": "Root",
+                "type": "dash-folder",
+                "folderUid": None,
+            },
+            {
+                "uid": "child",
+                "title": "Child",
+                "type": "dash-folder",
+                "folderUid": "root",
+            },
+            {
+                "uid": "grandchild",
+                "title": "Grandchild",
+                "type": "dash-folder",
+                "folderUid": "child",
+            },
+        ]
+        client = httpx.Client(
+            base_url="https://grafana.invalid",
+            transport=httpx.MockTransport(
+                lambda _request: httpx.Response(200, json=items)
+            ),
+        )
+        output = StringIO()
+        try:
+            with redirect_stdout(output):
+                result = cmd_folders(
+                    client,
+                    SimpleNamespace(
+                        uid="child",
+                        depth=0,
+                        dashboards=False,
+                        json_output=True,
+                    ),
+                )
+        finally:
+            client.close()
+
+        self.assertEqual(result, 0)
+        body = json.loads(output.getvalue())
+        self.assertEqual(body["folders"][0]["uid"], "child")
+        self.assertEqual(body["folders"][0]["parentUid"], "root")
+        self.assertEqual(body["folders"][0]["children"], [])
+        self.assertEqual(body["dashboards"], [])
 
 
 class ProxyHandlerTest(unittest.TestCase):
