@@ -1,0 +1,11 @@
+import { spawn } from "node:child_process";
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+
+export default function (pi: ExtensionAPI) {
+	pi.on("agent_end", () => {
+		spawn("{{ .chezmoi.homeDir }}/.local/bin/agent-pushover-notify", ["Pi"], {
+			detached: true,
+			stdio: "ignore",
+		}).unref();
+	});
+}

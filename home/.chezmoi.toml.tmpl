@@ -33,9 +33,12 @@ pushoverUserKey = {{ $pushoverUserKey | quote }}
 {{- if $pushoverUserKey }}
 pushoverApiToken = {{ promptStringOnce . "pushoverApiToken" "Pushover application API token" | quote }}
 pushoverEncryptionKey = {{ promptStringOnce . "pushoverEncryptionKey" "Pushover E2EE key (64 hex characters, blank to disable)" | quote }}
+# https://pushover.net/api#sounds
+pushoverAgentSound = {{ promptStringOnce . "pushoverAgentSound" "Pushover coding agent sound" "classical" | quote }}
 {{- else }}
 pushoverApiToken = ""
 pushoverEncryptionKey = ""
+pushoverAgentSound = ""
 {{- end }}
 
 isWSL = {{ and (eq .chezmoi.os "linux") (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}

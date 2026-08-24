@@ -34,4 +34,5 @@ Applications/Firefox.app
 
 {{ if not (and (index . "pushoverUserKey") (index . "pushoverApiToken")) }}
 .local/bin/agent-pushover-notify
+.pi/agent/extensions/pushover.ts
 {{- end }}

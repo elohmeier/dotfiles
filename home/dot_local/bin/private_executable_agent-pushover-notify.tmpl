@@ -7,13 +7,15 @@
 {{- $awk := lookPath "awk" -}}
 #!{{ lookPath "sh" }}
 agent=$1
+sound={{ index . "pushoverAgentSound" | default "classical" | quote }}
 summarize() {
     {{ $jq }} -r '(.["last-assistant-message"] // .last_assistant_message // "Finished work") | gsub("\\s+"; " ") | if length > 240 then .[:237] + "..." else . end'
 }
 case $agent in
     Codex) message=$([ "$#" -gt 1 ] && printf %s "$2" | summarize || summarize) ;;
     Claude) message=$(summarize) ;;
-    *) message=${2:-Finished work} ;;
+    Pi) message=${2:-Finished work} ;;
+    *) message=${2:-Finished work}; sound= ;;
 esac
 title="$agent finished"
 message="$message in ${PWD##*/} on {{ .chezmoi.username }}@{{ .chezmoi.hostname }}."
@@ -33,7 +35,6 @@ message=$(encrypt "$message")
     --form-string 'user={{ .pushoverUserKey }}' \
     --form-string "title=$title" \
     --form-string "message=$message" \
-{{- if index . "pushoverEncryptionKey" }} \
-    --form-string 'encrypted=1' \
-{{- end }}
+    --form-string "sound=$sound" \{{ if index . "pushoverEncryptionKey" }}
+    --form-string 'encrypted=1' \{{ end }}
     https://api.pushover.net/1/messages.json >/dev/null
