@@ -2,7 +2,7 @@ export PATH="$HOME/.cargo/bin:$HOME/go/bin:$PATH"
 
 {{- if eq .chezmoi.os "darwin" }}
 t() {
-    local session="${1:-main}"
+    local session="${1:-{{ .chezmoi.hostname }}}"
     [ -n "$TMUX" ] && return 0
     if [ -n "$SSH_AUTH_SOCK" ]; then
         [ "$SSH_AUTH_SOCK" = "$HOME/.ssh/agent.sock" ] || ln -sfn "$SSH_AUTH_SOCK" ~/.ssh/agent.sock
@@ -21,7 +21,7 @@ t() {
 }
 {{- else }}
 t() {
-    local session="${1:-main}"
+    local session="${1:-{{ .chezmoi.hostname }}}"
     [ -n "$TMUX" ] && return 0
     if [ -n "$SSH_AUTH_SOCK" ]; then
         [ "$SSH_AUTH_SOCK" = "$HOME/.ssh/agent.sock" ] || ln -sfn "$SSH_AUTH_SOCK" ~/.ssh/agent.sock
