@@ -12,3 +12,8 @@ pinentry-program {{ . }}
 {{- end }}
 default-cache-ttl 600
 max-cache-ttl 7200
+{{- if eq .chezmoi.os "linux" }}
+{{-   with lookPath "gpgconf" }}
+scdaemon-program {{ joinPath (output . "--list-dirs" "libexecdir" | trim) "scdaemon" }}
+{{-   end }}
+{{- end }}
