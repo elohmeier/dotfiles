@@ -1,0 +1,4 @@
+interface:
+  display_name: "chezmoi"
+  short_description: "Help manage chezmoi dotfiles"
+  default_prompt: "Use $chezmoi to help me improve my dotfiles setup safely."

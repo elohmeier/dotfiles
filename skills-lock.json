@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "chezmoi": {
+      "source": "elohmeier/skills",
+      "sourceType": "github",
+      "skillPath": "skills/chezmoi/SKILL.md",
+      "computedHash": "70ffd5494e545a66e144105a08fef769bf214b62e90366bd3fdc9911d322d7c9"
+    }
+  }
+}
