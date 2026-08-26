@@ -1,0 +1,88 @@
+#!/usr/bin/env -S osascript -l JavaScript
+
+ObjC.import("Foundation");
+
+const usage = `usage: mail-compose --to ADDRESS [--to ADDRESS ...] --subject SUBJECT
+                    (--body TEXT | --body-file FILE) [--signature NAME|none]
+                    [--attach FILE ...]
+
+Open an unsent message in Mail.app for review. Repeat --to and --attach as needed.`;
+
+function filePath(value) {
+  let path = ObjC.unwrap($(value).stringByExpandingTildeInPath);
+  if (!path.startsWith("/")) {
+    path = `${ObjC.unwrap($.NSFileManager.defaultManager.currentDirectoryPath)}/${path}`;
+  }
+  path = ObjC.unwrap($(path).stringByStandardizingPath);
+  if (!$.NSFileManager.defaultManager.fileExistsAtPath($(path))) {
+    throw new Error(`file not found: ${path}`);
+  }
+  return path;
+}
+
+function run(argv) {
+  const options = { to: [], attachments: [] };
+
+  for (let i = 0; i < argv.length; i++) {
+    const option = argv[i];
+    if (option === "-h" || option === "--help") return usage;
+    if (
+      ![
+        "--to",
+        "--subject",
+        "--body",
+        "--body-file",
+        "--signature",
+        "--attach",
+      ].includes(option)
+    ) {
+      throw new Error(`unknown option: ${option}\n\n${usage}`);
+    }
+    const value = argv[++i];
+    if (value === undefined) throw new Error(`missing value for ${option}`);
+    if (option === "--to") options.to.push(value);
+    else if (option === "--attach") options.attachments.push(value);
+    else options[option.slice(2).replace("-", "")] = value;
+  }
+
+  if (!options.to.length || options.subject === undefined) throw new Error(usage);
+  if ((options.body === undefined) === (options.bodyfile === undefined)) throw new Error(usage);
+
+  if (options.bodyfile !== undefined) {
+    const body = $.NSString.stringWithContentsOfFileEncodingError(
+      $(filePath(options.bodyfile)),
+      $.NSUTF8StringEncoding,
+      null,
+    );
+    if (!body) throw new Error(`could not read UTF-8 body: ${options.bodyfile}`);
+    options.body = ObjC.unwrap(body);
+  }
+
+  const attachments = options.attachments.map(filePath);
+  const Mail = Application("Mail");
+  const signature =
+    options.signature === undefined || options.signature === "none"
+      ? null
+      : Mail.signatures.whose({ name: options.signature })()[0];
+  if (options.signature !== undefined && options.signature !== "none" && !signature) {
+    throw new Error(`unknown Mail signature: ${options.signature}`);
+  }
+  const message = Mail.OutgoingMessage({
+    subject: options.subject,
+    content: options.body,
+    visible: true,
+  });
+  Mail.outgoingMessages.push(message);
+  if (options.signature !== undefined) {
+    message.messageSignature = signature;
+    delay(0.5);
+  }
+  options.to.forEach((address) =>
+    message.toRecipients.push(Mail.ToRecipient({ address })),
+  );
+  attachments.forEach((path) =>
+    message.content.attachments.push(Mail.Attachment({ fileName: Path(path) })),
+  );
+  Mail.activate();
+  return "Opened an unsent message in Mail.app.";
+}

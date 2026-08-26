@@ -1,6 +1,7 @@
 {{ if ne .chezmoi.os "darwin" }}
 Applications/Firefox.app
 .chezmoiscripts/darwin/**
+.local/bin/mail-compose
 {{ end -}}
 
 {{ if ne .chezmoi.os "linux" }}
