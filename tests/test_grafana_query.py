@@ -14,18 +14,23 @@ from click.exceptions import UsageError
 from rich.console import Console
 
 from scripts.grafana_query import (
+    ELASTICSEARCH_EXPLORE_LINK_START,
     GrafanaQueryApiProxyHandler,
     ProxyStats,
     RequestSample,
+    build_elasticsearch_explore_link,
     cmd_alert_rule_create,
     cmd_alert_rule_delete,
     cmd_alert_rule_edit,
     cmd_alert_rule_patch,
+    cmd_alert_rule_reconcile_explore_links,
     cmd_alert_rules,
     cmd_folders,
     cmd_show,
     client,
+    elasticsearch_alert_query,
     percentile,
+    reconcile_elasticsearch_explore_description,
     render_dashboard,
 )
 
@@ -76,6 +81,45 @@ def alert_rule(
     }
 
 
+def elasticsearch_alert_rule(
+    name: str = "elasticsearch-rule",
+    description: str = "Investigate the failing job.",
+    provenance: str = "",
+) -> dict:
+    rule = alert_rule(name=name, provenance=provenance)
+    rule["spec"]["annotations"] = {
+        "description": description,
+        "summary": "Elasticsearch job failure",
+    }
+    rule["spec"]["expressions"]["A"] = {
+        "relativeTimeRange": {"from": "10m0s", "to": "0s"},
+        "datasourceUID": "elastic-main",
+        "queryType": "lucene",
+        "model": {
+            "refId": "A",
+            "datasource": {
+                "type": "elasticsearch",
+                "uid": "elastic-main",
+            },
+            "queryType": "lucene",
+            "editorType": "code",
+            "timeField": "@timestamp",
+            "query": 'service.environment:PROD AND message:"failure"',
+            "metrics": [{"id": "1", "type": "count"}],
+            "bucketAggs": [
+                {"id": "2", "type": "terms", "field": "host.name"},
+                {"id": "3", "type": "terms", "field": "service.id"},
+                {
+                    "id": "4",
+                    "type": "date_histogram",
+                    "field": "@timestamp",
+                },
+            ],
+        },
+    }
+    return rule
+
+
 class ClientTest(unittest.TestCase):
     def test_configures_basic_auth(self) -> None:
         with patch("scripts.grafana_query.httpx.Client") as client_class:
@@ -120,6 +164,151 @@ class ClientTest(unittest.TestCase):
 
 
 class AlertRuleManagementTest(unittest.TestCase):
+    def test_builds_explore_link_from_elasticsearch_alert_query(self) -> None:
+        query = elasticsearch_alert_query(elasticsearch_alert_rule(), frozenset())
+        self.assertIsNotNone(query)
+        assert query is not None
+
+        self.assertEqual(query.ref_id, "A")
+        self.assertEqual(query.datasource_uid, "elastic-main")
+        self.assertEqual(query.term_fields, ("host.name", "service.id"))
+
+        link = build_elasticsearch_explore_link(query)
+        self.assertIn("{{ externalURL }}explore?", link)
+        self.assertNotIn("{{ externalURL }}/explore", link)
+        self.assertIn("{{ $panes | urlquery }}", link)
+        self.assertIn('printf "%s AND host.name:%q"', link)
+        self.assertIn('\\"log\\"', link)
+        self.assertIn('\\"type\\":\\"logs\\"', link)
+        self.assertIn('\\"limit\\":\\"500\\"', link)
+
+    def test_replaces_legacy_explore_link_and_is_idempotent(self) -> None:
+        query = elasticsearch_alert_query(elasticsearch_alert_rule(), frozenset())
+        assert query is not None
+        link = build_elasticsearch_explore_link(query)
+        description = (
+            "Investigate the failing job.\n"
+            "Logs (letzte 30 Minuten): {{ externalURL }}/explore?old=link\n"
+        )
+
+        reconciled = reconcile_elasticsearch_explore_description(description, link)
+
+        self.assertTrue(reconciled.startswith("Investigate the failing job.\n"))
+        self.assertNotIn("old=link", reconciled)
+        self.assertEqual(reconciled.count(ELASTICSEARCH_EXPLORE_LINK_START), 1)
+        self.assertEqual(
+            reconcile_elasticsearch_explore_description(reconciled, link),
+            reconciled,
+        )
+
+    def test_reconcile_explore_links_previews_checks_and_applies(self) -> None:
+        def run_reconcile(check: bool, yes: bool):
+            requests: list[httpx.Request] = []
+
+            def respond(request: httpx.Request) -> httpx.Response:
+                requests.append(request)
+                if request.method == "GET":
+                    return httpx.Response(
+                        200,
+                        json={"items": [elasticsearch_alert_rule()], "metadata": {}},
+                    )
+                return httpx.Response(200, json=elasticsearch_alert_rule())
+
+            grafana = httpx.Client(
+                base_url="https://grafana.invalid",
+                transport=httpx.MockTransport(respond),
+            )
+            output = StringIO()
+            try:
+                with redirect_stdout(output), redirect_stderr(StringIO()):
+                    result = cmd_alert_rule_reconcile_explore_links(
+                        grafana,
+                        SimpleNamespace(
+                            namespace="default",
+                            datasource_uid=(),
+                            check=check,
+                            yes=yes,
+                            allow_managed=False,
+                        ),
+                    )
+            finally:
+                grafana.close()
+            return result, requests, output.getvalue()
+
+        preview_result, preview_requests, preview_output = run_reconcile(False, False)
+        self.assertEqual(preview_result, 0)
+        self.assertEqual([request.method for request in preview_requests], ["GET"])
+        self.assertIn("WOULD UPDATE elasticsearch-rule", preview_output)
+        self.assertIn("Preview only", preview_output)
+
+        check_result, check_requests, check_output = run_reconcile(True, False)
+        self.assertEqual(check_result, 1)
+        self.assertEqual([request.method for request in check_requests], ["GET"])
+        self.assertIn("STALE elasticsearch-rule", check_output)
+
+        apply_result, apply_requests, apply_output = run_reconcile(False, True)
+        self.assertEqual(apply_result, 0)
+        self.assertEqual(
+            [request.method for request in apply_requests], ["GET", "PATCH"]
+        )
+        patch_request = apply_requests[1]
+        self.assertEqual(
+            patch_request.url.path,
+            "/apis/rules.alerting.grafana.app/v0alpha1/namespaces/default/alertrules/elasticsearch-rule",
+        )
+        self.assertEqual(patch_request.url.params["fieldValidation"], "Strict")
+        self.assertEqual(
+            patch_request.headers["Content-Type"], "application/merge-patch+json"
+        )
+        patch_body = json.loads(patch_request.content)
+        self.assertEqual(patch_body["metadata"], {"resourceVersion": "7"})
+        self.assertEqual(
+            set(patch_body["spec"]["annotations"]),
+            {"description"},
+        )
+        self.assertIn(
+            "{{ externalURL }}explore?",
+            patch_body["spec"]["annotations"]["description"],
+        )
+        self.assertIn("UPDATED elasticsearch-rule", apply_output)
+
+    def test_reconcile_explore_links_skips_managed_rules(self) -> None:
+        requests: list[httpx.Request] = []
+
+        def respond(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return httpx.Response(
+                200,
+                json={
+                    "items": [elasticsearch_alert_rule(provenance="file")],
+                    "metadata": {},
+                },
+            )
+
+        grafana = httpx.Client(
+            base_url="https://grafana.invalid",
+            transport=httpx.MockTransport(respond),
+        )
+        output = StringIO()
+        try:
+            with redirect_stdout(output):
+                result = cmd_alert_rule_reconcile_explore_links(
+                    grafana,
+                    SimpleNamespace(
+                        namespace="default",
+                        datasource_uid=(),
+                        check=False,
+                        yes=True,
+                        allow_managed=False,
+                    ),
+                )
+        finally:
+            grafana.close()
+
+        self.assertEqual(result, 0)
+        self.assertEqual([request.method for request in requests], ["GET"])
+        self.assertIn("provenance file", output.getvalue())
+
     def test_create_uses_grouped_provisioning_api_and_returns_app_rule(self) -> None:
         requests: list[httpx.Request] = []
 

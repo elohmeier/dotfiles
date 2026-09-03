@@ -128,6 +128,24 @@ ALERT_RULE_SERVER_ANNOTATIONS = frozenset(
         "grafana.com/updateTimestamp",
     }
 )
+ELASTICSEARCH_EXPLORE_LINK_START = (
+    "{{/* grafana-query:elasticsearch-explore-link:v1:start */}}"
+)
+ELASTICSEARCH_EXPLORE_LINK_END = (
+    "{{/* grafana-query:elasticsearch-explore-link:v1:end */}}"
+)
+ELASTICSEARCH_EXPLORE_LINK_LABEL = "Logs (letzte 30 Minuten):"
+ELASTICSEARCH_EXPLORE_LINK_RE = re.compile(
+    re.escape(ELASTICSEARCH_EXPLORE_LINK_START)
+    + ".*?"
+    + re.escape(ELASTICSEARCH_EXPLORE_LINK_END),
+    re.DOTALL,
+)
+ELASTICSEARCH_LEGACY_EXPLORE_LINK_RE = re.compile(
+    rf"^{re.escape(ELASTICSEARCH_EXPLORE_LINK_LABEL)} .*explore\?[^\n]*(?:\n|$)",
+    re.MULTILINE,
+)
+ELASTICSEARCH_EXPLORE_QUERY_SENTINEL = "grafana-query-runtime-query"
 SHOW_RESOURCES = tuple(
     sorted(
         SHOW_APP_RESOURCES.keys()
@@ -137,6 +155,23 @@ SHOW_RESOURCES = tuple(
     )
 )
 console = Console(stderr=True)
+
+
+@dataclass(slots=True, frozen=True)
+class ElasticsearchAlertQuery:
+    ref_id: str
+    datasource_uid: str
+    model: dict[str, Any]
+    term_fields: tuple[str, ...]
+
+
+@dataclass(slots=True, frozen=True)
+class ExploreLinkChange:
+    name: str
+    title: str
+    rule: dict[str, Any]
+    query: ElasticsearchAlertQuery
+    description: str
 
 
 @dataclass(slots=True)
@@ -973,6 +1008,182 @@ def fetch_alert_rule(
     return cast(dict[str, Any], body), 0
 
 
+def fetch_alert_rules(c: httpx.Client, namespace: str) -> list[dict[str, Any]]:
+    rules: list[dict[str, Any]] = []
+    continue_token: str | None = None
+    while True:
+        params: dict[str, str | int] = {"limit": 1000}
+        if continue_token:
+            params["continue"] = continue_token
+        response = c.get(
+            alert_rule_path(namespace),
+            params=params,
+            extensions=REQUEST_EXTENSIONS,
+        )
+        if response.status_code >= 400:
+            raise click.ClickException(
+                f"Grafana returned HTTP {response.status_code}: {response.text}"
+            )
+        body = response.json()
+        items = body.get("items") if isinstance(body, dict) else None
+        if not isinstance(items, list) or not all(
+            isinstance(item, dict) for item in items
+        ):
+            raise click.ClickException("Grafana returned an invalid alert-rule list")
+        rules.extend(cast(list[dict[str, Any]], items))
+        metadata = body.get("metadata", {})
+        continue_token = (
+            metadata.get("continue") if isinstance(metadata, dict) else None
+        )
+        if not isinstance(continue_token, str) or not continue_token:
+            return rules
+
+
+def elasticsearch_alert_query(
+    rule: dict[str, Any], datasource_uids: frozenset[str]
+) -> ElasticsearchAlertQuery | None:
+    spec = rule.get("spec")
+    expressions = spec.get("expressions") if isinstance(spec, dict) else None
+    if not isinstance(expressions, dict):
+        return None
+
+    matches: list[tuple[str, dict[str, Any], dict[str, Any], str]] = []
+    for ref_id, expression_value in expressions.items():
+        if not isinstance(ref_id, str) or not isinstance(expression_value, dict):
+            continue
+        expression = cast(dict[str, Any], expression_value)
+        model_value = expression.get("model")
+        if not isinstance(model_value, dict):
+            continue
+        model = cast(dict[str, Any], model_value)
+        datasource = model.get("datasource")
+        if (
+            not isinstance(datasource, dict)
+            or datasource.get("type") != "elasticsearch"
+        ):
+            continue
+        datasource_uid = expression.get("datasourceUID") or datasource.get("uid")
+        if not isinstance(datasource_uid, str) or not datasource_uid:
+            raise ValueError(
+                f"Elasticsearch expression {ref_id!r} has no datasource UID"
+            )
+        if datasource_uids and datasource_uid not in datasource_uids:
+            continue
+        matches.append((ref_id, expression, model, datasource_uid))
+
+    if not matches:
+        return None
+    if len(matches) != 1:
+        raise ValueError("has multiple Elasticsearch queries")
+
+    ref_id, expression, model, datasource_uid = matches[0]
+    query_type = model.get("queryType") or expression.get("queryType") or "lucene"
+    if query_type != "lucene":
+        raise ValueError(
+            f"Elasticsearch expression {ref_id!r} uses unsupported query type {query_type!r}"
+        )
+    if model.get("hide") is True:
+        raise ValueError(f"Elasticsearch expression {ref_id!r} is hidden")
+    if not isinstance(model.get("query", ""), str):
+        raise ValueError(f"Elasticsearch expression {ref_id!r} has no string query")
+
+    bucket_aggs = model.get("bucketAggs", [])
+    term_fields: list[str] = []
+    if isinstance(bucket_aggs, list):
+        for aggregation in bucket_aggs:
+            if not isinstance(aggregation, dict) or aggregation.get("type") != "terms":
+                continue
+            field_name = aggregation.get("field")
+            if (
+                isinstance(field_name, str)
+                and field_name
+                and field_name not in term_fields
+            ):
+                term_fields.append(field_name)
+    return ElasticsearchAlertQuery(
+        ref_id=ref_id,
+        datasource_uid=datasource_uid,
+        model=model,
+        term_fields=tuple(term_fields),
+    )
+
+
+def go_template_string(value: str) -> str:
+    return json.dumps(value, ensure_ascii=False)
+
+
+def lucene_escape_term(value: str) -> str:
+    value = re.sub(r"(&&|\|\||[+\-!(){}\[\]^\"~*?:\\/])", r"\\\1", value)
+    return re.sub(r"\s", lambda match: "\\" + match.group(), value)
+
+
+def build_elasticsearch_explore_link(query: ElasticsearchAlertQuery) -> str:
+    model = query.model
+    runtime_query = str(model.get("query", ""))
+    parts = [
+        ELASTICSEARCH_EXPLORE_LINK_START,
+        f"{{{{ $query := {go_template_string(runtime_query)} }}}}",
+    ]
+    for field_name in query.term_fields:
+        escaped_field = lucene_escape_term(field_name).replace("%", "%%")
+        filter_format = go_template_string(f"%s AND {escaped_field}:%q")
+        label = go_template_string(field_name)
+        parts.append(
+            f"{{{{ with $value := index $labels {label} }}}}"
+            f"{{{{ $query = printf {filter_format} $query $value }}}}"
+            "{{ end }}"
+        )
+
+    explore_query: dict[str, Any] = {
+        "refId": query.ref_id,
+        "datasource": {"type": "elasticsearch", "uid": query.datasource_uid},
+        "query": ELASTICSEARCH_EXPLORE_QUERY_SENTINEL,
+        "queryType": "lucene",
+        "metrics": [{"id": "1", "type": "logs", "settings": {"limit": "500"}}],
+        "bucketAggs": [],
+    }
+    for field_name in ("editorType", "timeField"):
+        value = model.get(field_name)
+        if isinstance(value, str) and value:
+            explore_query[field_name] = value
+    panes = {
+        "log": {
+            "datasource": query.datasource_uid,
+            "queries": [explore_query],
+            "range": {"from": "now-30m", "to": "now"},
+        }
+    }
+    panes_format = json.dumps(panes, ensure_ascii=False, separators=(",", ":"))
+    panes_format = panes_format.replace("%", "%%").replace(
+        go_template_string(ELASTICSEARCH_EXPLORE_QUERY_SENTINEL), "%q"
+    )
+    parts.extend(
+        (
+            f"{{{{ $panes := printf {go_template_string(panes_format)} $query }}}}",
+            f"{ELASTICSEARCH_EXPLORE_LINK_LABEL} "
+            "{{ externalURL }}explore?schemaVersion=1&panes="
+            "{{ $panes | urlquery }}&orgId=1",
+            ELASTICSEARCH_EXPLORE_LINK_END,
+        )
+    )
+    return "".join(parts)
+
+
+def reconcile_elasticsearch_explore_description(
+    description: str, explore_link: str
+) -> str:
+    start_count = description.count(ELASTICSEARCH_EXPLORE_LINK_START)
+    end_count = description.count(ELASTICSEARCH_EXPLORE_LINK_END)
+    if start_count != end_count or start_count > 1:
+        raise ValueError("description has malformed managed Explore-link markers")
+    if start_count:
+        return ELASTICSEARCH_EXPLORE_LINK_RE.sub(explore_link, description)
+
+    description = ELASTICSEARCH_LEGACY_EXPLORE_LINK_RE.sub("", description)
+    description = description.rstrip("\n")
+    return f"{description}\n{explore_link}" if description else explore_link
+
+
 def prepare_alert_rule(
     source: Any,
     namespace: str,
@@ -1302,6 +1513,135 @@ def cmd_alert_rule_create(c: httpx.Client, args: Any) -> int:
     if created is not None:
         print(json.dumps(created, indent=2, ensure_ascii=False))
     return result
+
+
+def cmd_alert_rule_reconcile_explore_links(c: httpx.Client, args: Any) -> int:
+    if args.check and args.yes:
+        raise click.UsageError("--check and --yes cannot be combined")
+
+    rules = fetch_alert_rules(c, args.namespace)
+    datasource_uids = frozenset(args.datasource_uid)
+    changes: list[ExploreLinkChange] = []
+    errors: list[str] = []
+    matched = 0
+    unchanged = 0
+    managed = 0
+
+    for rule in rules:
+        metadata = rule.get("metadata", {})
+        spec = rule.get("spec", {})
+        name = metadata.get("name") if isinstance(metadata, dict) else None
+        title = spec.get("title") if isinstance(spec, dict) else None
+        display_name = name if isinstance(name, str) and name else "<unnamed>"
+        display_title = title if isinstance(title, str) and title else display_name
+
+        try:
+            query = elasticsearch_alert_query(rule, datasource_uids)
+        except ValueError as error:
+            errors.append(f"{display_name}: {error}")
+            continue
+        if query is None:
+            continue
+        matched += 1
+
+        if not isinstance(name, str) or not name:
+            errors.append(f"{display_name}: has no metadata.name")
+            continue
+        resource_version = (
+            metadata.get("resourceVersion") if isinstance(metadata, dict) else None
+        )
+        if not isinstance(resource_version, str) or not resource_version:
+            errors.append(f"{display_name}: has no metadata.resourceVersion")
+            continue
+        annotations = spec.get("annotations", {}) if isinstance(spec, dict) else {}
+        if not isinstance(annotations, dict):
+            errors.append(f"{display_name}: spec.annotations is not an object")
+            continue
+        description = annotations.get("description", "")
+        if not isinstance(description, str):
+            errors.append(
+                f"{display_name}: spec.annotations.description is not a string"
+            )
+            continue
+        try:
+            reconciled = reconcile_elasticsearch_explore_description(
+                description,
+                build_elasticsearch_explore_link(query),
+            )
+        except ValueError as error:
+            errors.append(f"{display_name}: {error}")
+            continue
+        if reconciled == description:
+            unchanged += 1
+            continue
+
+        manager = alert_rule_manager(rule)
+        if manager and not args.allow_managed:
+            managed += 1
+            print(f"SKIP {name}: {display_title} ({manager})")
+            continue
+        changes.append(
+            ExploreLinkChange(
+                name=name,
+                title=display_title,
+                rule=rule,
+                query=query,
+                description=reconciled,
+            )
+        )
+
+    action = "STALE" if args.check else "UPDATE" if args.yes else "WOULD UPDATE"
+    for change in changes:
+        term_fields = ", ".join(change.query.term_fields) or "none"
+        print(
+            f"{action} {change.name}: {change.title} "
+            f"[datasource={change.query.datasource_uid}, "
+            f"query={change.query.ref_id}, terms={term_fields}]"
+        )
+    for error in errors:
+        print(f"ERROR {error}", file=sys.stderr)
+
+    print(
+        f"Elasticsearch alert rules: {matched} matched, {len(changes)} changed, "
+        f"{unchanged} current, {managed} managed skipped, {len(errors)} errors."
+    )
+    if errors:
+        print("No changes applied because validation failed.", file=sys.stderr)
+        return 1
+    if args.check:
+        return 1 if changes else 0
+    if not args.yes:
+        if changes:
+            print("Preview only; pass --yes to apply these changes.")
+        return 0
+
+    failed = 0
+    for change in changes:
+        content = prepare_alert_rule_patch(
+            {"spec": {"annotations": {"description": change.description}}},
+            "merge",
+            args.namespace,
+            change.name,
+            change.rule,
+        )
+        response = c.patch(
+            alert_rule_path(args.namespace, change.name),
+            params={"fieldValidation": "Strict"},
+            content=content,
+            headers={
+                "Content-Type": ALERT_RULE_PATCH_CONTENT_TYPES["merge"],
+            },
+            extensions=REQUEST_EXTENSIONS,
+        )
+        if response.status_code >= 400:
+            failed += 1
+            print(
+                f"ERROR {change.name}: HTTP {response.status_code}: {response.text}",
+                file=sys.stderr,
+            )
+        else:
+            print(f"UPDATED {change.name}: {change.title}")
+    return 1 if failed else 0
 
 
 def cmd_alert_rule_replace(c: httpx.Client, args: Any) -> int:
@@ -2475,7 +2815,7 @@ def alert_rules_command(
 
 @cli.group("alert-rule")
 def alert_rule_group() -> None:
-    """Get, create, edit, patch, replace, or delete alert rules."""
+    """Manage editable App Platform alert rules."""
 
 
 @alert_rule_group.command("get")
@@ -2511,6 +2851,37 @@ def alert_rule_create_command(
 ) -> None:
     """Create a grouped alert rule from a JSON or YAML App Platform resource."""
     run_command(cmd_alert_rule_create(c, SimpleNamespace(**locals())))
+
+
+@alert_rule_group.command("reconcile-explore-links")
+@click.option("--namespace", default="default", show_default=True)
+@click.option(
+    "--datasource-uid",
+    multiple=True,
+    help="Only reconcile alerts using this datasource UID; repeat as needed.",
+)
+@click.option(
+    "--check",
+    is_flag=True,
+    help="Make no changes and fail if an Explore link is stale or missing.",
+)
+@click.option(
+    "--yes",
+    is_flag=True,
+    help="Apply changes; without this option the command only previews them.",
+)
+@click.option("--allow-managed", is_flag=True)
+@click.pass_obj
+def alert_rule_reconcile_explore_links_command(
+    c: httpx.Client,
+    namespace: str,
+    datasource_uid: tuple[str, ...],
+    check: bool,
+    yes: bool,
+    allow_managed: bool,
+) -> None:
+    """Reconcile generated Explore links for Elasticsearch alert rules."""
+    run_command(cmd_alert_rule_reconcile_explore_links(c, SimpleNamespace(**locals())))
 
 
 @alert_rule_group.command("replace")
