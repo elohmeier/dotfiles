@@ -6,6 +6,7 @@ Applications/Firefox.app
 
 {{ if ne .chezmoi.os "linux" }}
 .chezmoiscripts/linux/**
+.config/systemd/**
 {{ end -}}
 
 {{ if not .isWSL }}

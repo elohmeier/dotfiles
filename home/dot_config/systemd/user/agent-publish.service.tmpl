@@ -1,0 +1,17 @@
+[Unit]
+Description=Serve agent-published project artifacts
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Environment=PATH=%h/.local/bin:%h/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin
+ExecStartPre={{ lookPath "mkdir" }} -p %h/.local/share/agent-publish
+ExecStartPre={{ lookPath "env" }} caddy validate --config %h/.config/agent-publish/Caddyfile --adapter caddyfile
+ExecStart={{ lookPath "env" }} caddy run --config %h/.config/agent-publish/Caddyfile --adapter caddyfile
+Restart=on-failure
+NoNewPrivileges=true
+PrivateTmp=true
+ReadOnlyPaths=%h/.local/share/agent-publish
+
+[Install]
+WantedBy=default.target

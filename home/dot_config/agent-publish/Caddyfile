@@ -1,0 +1,19 @@
+{
+	admin off
+	auto_https off
+}
+
+:8064 {
+	bind 0.0.0.0
+	root * {$HOME}/.local/share/agent-publish
+	encode zstd gzip
+	header {
+		Referrer-Policy no-referrer
+		X-Content-Type-Options nosniff
+	}
+	file_server {
+		browse {$HOME}/.config/agent-publish/browse.html {
+			sort time desc
+		}
+	}
+}

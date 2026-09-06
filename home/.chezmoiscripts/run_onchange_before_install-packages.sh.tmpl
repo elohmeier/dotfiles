@@ -9,6 +9,9 @@ echo "Installing packages..."
 "{{ $brew }}" bundle --file=/dev/stdin <<EOF
 brew "bat"
 brew "btop"
+{{- if eq .chezmoi.os "linux" }}
+brew "caddy"
+{{- end }}
 brew "eza"
 brew "fd"
 {{- if not (lookPath "fish") }}
@@ -27,7 +30,7 @@ set -u
 
 echo "Installing packages..."
 
-"{{ $apk }}" add bat btop curl eza fd fish fzf git just ncdu ncurses python3 ripgrep sops uv vivid zoxide
+"{{ $apk }}" add bat btop caddy curl eza fd fish fzf git just ncdu ncurses python3 ripgrep sops uv vivid zoxide
 {{ else -}}
 exit 0
 {{ end -}}

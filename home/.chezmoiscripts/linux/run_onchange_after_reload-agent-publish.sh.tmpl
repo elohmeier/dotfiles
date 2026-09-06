@@ -1,0 +1,8 @@
+#!/bin/sh
+# service: {{ include "dot_config/systemd/user/agent-publish.service.tmpl" | sha256sum }}
+# caddyfile: {{ include "dot_config/agent-publish/Caddyfile" | sha256sum }}
+# browse-template: {{ include "dot_config/agent-publish/browse.html" | sha256sum }}
+
+systemctl --user daemon-reload
+systemctl --user enable agent-publish.service
+systemctl --user restart agent-publish.service

@@ -1,0 +1,345 @@
+{{ $nonce := uuidv4 -}}
+{{ $nonceAttribute := print "nonce=" (quote $nonce) -}}
+{{ $csp := printf "default-src 'none'; base-uri 'none'; img-src 'self'; media-src 'self'; script-src 'nonce-%s'; style-src 'nonce-%s'; frame-ancestors 'self'; form-action 'none';" $nonce $nonce -}}
+{{ .RespHeader.Set "Content-Security-Policy" $csp -}}
+{{ .RespHeader.Set "Cache-Control" "no-store" -}}
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="color-scheme" content="light dark">
+	<title>{{html .Name}} · Agent artifacts</title>
+	<script {{ $nonceAttribute }}>
+		try {
+			const theme = localStorage.getItem('agent-artifacts-theme');
+			if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
+		} catch {}
+	</script>
+	<style {{ $nonceAttribute }}>
+		:root {
+			color-scheme: light dark;
+			--ink: light-dark(#14212b, #e5edf2);
+			--muted: light-dark(#536570, #a3b5c2);
+			--canvas: light-dark(#e8eef2, #111a22);
+			--card: light-dark(#f8fbfc, #1a2631);
+			--line: light-dark(#c7d3da, #364957);
+			--signal: light-dark(#24677a, #83c5d8);
+			--time: light-dark(#905410, #e9b56e);
+			--preview: light-dark(#dce6ec, #0c141c);
+			--grid-line: light-dark(rgb(36 103 122 / 6%), rgb(131 197 216 / 4%));
+			--shadow: 0 14px 36px rgb(20 33 43 / 10%);
+		}
+		:root[data-theme="light"] { color-scheme: light; }
+		:root[data-theme="dark"] { color-scheme: dark; }
+
+		* { box-sizing: border-box; }
+		[hidden] { display: none !important; }
+
+		body {
+			margin: 0;
+			min-height: 100vh;
+			color: var(--ink);
+			background:
+				linear-gradient(90deg, var(--grid-line) 1px, transparent 1px) 0 0 / 28px 28px,
+				var(--canvas);
+			font: 16px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+		}
+
+		a { color: inherit; }
+		:focus-visible {
+			outline: 3px solid var(--signal);
+			outline-offset: -3px;
+		}
+
+		.shell { width: min(1480px, calc(100% - 40px)); margin: 0 auto; }
+
+		header {
+			padding: 24px 0 20px;
+			border-bottom: 1px solid var(--line);
+		}
+
+		.eyebrow, .stamp, .meta, .sort a, .file-meta, .appearance {
+			font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+		}
+
+		.eyebrow {
+			margin: 0 0 10px;
+			color: var(--signal);
+			font-size: .72rem;
+			font-weight: 800;
+			letter-spacing: .16em;
+			text-transform: uppercase;
+		}
+
+		h1 {
+			margin: 0;
+			font-family: "Arial Narrow", "Liberation Sans Narrow", system-ui, sans-serif;
+			font-size: clamp(2rem, 4vw, 3rem);
+			font-stretch: condensed;
+			font-weight: 800;
+			letter-spacing: -.045em;
+			line-height: 1.1;
+			overflow-wrap: anywhere;
+		}
+
+		.header-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+		.breadcrumbs { display: flex; flex-wrap: wrap; gap: .4rem; margin: 0 0 12px; color: var(--muted); font-size: .85rem; }
+		.breadcrumbs a { min-width: 0; overflow-wrap: anywhere; text-decoration: none; }
+		.breadcrumbs a:hover { color: var(--signal); }
+		.appearance { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: .75rem; }
+		.appearance select { padding: .55rem .6rem; border: 1px solid var(--line); border-radius: 4px; background: var(--card); color: var(--ink); font: inherit; }
+
+		.toolbar {
+			display: flex;
+			flex-wrap: wrap;
+			align-items: center;
+			gap: 12px 18px;
+			padding: 18px 0;
+		}
+
+		.meta { color: var(--muted); font-size: .78rem; }
+		.meta strong { color: var(--ink); }
+		.toolbar .meta { margin-right: auto; }
+
+		.search {
+			width: min(280px, 100%);
+			min-width: 0;
+			padding: .68rem .85rem;
+			border: 1px solid var(--line);
+			border-radius: 4px;
+			background: var(--card);
+			color: var(--ink);
+			font: inherit;
+		}
+		.search::placeholder { color: var(--muted); opacity: 1; }
+
+		.sort { display: flex; align-items: center; gap: 5px; }
+		.sort a {
+			padding: .55rem .7rem;
+			border: 1px solid transparent;
+			border-radius: 999px;
+			color: var(--muted);
+			font-size: .72rem;
+			font-weight: 700;
+			text-decoration: none;
+			text-transform: uppercase;
+		}
+		.sort a:hover, .sort a.active {
+			border-color: var(--line);
+			background: var(--card);
+			color: var(--ink);
+		}
+
+		main { padding: 12px 0 64px; }
+		.parent-link { display: inline-block; margin: 0 0 16px; padding: 4px 0; color: var(--signal); font-size: .85rem; text-decoration: none; }
+		.parent-link:hover { text-decoration: underline; }
+		.grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+			gap: 14px;
+		}
+
+		.card {
+			display: flex;
+			flex-direction: column;
+			min-width: 0;
+			overflow: hidden;
+			border: 1px solid var(--line);
+			border-radius: 6px;
+			background: var(--card);
+			transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
+		}
+		.card:hover { transform: translateY(-2px); border-color: var(--signal); box-shadow: var(--shadow); }
+
+		.preview {
+			display: block;
+			position: relative;
+			flex-shrink: 0;
+			aspect-ratio: 4 / 3;
+			overflow: hidden;
+			background: var(--preview);
+		}
+		.preview img, .preview video { width: 100%; height: 100%; display: block; object-fit: contain; }
+		.video-preview::after {
+			content: "HOVER TO PREVIEW";
+			position: absolute;
+			right: 9px;
+			top: 9px;
+			padding: .25rem .4rem;
+			border-radius: 2px;
+			background: rgb(8 15 19 / 78%);
+			color: #f4f7f8;
+			font: 700 .62rem/1 ui-monospace, monospace;
+			letter-spacing: .08em;
+			pointer-events: none;
+		}
+		.video-preview:focus-within::after, .video-preview:hover::after { opacity: 0; }
+
+		.folder-mark, .file-mark {
+			display: grid;
+			aspect-ratio: 4 / 3;
+			flex-shrink: 0;
+			place-items: center;
+			background: var(--preview);
+			color: var(--signal);
+			font: 800 clamp(2.8rem, 6vw, 5.2rem)/1 "Arial Narrow", sans-serif;
+			letter-spacing: -.06em;
+			text-decoration: none;
+		}
+		.file-mark { color: var(--muted); }
+
+		.card-body { display: flex; flex: 1; flex-direction: column; padding: 14px 15px 15px; }
+		.file-name {
+			display: block;
+			margin-bottom: auto;
+			font-weight: 750;
+			text-decoration: none;
+			overflow-wrap: anywhere;
+		}
+		.file-name:hover { color: var(--signal); }
+		.file-meta {
+			display: flex;
+			flex-wrap: wrap;
+			justify-content: space-between;
+			gap: 4px 12px;
+			margin-top: 8px;
+			color: var(--muted);
+			font-size: .68rem;
+			text-transform: uppercase;
+		}
+		.stamp { color: var(--time); white-space: nowrap; }
+		.empty { padding: 50px 0; color: var(--muted); text-align: center; }
+
+		@media (max-width: 600px) {
+			.shell { width: min(100% - 24px, 1480px); }
+			header { padding-top: 20px; }
+			.toolbar { gap: 10px; }
+			.toolbar .meta { flex-basis: 100%; }
+			.search { width: 100%; }
+		}
+
+		@media (hover: none) {
+			.video-preview::after { display: none; }
+		}
+
+		@media (prefers-reduced-motion: reduce) {
+			.card { transition: none; }
+			.card:hover { transform: none; }
+		}
+	</style>
+</head>
+<body>
+	<header>
+		<div class="shell">
+			<p class="eyebrow">Agent artifact shelf</p>
+			<nav class="breadcrumbs" aria-label="Breadcrumb">
+				{{range $index, $crumb := .Breadcrumbs}}{{if ne $index 0}}<span aria-hidden="true">/</span>{{end}}<a href="{{html $crumb.Link}}"{{if eq $crumb.Link ""}} aria-current="page"{{end}}>{{if eq $index 0}}Artifacts{{else}}{{html $crumb.Text}}{{end}}</a>{{end}}
+			</nav>
+			<div class="header-row">
+				<h1>{{if .CanGoUp}}{{html .Name}}{{else}}Artifacts{{end}}</h1>
+				<label class="appearance" id="appearance-control" hidden>Appearance
+					<select id="appearance">
+						<option value="system">System</option>
+						<option value="light">Light</option>
+						<option value="dark">Dark</option>
+					</select>
+				</label>
+			</div>
+		</div>
+	</header>
+
+	<div class="shell toolbar">
+		<div class="meta"><strong>{{.NumFiles}}</strong> files · <strong>{{.NumDirs}}</strong> folders · {{.HumanTotalFileSize}}</div>
+		<nav class="sort" aria-label="Sort files">
+			<a class="{{if and (eq .Sort "time") (eq .Order "desc")}}active{{end}}" href="?sort=time&amp;order=desc">Newest</a>
+			<a class="{{if and (eq .Sort "name") (eq .Order "asc")}}active{{end}}" href="?sort=name&amp;order=asc">Name</a>
+			<a class="{{if and (eq .Sort "size") (eq .Order "desc")}}active{{end}}" href="?sort=size&amp;order=desc">Size</a>
+		</nav>
+		<input class="search" id="filter" type="search" placeholder="Filter this folder" aria-label="Filter this folder">
+	</div>
+
+	<main class="shell">
+		{{if .CanGoUp}}<a class="parent-link" href="..">↰ Parent folder</a>{{end}}
+		<div class="grid" id="listing">
+			{{range .Items}}
+			<article class="card item" data-name="{{html .Name}}">
+				{{if .IsDir}}
+				<a class="folder-mark" href="{{html .URL}}" aria-label="Open {{html .Name}}">/</a>
+				{{else if .HasExt ".jpg" ".jpeg" ".png" ".gif" ".webp" ".avif" ".svg" ".bmp" ".ico"}}
+				<a class="preview image-preview" href="{{html .URL}}" aria-label="Open {{html .Name}}">
+					<img src="{{html .URL}}" alt="{{html .Name}}" loading="lazy" decoding="async">
+				</a>
+				{{else if .HasExt ".mp4" ".webm" ".ogg" ".mov" ".m4v"}}
+				<div class="preview video-preview">
+					<video controls muted playsinline preload="none" data-src="{{html .URL}}" aria-label="Preview {{html .Name}}"></video>
+				</div>
+				{{else}}
+				<div class="file-mark">·</div>
+				{{end}}
+				<div class="card-body">
+					<a class="file-name" href="{{html .URL}}">{{html .Name}}</a>
+					<div class="file-meta">
+						<span>{{if .IsDir}}folder{{else}}{{.HumanSize}}{{end}}</span>
+						<time class="stamp" datetime="{{.HumanModTime "2006-01-02T15:04:05Z"}}">{{.HumanModTime "2006-01-02 15:04"}}</time>
+					</div>
+				</div>
+			</article>
+			{{end}}
+		</div>
+		<p class="empty" id="empty" role="status"{{if .Items}} hidden{{end}}>This folder is empty.</p>
+	</main>
+
+	<script {{ $nonceAttribute }}>
+		const appearance = document.getElementById('appearance');
+		appearance.value = document.documentElement.dataset.theme || 'system';
+		document.getElementById('appearance-control').hidden = false;
+		appearance.addEventListener('change', () => {
+			document.documentElement.dataset.theme = appearance.value;
+			try { localStorage.setItem('agent-artifacts-theme', appearance.value); } catch {}
+		});
+
+		const items = [...document.querySelectorAll('.item')];
+		const filter = document.getElementById('filter');
+		const empty = document.getElementById('empty');
+
+		filter.addEventListener('input', () => {
+			const query = filter.value.trim().toLowerCase();
+			let visible = 0;
+			items.forEach(item => {
+				const match = item.dataset.name.toLowerCase().includes(query);
+				item.hidden = !match;
+				if (match) visible += 1;
+			});
+			empty.hidden = visible !== 0;
+			empty.textContent = query ? 'No matching artifacts in this folder.' : 'This folder is empty.';
+		});
+
+		function loadVideo(video) {
+			if (video.src) return;
+			video.src = video.dataset.src;
+			video.preload = 'metadata';
+			video.load();
+		}
+
+		const observer = new IntersectionObserver(entries => {
+			entries.forEach(entry => {
+				if (!entry.isIntersecting) return;
+				loadVideo(entry.target);
+				observer.unobserve(entry.target);
+			});
+		}, { rootMargin: '240px' });
+
+		document.querySelectorAll('video').forEach(video => {
+			observer.observe(video);
+			const preview = video.closest('.preview');
+			preview.addEventListener('mouseenter', () => {
+				if (!matchMedia('(hover: hover) and (prefers-reduced-motion: no-preference)').matches) return;
+				loadVideo(video);
+				video.play().catch(() => {});
+			});
+			preview.addEventListener('mouseleave', () => video.pause());
+		});
+	</script>
+</body>
+</html>
