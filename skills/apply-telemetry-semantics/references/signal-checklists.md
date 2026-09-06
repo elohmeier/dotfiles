@@ -81,15 +81,15 @@ Load the sections for the signals and layers in scope. Verify each item against 
 
 Use the ECS schema's `otel:` metadata as a compatibility statement, not as permission to copy values blindly.
 
-| Relation | Implementation decision |
-| --- | --- |
-| `match` | Share the semantic value only after verifying the current OTel group, type, and placement. |
+| Relation     | Implementation decision                                                                       |
+| ------------ | --------------------------------------------------------------------------------------------- |
+| `match`      | Share the semantic value only after verifying the current OTel group, type, and placement.    |
 | `equivalent` | Rename or alias when both storage representations and types are compatible; test round trips. |
-| `related` | Define a transform and document preconditions and information loss. |
-| `conflict` | Keep both or choose one contract explicitly; never silently alias. |
-| `metric` | Convert through a metric-aware pipeline, not a field rename. |
-| `otlp` | Map protocol-native context or record fields at export/ingest. |
-| `na` | Keep ECS-specific data separate from OTel standard namespaces. |
+| `related`    | Define a transform and document preconditions and information loss.                           |
+| `conflict`   | Keep both or choose one contract explicitly; never silently alias.                            |
+| `metric`     | Convert through a metric-aware pipeline, not a field rename.                                  |
+| `otlp`       | Map protocol-native context or record fields at export/ingest.                                |
+| `na`         | Keep ECS-specific data separate from OTel standard namespaces.                                |
 
 Check all mappings twice when versions differ: once against ECS's pinned SemConv ref and once against the actual instrumentation target. A newer OTel convention may add, rename, stabilize, or deprecate an item after ECS generated its mapping.
 
@@ -97,13 +97,13 @@ Check all mappings twice when versions differ: once against ECS's pinned SemConv
 
 Cover the applicable rows in emitted OTLP or stored ECS fixtures:
 
-| Case | Verify |
-| --- | --- |
-| Normal success | Required/default fields, correct absence of error data, stable names and types. |
-| Domain error | Status/outcome, bounded error classification, no duplicate exception emission. |
-| Missing conditional input | Omit conditionally required data only when its condition is false. |
-| Opt-in disabled/enabled | No costly or sensitive data by default; exact fields after explicit enablement. |
-| Unknown/custom value | Follow `_OTHER`, custom value, or omission rules from the exact convention. |
-| Resource enrichment | Correct entity placement and deterministic merge precedence. |
-| ECS transform | Correct relation type, type/unit conversion, arrays, timestamps, and correlation IDs. |
-| Version migration | Stable default behavior, configured experimental/dual emission, and deprecated-name handling. |
+| Case                      | Verify                                                                                        |
+| ------------------------- | --------------------------------------------------------------------------------------------- |
+| Normal success            | Required/default fields, correct absence of error data, stable names and types.               |
+| Domain error              | Status/outcome, bounded error classification, no duplicate exception emission.                |
+| Missing conditional input | Omit conditionally required data only when its condition is false.                            |
+| Opt-in disabled/enabled   | No costly or sensitive data by default; exact fields after explicit enablement.               |
+| Unknown/custom value      | Follow `_OTHER`, custom value, or omission rules from the exact convention.                   |
+| Resource enrichment       | Correct entity placement and deterministic merge precedence.                                  |
+| ECS transform             | Correct relation type, type/unit conversion, arrays, timestamps, and correlation IDs.         |
+| Version migration         | Stable default behavior, configured experimental/dual emission, and deprecated-name handling. |
