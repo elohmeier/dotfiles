@@ -15,6 +15,17 @@ git:
       command: '{{ lookPath "delta" | default "delta" }} --paging=never --hyperlinks --hyperlinks-file-link-format="lazygit-edit://{path}:{line}"'
 
 customCommands:
+  - key: <c-e>
+    description: Export staged changes to patch
+    command: >-
+      {{ lookPath "git-staged-patch" | default "git-staged-patch" | quote }} -- {{ "{{.Form.PatchPath | quote}}" }}
+    context: files
+    prompts:
+      - type: input
+        key: PatchPath
+        title: Export staged changes to patch file
+        initialValue: staged.patch
+    output: popup
   - key: <c-a>
     description: Pick AI commit
     command: aicommit2
