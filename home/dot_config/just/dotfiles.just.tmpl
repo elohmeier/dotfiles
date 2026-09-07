@@ -19,6 +19,24 @@ diskless-swap-status:
 install-skills:
     "{{ lookPath "npx" | default "npx" }}" --yes skills add elohmeier/skills --skill '*' --agent claude-code --agent codex --global --yes
 
+{{- if eq .chezmoi.os "linux" }}
+# Install Caddy and enable the agent-publish user service (requires systemd)
+enable-agent-publish:
+{{- if lookPath "brew" }}
+    "{{ lookPath "brew" }}" install caddy
+{{- else if lookPath "apk" }}
+    "{{ lookPath "apk" }}" add caddy
+{{- end }}
+    "{{ lookPath "mkdir" }}" -p "$HOME/.local/share/agent-publish"
+    "{{ lookPath "systemctl" }}" --user daemon-reload
+    "{{ lookPath "systemctl" }}" --user enable agent-publish.service
+    "{{ lookPath "systemctl" }}" --user restart agent-publish.service
+
+# Stop agent-publish and disable automatic startup
+disable-agent-publish:
+    "{{ lookPath "systemctl" }}" --user disable --now agent-publish.service
+{{- end }}
+
 # Install Neovim and its language tooling
 install-nvim:
     #!/bin/bash
