@@ -64,6 +64,18 @@ uvx --from git+https://github.com/elohmeier/dotfiles httpserve
 pipx run --spec git+https://github.com/elohmeier/dotfiles httpserve
 ```
 
+On Linux, `mount-media` and `umount-media` manage SD cards, USB drives, and
+optical discs through UDisks, with authorization in the terminal:
+
+```bash
+mount-media                      # select the only removable filesystem
+mount-media --device /dev/sr0     # mount an optical disc
+umount-media --device /dev/sr0
+```
+
+Fish completes options and available media devices. These commands are installed
+by `home/.chezmoiscripts/run_onchange_after_install-uv-tools.sh.tmpl`.
+
 ## Agent Skills
 
 Install or update the skills from [elohmeier/skills](https://github.com/elohmeier/skills) for Claude Code and Codex:

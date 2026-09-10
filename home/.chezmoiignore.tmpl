@@ -7,6 +7,8 @@ Applications/Firefox.app
 {{ if ne .chezmoi.os "linux" }}
 .chezmoiscripts/linux/**
 .config/systemd/**
+.config/fish/completions/mount-media.fish
+.config/fish/completions/umount-media.fish
 {{ end -}}
 
 {{ if not .isWSL }}

@@ -1,4 +1,4 @@
-"""Mount removable FAT/exFAT filesystems with terminal polkit authorization."""
+"""Mount removable media with terminal polkit authorization."""
 
 import json
 import os
@@ -10,44 +10,72 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import click
+from click.shell_completion import CompletionItem
 
 UDISKS_TIMEOUT = 120
 
 
-def partition_for(devices: list[dict], requested: str | None = None) -> str:
-    if requested is None:
-        candidates = [
-            partition["path"]
-            for disk in devices
-            if disk["type"] == "disk" and disk["rm"]
-            for partition in disk.get("children") or [disk]
-            if partition.get("fstype") in {"vfat", "exfat"}
-        ]
-        if not candidates:
-            raise ValueError(
-                "no removable FAT/exFAT partition found; connect the SD card"
-            )
-        if len(candidates) != 1:
-            raise ValueError(
-                "multiple removable FAT/exFAT partitions found: "
-                + ", ".join(candidates)
-                + "; select one with --device PATH"
-            )
-        return candidates[0]
+def block_devices() -> list[dict]:
+    return json.loads(
+        subprocess.check_output(
+            [
+                # Homebrew's lsblk lacks udev metadata for unreadable devices.
+                "/usr/bin/lsblk",
+                "--json",
+                "--tree",
+                "--paths",
+                "--output",
+                "PATH,TYPE,RM,HOTPLUG,FSTYPE",
+            ],
+            text=True,
+        )
+    )["blockdevices"]
+
+
+def media_filesystems(devices: list[dict]):
     for disk in devices:
-        children = disk.get("children", [])
-        matches = [p for p in [disk, *children] if p["path"] == requested]
-        if not matches:
+        if not (
+            disk["type"] == "rom"
+            or disk["type"] == "disk"
+            and (disk["rm"] or disk.get("hotplug"))
+        ):
             continue
-        if disk["type"] != "disk" or not disk["rm"]:
-            raise ValueError("target must belong to a removable disk")
-        selected = matches[0]
-        candidates = children if selected is disk and children else [selected]
-        candidates = [p for p in candidates if p.get("fstype") in {"vfat", "exfat"}]
-        if len(candidates) != 1:
-            raise ValueError("select exactly one FAT/exFAT partition with --device")
-        return candidates[0]["path"]
-    raise ValueError(f"device is absent or is not a disk/partition: {requested}")
+        for partition in disk.get("children") or [disk]:
+            filesystem = partition.get("fstype")
+            if (
+                filesystem
+                and filesystem not in {"swap", "crypto_LUKS", "BitLocker"}
+                and not filesystem.endswith("_member")
+            ):
+                yield disk["path"], partition
+
+
+def partition_for(devices: list[dict], requested: str | None = None) -> str:
+    candidates = [
+        partition["path"]
+        for disk, partition in media_filesystems(devices)
+        if requested is None or requested in {disk, partition["path"]}
+    ]
+    if not candidates:
+        raise ValueError(
+            "no mountable filesystem found on removable media"
+            + (f": {requested}" if requested else "; connect or insert media")
+        )
+    if len(candidates) != 1:
+        raise ValueError(
+            "multiple filesystems found: "
+            + ", ".join(candidates)
+            + "; select exactly one with --device PATH"
+        )
+    return candidates[0]
+
+
+def complete_device(_ctx, _param, incomplete: str) -> list[CompletionItem]:
+    return [
+        CompletionItem(partition["path"], help=partition["fstype"])
+        for _, partition in media_filesystems(block_devices())
+        if partition["path"].startswith(incomplete)
+    ]
 
 
 def mountpoint(partition: str) -> Path | None:
@@ -160,7 +188,7 @@ def udisks(action: str, partition: str):
     except subprocess.TimeoutExpired as error:
         raise OSError(
             f"{action} timed out after {UDISKS_TIMEOUT}s; "
-            "check mount state before removing the card"
+            "check mount state before removing the media"
         ) from error
 
 
@@ -171,30 +199,20 @@ def interrupted(signum, _frame):
 @click.command()
 @click.option(
     "--device",
-    type=click.Path(exists=True, path_type=Path, resolve_path=True),
-    help="Disk or partition (default: the only removable FAT/exFAT filesystem).",
+    type=click.Path(
+        exists=True, readable=False, dir_okay=False, path_type=Path, resolve_path=True
+    ),
+    shell_complete=complete_device,
+    help="Media device (default: the only removable filesystem).",
 )
 @click.pass_context
 def main(ctx: click.Context, device: Path | None):
-    """Mount or unmount an SD card with authorization in this terminal."""
-    action = "unmount" if ctx.info_name == "umount-sd" else "mount"
+    """Mount or unmount removable media with authorization in this terminal."""
+    action = "unmount" if ctx.info_name == "umount-media" else "mount"
     signal.signal(signal.SIGTERM, interrupted)
     try:
-        inventory = json.loads(
-            subprocess.check_output(
-                [
-                    "lsblk",
-                    "--json",
-                    "--tree",
-                    "--paths",
-                    "--output",
-                    "PATH,TYPE,RM,FSTYPE",
-                ],
-                text=True,
-            )
-        )
         partition = partition_for(
-            inventory["blockdevices"], str(device) if device is not None else None
+            block_devices(), str(device) if device is not None else None
         )
         if not Path(partition).is_block_device():
             raise ValueError(f"not a block device: {partition}")

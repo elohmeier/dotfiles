@@ -39,8 +39,8 @@ git-survey = "scripts.git_survey:main"
 typst-watch = "scripts.typst_watch:main"
 foreman-job = "scripts.foreman_job:main"
 agent-publish = "scripts.agent_publish:cli"
-mount-sd = "scripts.sdcard:main"
-umount-sd = "scripts.sdcard:main"
+mount-media = "scripts.media:main"
+umount-media = "scripts.media:main"
 
 [build-system]
 requires = ["uv_build>=0.9.4,<0.13.0"]
