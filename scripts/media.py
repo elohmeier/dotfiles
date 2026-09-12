@@ -1,5 +1,6 @@
 """Mount removable media with terminal polkit authorization."""
 
+import getpass
 import json
 import os
 import select
@@ -8,11 +9,19 @@ import subprocess
 import sys
 from contextlib import contextmanager
 from pathlib import Path
+from shlex import quote
 
 import click
 from click.shell_completion import CompletionItem
 
 UDISKS_TIMEOUT = 120
+# Docker group membership already grants host root; a privileged container in
+# the host mount namespace avoids the polkit password prompt entirely.
+DOCKER_ROOT = [
+    *("docker", "run", "--rm", "--privileged", "--pid=host", "alpine"),
+    *("nsenter", "-t", "1", "-m", "sh", "-ec"),
+]
+OWNER_OPTION_FSTYPES = {"vfat", "exfat", "ntfs", "iso9660", "udf"}
 
 
 def block_devices() -> list[dict]:
@@ -172,18 +181,65 @@ def run_authenticated(command: list[str]):
             stop_process(process)
 
 
+def polkit_authorized() -> bool:
+    return (
+        subprocess.run(
+            [
+                *("pkcheck", "--process", str(os.getpid())),
+                *("--action-id", "org.freedesktop.udisks2.filesystem-mount"),
+            ],
+            capture_output=True,
+        ).returncode
+        == 0
+    )
+
+
+def docker_root() -> bool:
+    daemon = subprocess.run(
+        ["docker", "info", "--format", "{{.SecurityOptions}}"],
+        capture_output=True,
+        text=True,
+    )
+    return daemon.returncode == 0 and "rootless" not in daemon.stdout
+
+
+def root_script(action: str, partition: str) -> str:
+    if action == "unmount":
+        return (
+            f"umount {quote(partition)}; rmdir {quote(str(mountpoint(partition)))} || :"
+        )
+    info = json.loads(
+        subprocess.check_output(
+            ["/usr/bin/lsblk", "--json", "--output", "FSTYPE,LABEL,UUID", partition],
+            text=True,
+        )
+    )["blockdevices"][0]
+    target = quote(f"/run/media/{getpass.getuser()}/{info['label'] or info['uuid']}")
+    options = "nosuid,nodev"
+    if info["fstype"] in OWNER_OPTION_FSTYPES:
+        options += f",uid={os.getuid()},gid={os.getgid()}"
+    return f"mkdir -p {target} && mount -o {options} {quote(partition)} {target}"
+
+
 def udisks(action: str, partition: str):
-    command = ["udisksctl", action, "--block-device", partition]
-    if not sys.stdin.isatty():
-        command.append("--no-user-interaction")
+    as_root = not polkit_authorized() and docker_root()
     print(
-        f"{'Mounting' if action == 'mount' else 'Unmounting'} {partition}...",
+        f"{'Mounting' if action == 'mount' else 'Unmounting'} {partition}"
+        f"{' as root via docker' if as_root else ''}...",
         flush=True,
     )
+    command = ["udisksctl", action, "--block-device", partition]
     try:
-        if sys.stdin.isatty():
+        if as_root:
+            subprocess.run(
+                [*DOCKER_ROOT, root_script(action, partition)],
+                check=True,
+                timeout=UDISKS_TIMEOUT,
+            )
+        elif sys.stdin.isatty():
             run_authenticated(command)
         else:
+            command.append("--no-user-interaction")
             subprocess.run(command, check=True, timeout=UDISKS_TIMEOUT)
     except subprocess.TimeoutExpired as error:
         raise OSError(

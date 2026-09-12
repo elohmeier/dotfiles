@@ -73,6 +73,10 @@ mount-media --device /dev/sr0     # mount an optical disc
 umount-media --device /dev/sr0
 ```
 
+When polkit would require a password (for example over SSH) and the rootful
+Docker daemon is reachable, the commands mount as root through a privileged
+container instead of prompting.
+
 Fish completes options and available media devices. These commands are installed
 by `home/.chezmoiscripts/run_onchange_after_install-uv-tools.sh.tmpl`.
 

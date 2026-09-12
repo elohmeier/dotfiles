@@ -246,6 +246,7 @@ def test_auto_requires_explicit_selection_for_multiple_destinations(separate_dis
 @pytest.mark.parametrize("interactive", [True, False])
 def test_authentication_only_prompts_in_a_terminal(interactive, monkeypatch):
     commands = []
+    monkeypatch.setattr(media, "polkit_authorized", lambda: True)
     monkeypatch.setattr(media.sys.stdin, "isatty", lambda: interactive)
     monkeypatch.setattr(
         media.subprocess, "run", lambda command, **_: commands.append(command)
@@ -253,6 +254,84 @@ def test_authentication_only_prompts_in_a_terminal(interactive, monkeypatch):
     monkeypatch.setattr(media, "run_authenticated", commands.append)
     media.udisks("mount", "/dev/sda1")
     assert ("--no-user-interaction" in commands[0]) is not interactive
+
+
+@pytest.mark.parametrize("action,mounted", [("mount", False), ("unmount", True)])
+def test_unauthorized_session_uses_docker_root_instead_of_prompting(
+    action, mounted, monkeypatch
+):
+    commands = []
+    monkeypatch.setattr(media, "polkit_authorized", lambda: False)
+    monkeypatch.setattr(media, "docker_root", lambda: True)
+    monkeypatch.setattr(media, "root_script", lambda *args: f"handle {args}")
+    monkeypatch.setattr(
+        media.subprocess, "run", lambda command, **_: commands.append(command)
+    )
+    monkeypatch.setattr(
+        media,
+        "run_authenticated",
+        MagicMock(side_effect=AssertionError("must not open a password prompt")),
+    )
+    media.udisks(action, "/dev/sda1")
+    assert commands == [
+        [*media.DOCKER_ROOT, f"handle {(action, '/dev/sda1')}"],
+    ]
+
+
+def test_authorized_session_never_consults_docker(monkeypatch):
+    monkeypatch.setattr(media, "polkit_authorized", lambda: True)
+    monkeypatch.setattr(
+        media,
+        "docker_root",
+        MagicMock(side_effect=AssertionError("docker must not be consulted")),
+    )
+    monkeypatch.setattr(media.sys.stdin, "isatty", lambda: True)
+    executed = MagicMock()
+    monkeypatch.setattr(media, "run_authenticated", executed)
+    media.udisks("mount", "/dev/sda1")
+    executed.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "filesystem,owned", [("vfat", True), ("iso9660", True), ("ext4", False)]
+)
+def test_root_mount_script_targets_run_media_with_owner_options(
+    filesystem, owned, monkeypatch
+):
+    monkeypatch.setattr(
+        media.subprocess,
+        "check_output",
+        lambda *_, **__: json.dumps(
+            {
+                "blockdevices": [
+                    {"fstype": filesystem, "label": "SD CARD", "uuid": "AB-12"}
+                ]
+            }
+        ),
+    )
+    monkeypatch.setattr(media.getpass, "getuser", lambda: "gordon")
+    script = media.root_script("mount", "/dev/sda1")
+    assert script.startswith("mkdir -p '/run/media/gordon/SD CARD' && mount -o nosuid")
+    assert (f",uid={os.getuid()},gid={os.getgid()}" in script) is owned
+
+
+def test_root_mount_script_falls_back_to_uuid(monkeypatch):
+    monkeypatch.setattr(
+        media.subprocess,
+        "check_output",
+        lambda *_, **__: json.dumps(
+            {"blockdevices": [{"fstype": "exfat", "label": None, "uuid": "AB-12"}]}
+        ),
+    )
+    monkeypatch.setattr(media.getpass, "getuser", lambda: "gordon")
+    assert "/run/media/gordon/AB-12" in media.root_script("mount", "/dev/sda1")
+
+
+def test_root_unmount_script_removes_the_mountpoint(monkeypatch):
+    monkeypatch.setattr(media, "mountpoint", lambda _: Path("/run/media/gordon/SD"))
+    assert media.root_script("unmount", "/dev/sda1") == (
+        "umount /dev/sda1; rmdir /run/media/gordon/SD || :"
+    )
 
 
 def test_noninteractive_copy_never_starts_authentication_agent(monkeypatch):
@@ -314,6 +393,7 @@ def test_agent_startup_failure_prevents_copy_and_cleans_up(exited, monkeypatch):
 
 
 def test_mount_timeout_is_reported(monkeypatch):
+    monkeypatch.setattr(media, "polkit_authorized", lambda: True)
     monkeypatch.setattr(media.sys.stdin, "isatty", lambda: False)
 
     def stall(command, *, check, timeout):
