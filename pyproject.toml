@@ -39,6 +39,7 @@ git-survey = "scripts.git_survey:main"
 typst-watch = "scripts.typst_watch:main"
 foreman-job = "scripts.foreman_job:main"
 agent-publish = "scripts.agent_publish:cli"
+pi-config = "scripts.pi_config:main"
 mount-media = "scripts.media:main"
 umount-media = "scripts.media:main"
 
