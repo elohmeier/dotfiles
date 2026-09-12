@@ -1,0 +1,21 @@
+# Detects the container runtime and defines image names. Source this file; do
+# not execute directly. Split out of _docker_flags so tasks that only need the
+# runtime (e.g. pi:egress status/stop) can source it without _docker_flags'
+# side effects (image auto-build, directory creation).
+
+PI_IMAGE="pi-less-yolo:latest"
+PI_PROXY_IMAGE="pi-less-yolo-proxy:latest"
+
+# PI_CONTAINER_RUNTIME overrides; otherwise detect podman via version output or binary path.
+# || true: some docker-as-podman shims exit non-zero, which would abort under pipefail.
+# readlink: when podman is symlinked as "docker", it reports "docker version X" not "podman version X".
+if [[ -n "${PI_CONTAINER_RUNTIME:-}" ]]; then
+  DOCKER_CMD="${PI_CONTAINER_RUNTIME}"
+else
+  DOCKER_CMD="docker"
+  detected_version=$(docker --version 2>&1 || true)
+  docker_realpath=$(readlink -f "$(command -v docker || true)" 2>/dev/null || true)
+  if [[ "${detected_version}" == *podman* ]] || [[ "${docker_realpath}" == *podman* ]]; then
+    DOCKER_CMD="podman"
+  fi
+fi

@@ -1,0 +1,249 @@
+#!/usr/bin/env bash
+#MISE description="Manage egress filtering: watch approval requests, allow/deny hosts, list rules, status, stop"
+set -euo pipefail
+
+# shellcheck source=tasks/pi/_runtime
+source "$(dirname "$0")/_runtime"
+# shellcheck source=tasks/pi/_egress
+source "$(dirname "$0")/_egress"
+
+usage() {
+  cat <<'EOF'
+Usage: mise run pi:egress <command> [args]
+
+Commands:
+  watch              Interactively approve/deny connection requests
+                     (PI_EGRESS=interactive mode; run in a second terminal)
+  allow <host>...    Persistently allow hosts (pattern: host, host:port, *.suffix)
+  deny <host>...     Persistently deny hosts (deny rules win over allow rules)
+  list               Show generated defaults and persistent rules
+  secrets            List secret scopes (proxy-side placeholder injection)
+  secrets add <NAME> <host,host> [METHOD,METHOD]
+                     Scope secret $NAME to hosts (and optionally methods);
+                     the container only ever sees a placeholder
+  secrets remove <NAME>
+  web                Inspect recorded flows in mitmweb (record with
+                     PI_EGRESS_RECORD=1; secrets appear as placeholders)
+  status             Show proxy container, networks, and recent decisions
+  stop               Stop and remove the proxy sidecar
+EOF
+}
+
+rule_add() {
+  local file="${PI_EGRESS_DIR}/rules.$1" pattern="$2"
+  mkdir -p "${PI_EGRESS_DIR}"
+  touch "${file}"
+  if grep -qxF "${pattern}" "${file}"; then
+    echo "already present in rules.$1: ${pattern}"
+  else
+    echo "${pattern}" >> "${file}"
+    echo "added to rules.$1: ${pattern}"
+  fi
+}
+
+print_rules_file() {
+  local label="$1" file="$2"
+  echo "${label}:"
+  if [[ -s "${file}" ]]; then
+    sed 's/^/  /' "${file}"
+  else
+    echo "  (none)"
+  fi
+}
+
+cmd_watch() {
+  mkdir -p "${PI_EGRESS_DIR}/pending" "${PI_EGRESS_DIR}/decisions"
+  echo "Watching for egress approval requests in ${PI_EGRESS_DIR}/pending"
+  echo "Requests are denied by default after the proxy timeout. Ctrl-C to stop."
+  while true; do
+    local request_file id host_port host
+    for request_file in "${PI_EGRESS_DIR}/pending"/*; do
+      [[ -e "${request_file}" ]] || continue
+      id="$(basename "${request_file}")"
+      [[ -e "${PI_EGRESS_DIR}/decisions/${id}" ]] && continue
+      host_port="$(cat "${request_file}" 2>/dev/null || true)"
+      [[ -z "${host_port}" ]] && continue
+      host="${host_port%:*}"
+      host="${host#[}"
+      host="${host%]}"
+
+      printf '\n[pi-egress] agent wants to connect to %s\n' "${host_port}"
+      printf '  a) allow once   s) allow for session   A) always allow (persist)\n'
+      printf '  d) deny once    x) deny for session    N) never allow (persist)\n'
+      local answer=""
+      read -rn1 -p '  choice [d]: ' answer < /dev/tty || answer="d"
+      echo
+      if [[ ! -e "${request_file}" ]]; then
+        echo "  request expired (proxy timed out — denied by default)"
+        continue
+      fi
+      case "${answer}" in
+        a)      echo "allow"         > "${PI_EGRESS_DIR}/decisions/${id}" ;;
+        s)      echo "allow-session" > "${PI_EGRESS_DIR}/decisions/${id}" ;;
+        A)      rule_add allow "${host}"
+                echo "allow"         > "${PI_EGRESS_DIR}/decisions/${id}" ;;
+        x)      echo "deny-session"  > "${PI_EGRESS_DIR}/decisions/${id}" ;;
+        N)      rule_add deny "${host}"
+                echo "deny"          > "${PI_EGRESS_DIR}/decisions/${id}" ;;
+        d|"")   echo "deny"          > "${PI_EGRESS_DIR}/decisions/${id}" ;;
+        *)      echo "  unrecognized choice — denying once"
+                echo "deny"          > "${PI_EGRESS_DIR}/decisions/${id}" ;;
+      esac
+    done
+    sleep 0.5
+  done
+}
+
+cmd_list() {
+  if [[ -f "${PI_EGRESS_DIR}/config" ]]; then
+    echo "generated config (last run):"
+    grep -v '^#' "${PI_EGRESS_DIR}/config" | sed 's/^/  /'
+  else
+    echo "no generated config yet — run a pi task with PI_EGRESS set"
+  fi
+  echo
+  print_rules_file "persistent allow rules (rules.allow)" "${PI_EGRESS_DIR}/rules.allow"
+  echo
+  print_rules_file "persistent deny rules (rules.deny)" "${PI_EGRESS_DIR}/rules.deny"
+}
+
+cmd_secrets() {
+  local rules="${PI_EGRESS_DIR}/secrets.rules"
+  local sub="${1:-list}"
+  [[ $# -gt 0 ]] && shift
+  case "${sub}" in
+    list)
+      if [[ -s "${rules}" ]]; then
+        echo "secret scopes (values are read from the host environment on each run):"
+        local name rest
+        while read -r name rest; do
+          [[ -z "${name}" || "${name}" == \#* ]] && continue
+          if [[ -n "${!name:-}" ]]; then
+            echo "  ${name} ${rest} (set)"
+          else
+            echo "  ${name} ${rest} (NOT set in current environment)"
+          fi
+        done < "${rules}"
+      else
+        echo "no secret scopes defined — add one with:"
+        echo "  mise run pi:egress secrets add GITHUB_TOKEN api.github.com,github.com"
+      fi
+      ;;
+    add)
+      [[ $# -ge 2 ]] || { echo "usage: mise run pi:egress secrets add <NAME> <host,host> [METHOD,METHOD]" >&2; exit 1; }
+      local name="$1" hosts="$2" methods="${3:-}"
+      mkdir -p "${PI_EGRESS_DIR}"
+      touch "${rules}"
+      if grep -q "^${name} " "${rules}"; then
+        echo "secret '${name}' already has a scope — remove it first" >&2
+        exit 1
+      fi
+      echo "${name} hosts=${hosts}${methods:+ methods=${methods}}" >> "${rules}"
+      echo "added scope for '${name}' — export ${name} on the host before running pi"
+      ;;
+    remove)
+      [[ $# -ge 1 ]] || { echo "usage: mise run pi:egress secrets remove <NAME>" >&2; exit 1; }
+      if [[ -f "${rules}" ]] && grep -q "^$1 " "${rules}"; then
+        grep -v "^$1 " "${rules}" > "${rules}.tmp"
+        mv "${rules}.tmp" "${rules}"
+        echo "removed scope for '$1'"
+      else
+        echo "no scope for '$1'"
+      fi
+      ;;
+    *)
+      echo "unknown secrets subcommand: ${sub} (expected list, add, or remove)" >&2
+      exit 1
+      ;;
+  esac
+}
+
+cmd_web() {
+  local flows="${PI_EGRESS_DIR}/flows.mitm"
+  if [[ ! -s "${flows}" ]]; then
+    echo "no recorded flows at ${flows}" >&2
+    echo "record a session first: PI_EGRESS=allowlist PI_EGRESS_RECORD=1 mise run pi" >&2
+    exit 1
+  fi
+  "${DOCKER_CMD}" image inspect "${PI_PROXY_IMAGE}" > /dev/null 2>&1 || mise run pi:build
+  echo "Recorded flows contain placeholders only — secret values are redacted."
+  echo "Open the URL printed below, replacing 0.0.0.0 with 127.0.0.1. Ctrl-C to stop."
+  # Only the flows file is mounted (read-only) — not the state dir, which
+  # holds the CA key and secret values. The web UI is published on the host
+  # loopback only; the pi container (internal network) cannot reach it.
+  local run_flags=(
+    "--rm"
+    "--user" "$(id -u):$(id -g)"
+    "--cap-drop=ALL"
+    "--security-opt=no-new-privileges"
+    "--publish" "127.0.0.1:8081:8081"
+    "--volume" "${flows}:/flows.mitm:ro"
+    "--entrypoint" "mitmweb"
+  )
+  [[ "${DOCKER_CMD}" == "podman" ]] && run_flags+=("--userns=keep-id")
+  "${DOCKER_CMD}" run "${run_flags[@]}" "${PI_PROXY_IMAGE}" \
+    --no-server --web-host 0.0.0.0 --web-port 8081 \
+    --set web_open_browser=false \
+    --rfile /flows.mitm
+}
+
+cmd_status() {
+  # docker inspect may print a blank line to stdout when the container is missing.
+  local state
+  state=$("${DOCKER_CMD}" inspect -f '{{.State.Status}}' "${PI_EGRESS_PROXY}" 2>/dev/null) || state=""
+  state="${state//$'\n'/}"
+  [[ -z "${state}" ]] && state="not created"
+  echo "proxy container ${PI_EGRESS_PROXY}: ${state}"
+  echo "state directory: ${PI_EGRESS_DIR}"
+  if [[ -f "${PI_EGRESS_DIR}/config" ]]; then
+    grep -E '^(mode|timeout|record|intercept)=' "${PI_EGRESS_DIR}/config" | sed 's/^/  /'
+  fi
+  if [[ -s "${PI_EGRESS_DIR}/flows.mitm" ]]; then
+    echo "recorded flows: $(du -h "${PI_EGRESS_DIR}/flows.mitm" | cut -f1) (view with 'mise run pi:egress web')"
+  fi
+  local pending_count
+  pending_count=$(find "${PI_EGRESS_DIR}/pending" -type f 2>/dev/null | wc -l | tr -d ' ')
+  echo "pending approval requests: ${pending_count}"
+  if [[ -f "${PI_EGRESS_DIR}/egress.log" ]]; then
+    echo "recent decisions:"
+    tail -n 10 "${PI_EGRESS_DIR}/egress.log" | sed 's/^/  /'
+  fi
+}
+
+cmd_stop() {
+  # rm -f is idempotent on newer Docker; check existence first for an honest message.
+  if "${DOCKER_CMD}" inspect "${PI_EGRESS_PROXY}" > /dev/null 2>&1; then
+    "${DOCKER_CMD}" rm -f "${PI_EGRESS_PROXY}" > /dev/null
+    echo "stopped ${PI_EGRESS_PROXY}"
+  else
+    echo "${PI_EGRESS_PROXY} was not running"
+  fi
+  # Networks are only removable once no container is attached; ignore failures.
+  "${DOCKER_CMD}" network rm "${PI_EGRESS_NET_INTERNAL}" "${PI_EGRESS_NET_EXTERNAL}" > /dev/null 2>&1 || true
+}
+
+command="${1:-}"
+[[ $# -gt 0 ]] && shift
+case "${command}" in
+  watch)  cmd_watch ;;
+  allow)
+    [[ $# -gt 0 ]] || { echo "usage: mise run pi:egress allow <host>..." >&2; exit 1; }
+    for pattern in "$@"; do rule_add allow "${pattern}"; done
+    echo "rules take effect immediately, including for pending requests"
+    ;;
+  deny)
+    [[ $# -gt 0 ]] || { echo "usage: mise run pi:egress deny <host>..." >&2; exit 1; }
+    for pattern in "$@"; do rule_add deny "${pattern}"; done
+    ;;
+  list)    cmd_list ;;
+  secrets) cmd_secrets "$@" ;;
+  web)     cmd_web ;;
+  status)  cmd_status ;;
+  stop)    cmd_stop ;;
+  ""|help|-h|--help) usage ;;
+  *)
+    echo "unknown command: ${command}" >&2
+    usage >&2
+    exit 1
+    ;;
+esac

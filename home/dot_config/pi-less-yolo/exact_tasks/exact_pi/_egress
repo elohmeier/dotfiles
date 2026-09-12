@@ -1,0 +1,240 @@
+# Egress-filtering helpers for pi container tasks. Source this file; do not
+# execute directly. Requires DOCKER_CMD and PI_PROXY_IMAGE — source
+# tasks/pi/_runtime (or _docker_flags, which sources it) first.
+#
+# Topology: the pi container is attached only to an --internal network (no
+# route out). The proxy sidecar sits on both the internal network (at a fixed
+# IP, so no dependency on container-name DNS) and an external bridge. All
+# egress goes through the proxy, which filters by hostname at the HTTP
+# CONNECT level — tools that ignore proxy env vars simply have no route out.
+#
+# The proxy is mitmproxy running the proxy/pi_egress.py addon. By default it
+# only filters at the CONNECT level (no TLS interception); hosts matching an
+# intercept pattern or an active secret rule are MITMed so the addon can
+# rewrite requests (secret injection) and record flows.
+#
+# State lives in ${PI_EGRESS_DIR} (host side), mounted at /egress in the proxy:
+#   config       regenerated on every run: mode, timeout, derived allow hosts,
+#                intercept patterns, record flag
+#   rules.allow  persistent user allow patterns (managed via pi:egress)
+#   rules.deny   persistent user deny patterns (deny wins)
+#   secrets.rules persistent secret scopes: NAME hosts=<p,p> [methods=GET,POST]
+#   secrets.env  regenerated per run (mode 600): NAME<TAB>placeholder<TAB>value
+#   mitmproxy/   mitmproxy confdir — holds the generated CA (private key!)
+#   pending/ decisions/  interactive-approval handshake files
+#   egress.log   decision log
+#   flows.mitm   recorded flows (PI_EGRESS_RECORD=1), placeholders only
+
+PI_EGRESS_DIR="${PI_EGRESS_DIR:-${HOME}/.pi/agent/egress}"
+# Overridable so tests can run an isolated proxy/network alongside a real one.
+PI_EGRESS_NAME="${PI_EGRESS_NAME:-pi-egress}"
+PI_EGRESS_SUBNET="${PI_EGRESS_SUBNET:-10.223.0.0/24}"
+PI_EGRESS_PROXY_IP="${PI_EGRESS_PROXY_IP:-10.223.0.2}"
+
+PI_EGRESS_NET_INTERNAL="${PI_EGRESS_NAME}-internal"
+PI_EGRESS_NET_EXTERNAL="${PI_EGRESS_NAME}-external"
+PI_EGRESS_PROXY="${PI_EGRESS_NAME}-proxy"
+
+# Hosts each provider needs. Used for both API-key env vars and OAuth entries
+# found in auth.json. Keep in sync with PI_ENV_VARS in _docker_flags.
+_pi_egress_provider_hosts() {
+  case "$1" in
+    anthropic)  echo "api.anthropic.com console.anthropic.com" ;;
+    azure)      echo "*.openai.azure.com" ;;
+    openai)     echo "api.openai.com" ;;
+    openai-codex) echo "api.openai.com auth.openai.com chatgpt.com" ;;
+    google)     echo "generativelanguage.googleapis.com oauth2.googleapis.com" ;;
+    mistral)    echo "api.mistral.ai" ;;
+    groq)       echo "api.groq.com" ;;
+    cerebras)   echo "api.cerebras.ai" ;;
+    xai)        echo "api.x.ai" ;;
+    openrouter) echo "openrouter.ai" ;;
+    vercel)     echo "ai-gateway.vercel.sh" ;;
+    zai)        echo "api.z.ai" ;;
+    opencode)   echo "opencode.ai *.opencode.ai" ;;
+    kimi)       echo "api.moonshot.ai api.moonshot.cn" ;;
+    minimax)    echo "api.minimax.io" ;;
+    minimax-cn) echo "api.minimaxi.com" ;;
+    *)          echo "" ;;
+  esac
+}
+
+# One host per line: npm registry (version check, extension installs), hosts
+# for every provider with an API key set or an OAuth entry in auth.json, and
+# any extras from PI_EGRESS_ALLOW (comma- or space-separated patterns).
+_pi_egress_default_hosts() {
+  echo "registry.npmjs.org"
+
+  local providers=()
+  [[ -n "${ANTHROPIC_API_KEY:-}" ]]    && providers+=(anthropic)
+  [[ -n "${AZURE_OPENAI_API_KEY:-}" ]] && providers+=(azure)
+  [[ -n "${OPENAI_API_KEY:-}" ]]       && providers+=(openai)
+  [[ -n "${GEMINI_API_KEY:-}" ]]       && providers+=(google)
+  [[ -n "${MISTRAL_API_KEY:-}" ]]      && providers+=(mistral)
+  [[ -n "${GROQ_API_KEY:-}" ]]         && providers+=(groq)
+  [[ -n "${CEREBRAS_API_KEY:-}" ]]     && providers+=(cerebras)
+  [[ -n "${XAI_API_KEY:-}" ]]          && providers+=(xai)
+  [[ -n "${OPENROUTER_API_KEY:-}" ]]   && providers+=(openrouter)
+  [[ -n "${AI_GATEWAY_API_KEY:-}" ]]   && providers+=(vercel)
+  [[ -n "${ZAI_API_KEY:-}" ]]          && providers+=(zai)
+  [[ -n "${OPENCODE_API_KEY:-}" ]]     && providers+=(opencode)
+  [[ -n "${KIMI_API_KEY:-}" ]]         && providers+=(kimi)
+  [[ -n "${MINIMAX_API_KEY:-}" ]]      && providers+=(minimax)
+  [[ -n "${MINIMAX_CN_API_KEY:-}" ]]   && providers+=(minimax-cn)
+
+  # OAuth logins stored in auth.json (no env var to detect them by).
+  local auth_file="${HOME}/.pi/agent/auth.json"
+  if [[ -f "${auth_file}" ]]; then
+    local oauth_provider
+    for oauth_provider in anthropic openai-codex openai google openrouter; do
+      if grep -q "\"${oauth_provider}\"" "${auth_file}"; then
+        providers+=("${oauth_provider}")
+      fi
+    done
+  fi
+
+  local provider host
+  for provider in ${providers[@]+"${providers[@]}"}; do
+    for host in $(_pi_egress_provider_hosts "${provider}"); do
+      echo "${host}"
+    done
+  done
+
+  if [[ -n "${PI_EGRESS_ALLOW:-}" ]]; then
+    echo "${PI_EGRESS_ALLOW}" | tr ', ' '\n'
+  fi
+}
+
+# Regenerate the proxy config. Called on every run so mode, timeout, and the
+# derived allowlist track the current environment; user rules live in
+# rules.allow / rules.deny and are never touched.
+egress_write_config() {
+  local mode="$1"
+  mkdir -p "${PI_EGRESS_DIR}/pending" "${PI_EGRESS_DIR}/decisions"
+  # The state dir holds the interception CA key and real secret values.
+  chmod 700 "${PI_EGRESS_DIR}"
+  touch "${PI_EGRESS_DIR}/rules.allow" "${PI_EGRESS_DIR}/rules.deny"
+  local tmp="${PI_EGRESS_DIR}/.config.tmp"
+  {
+    echo "# Generated by pi-less-yolo on every run — do not edit."
+    echo "# Put persistent rules in rules.allow / rules.deny (or use 'mise run pi:egress')."
+    echo "mode=${mode}"
+    echo "timeout=${PI_EGRESS_TIMEOUT:-60}"
+    if [[ -n "${PI_EGRESS_ALLOW_PRIVATE:-}" ]]; then
+      echo "allow-private=1"
+    fi
+    if [[ -n "${PI_EGRESS_RECORD:-}" ]]; then
+      echo "record=1"
+    fi
+    # PI_EGRESS_INSPECT: extra hosts to TLS-intercept (pattern list, or
+    # 'all'). Hosts with an active secret rule are intercepted implicitly.
+    if [[ -n "${PI_EGRESS_INSPECT:-}" ]]; then
+      echo "${PI_EGRESS_INSPECT}" | tr ', ' '\n' | sed '/^$/d' | sed 's/^/intercept=/'
+    fi
+    _pi_egress_default_hosts | sed '/^$/d' | sort -u | sed 's/^/allow=/'
+  } > "${tmp}"
+  mv "${tmp}" "${PI_EGRESS_DIR}/config"
+}
+
+# Compile secrets.env (placeholder + real value for every secrets.rules entry
+# whose env var is set on the host) and collect the --env flags that hand the
+# *placeholders* to the pi container. The real values only ever reach the
+# proxy via the state-dir mount; the pi container cannot read /egress.
+egress_prepare_secrets() {
+  local rules="${PI_EGRESS_DIR}/secrets.rules"
+  local out="${PI_EGRESS_DIR}/secrets.env" tmp="${PI_EGRESS_DIR}/.secrets.env.tmp"
+  PI_EGRESS_SECRET_ENV=()
+  PI_EGRESS_SECRETS_ACTIVE=0
+  : > "${tmp}"
+  chmod 600 "${tmp}"
+  if [[ -f "${rules}" ]]; then
+    local name rest value placeholder
+    while read -r name rest; do
+      [[ -z "${name}" || "${name}" == \#* ]] && continue
+      value="${!name:-}"
+      if [[ -z "${value}" ]]; then
+        echo "warning: egress secret '${name}' has a rule but is not set in the environment — skipping" >&2
+        continue
+      fi
+      placeholder="pi-secret-${name}-$(head -c8 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+      printf '%s\t%s\t%s\n' "${name}" "${placeholder}" "${value}" >> "${tmp}"
+      PI_EGRESS_SECRET_ENV+=("--env" "${name}=${placeholder}")
+      PI_EGRESS_SECRETS_ACTIVE=$((PI_EGRESS_SECRETS_ACTIVE + 1))
+    done < "${rules}"
+  fi
+  mv "${tmp}" "${out}"
+}
+
+# Ensure networks exist and the proxy sidecar is running the current image.
+egress_ensure_proxy() {
+  "${DOCKER_CMD}" image inspect "${PI_PROXY_IMAGE}" > /dev/null 2>&1 || mise run pi:build
+
+  "${DOCKER_CMD}" network inspect "${PI_EGRESS_NET_INTERNAL}" > /dev/null 2>&1 \
+    || "${DOCKER_CMD}" network create --internal --subnet "${PI_EGRESS_SUBNET}" "${PI_EGRESS_NET_INTERNAL}" > /dev/null
+  "${DOCKER_CMD}" network inspect "${PI_EGRESS_NET_EXTERNAL}" > /dev/null 2>&1 \
+    || "${DOCKER_CMD}" network create "${PI_EGRESS_NET_EXTERNAL}" > /dev/null
+
+  # docker inspect may print a blank line to stdout when the container is
+  # missing; strip newlines so the comparison is exact.
+  local state
+  state=$("${DOCKER_CMD}" inspect -f '{{.State.Running}}' "${PI_EGRESS_PROXY}" 2>/dev/null) || state=""
+  state="${state//$'\n'/}"
+  [[ -z "${state}" ]] && state="absent"
+
+  if [[ "${state}" == "true" ]]; then
+    # Restart the sidecar if pi:build produced a newer proxy image.
+    local running_image current_image
+    running_image=$("${DOCKER_CMD}" inspect -f '{{.Image}}' "${PI_EGRESS_PROXY}")
+    current_image=$("${DOCKER_CMD}" image inspect -f '{{.Id}}' "${PI_PROXY_IMAGE}")
+    if [[ "${running_image}" != "${current_image}" ]]; then
+      "${DOCKER_CMD}" rm -f "${PI_EGRESS_PROXY}" > /dev/null
+      state=absent
+    fi
+  elif [[ "${state}" == "false" ]]; then
+    "${DOCKER_CMD}" rm -f "${PI_EGRESS_PROXY}" > /dev/null
+    state=absent
+  fi
+
+  if [[ "${state}" == "absent" ]]; then
+    local run_flags=(
+      "--detach"
+      "--name" "${PI_EGRESS_PROXY}"
+      "--user" "$(id -u):$(id -g)"
+      "--cap-drop=ALL"
+      "--security-opt=no-new-privileges"
+      "--network" "${PI_EGRESS_NET_EXTERNAL}"
+      # :z — the state dir is dedicated to the sidecar, so an SELinux shared
+      # relabel is safe and required for rootless podman on Fedora; other
+      # runtimes ignore it.
+      "--volume" "${PI_EGRESS_DIR}:/egress:z"
+    )
+    [[ "${DOCKER_CMD}" == "podman" ]] && run_flags+=("--userns=keep-id")
+    "${DOCKER_CMD}" run "${run_flags[@]}" "${PI_PROXY_IMAGE}" > /dev/null
+    "${DOCKER_CMD}" network connect --ip "${PI_EGRESS_PROXY_IP}" "${PI_EGRESS_NET_INTERNAL}" "${PI_EGRESS_PROXY}"
+
+    # mitmproxy takes a moment to boot; don't let the pi container race its
+    # first request against a listener that isn't up yet.
+    local _i
+    for _i in $(seq 1 75); do
+      if "${DOCKER_CMD}" logs "${PI_EGRESS_PROXY}" 2>&1 | grep -q "listening"; then
+        break
+      fi
+      sleep 0.2
+    done
+  fi
+
+  # mitmproxy generates its interception CA on first startup; the pi
+  # container mounts the certificate (never the key) to trust intercepted
+  # hosts. Wait for it so the mount source exists even on the very first run.
+  PI_EGRESS_CA_CERT="${PI_EGRESS_DIR}/mitmproxy/mitmproxy-ca-cert.pem"
+  local _i
+  for _i in $(seq 1 100); do
+    [[ -s "${PI_EGRESS_CA_CERT}" ]] && break
+    sleep 0.2
+  done
+  if [[ ! -s "${PI_EGRESS_CA_CERT}" ]]; then
+    echo "error: egress proxy did not generate its CA certificate (${PI_EGRESS_CA_CERT})" >&2
+    echo "       check '${DOCKER_CMD} logs ${PI_EGRESS_PROXY}'" >&2
+    exit 1
+  fi
+}

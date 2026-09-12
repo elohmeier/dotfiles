@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+#MISE description="Run pi coding agent in a Docker container"
+#MISE raw=true
+#MISE dir="{{cwd}}"
+set -euo pipefail
+
+# shellcheck source=tasks/pi/_docker_flags
+source "$(dirname "$0")/_docker_flags"
+
+DOCKER_FLAGS+=("--interactive")
+[ -t 0 ] && [ -t 1 ] && DOCKER_FLAGS+=("--tty")
+
+if [ -n "${TMUX:-}" ]; then
+  tmux set-option -p allow-passthrough on 2>/dev/null || true
+  trap 'tmux set-option -p allow-passthrough off 2>/dev/null || true' EXIT
+fi
+
+PI_ARGS=()
+PI_SYSTEM_PROMPT=""
+if [[ -z "${PI_NO_CONTAINER_PROMPT:-}" ]]; then
+  PI_SYSTEM_PROMPT="You are running inside a Docker container as a non-root user. No Docker socket, sudo, or system package installation (apk requires root) is available."
+fi
+if [[ -n "${PI_EGRESS:-}" ]]; then
+  PI_SYSTEM_PROMPT="${PI_SYSTEM_PROMPT:+${PI_SYSTEM_PROMPT} }Outbound network access is restricted to an allowlist; blocked connections fail with HTTP 403 from the proxy or connection errors. If a needed host is blocked, tell the user — they can permit it with 'mise run pi:egress allow <host>'."
+  if [[ "${PI_EGRESS_SECRETS_ACTIVE:-0}" -gt 0 ]]; then
+    PI_SYSTEM_PROMPT="${PI_SYSTEM_PROMPT} Some credential environment variables hold placeholders that the proxy replaces with real values in transit, only for their approved hosts. Use them normally (e.g. \$GITHUB_TOKEN); reading them will only ever show the placeholder."
+  fi
+fi
+if [[ -n "${PI_SYSTEM_PROMPT}" ]]; then
+  PI_ARGS+=("--append-system-prompt" "${PI_SYSTEM_PROMPT}")
+fi
+
+"${DOCKER_CMD}" run "${DOCKER_FLAGS[@]}" "${PI_IMAGE}" "${PI_ARGS[@]}" "$@"
