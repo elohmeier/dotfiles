@@ -1,0 +1,54 @@
+{{- $enc := index . "pushoverEncryptionKey" -}}
+{{ if $enc -}}
+import { createCipheriv, createHmac, randomBytes } from "node:crypto";
+{{ end -}}
+import { basename } from "node:path";
+{{ if $enc -}}
+import { gzipSync } from "node:zlib";
+{{ end -}}
+import type { AgentEndEvent, ExtensionAPI } from "@earendil-works/pi-coding-agent";
+
+{{ if $enc -}}
+const key = Buffer.from({{ $enc | quote }}, "hex");
+
+// Mirrors agent-pushover-notify: base64(iv || aes-256-cbc(gzip(text)) || hmac-sha256(iv || ciphertext))
+function encrypt(text: string): string {
+	const iv = randomBytes(16);
+	const cipher = createCipheriv("aes-256-cbc", key, iv);
+	const ciphertext = Buffer.concat([cipher.update(gzipSync(text, { level: 9 })), cipher.final()]);
+	const mac = createHmac("sha256", key).update(Buffer.concat([iv, ciphertext])).digest();
+	return Buffer.concat([iv, ciphertext, mac]).toString("base64");
+}
+
+{{ end -}}
+export default function (pi: ExtensionAPI) {
+	pi.on("agent_end", (event: AgentEndEvent) => {
+		try {
+			const last = event.messages.filter((m) => m.role === "assistant").at(-1);
+			let summary = "Finished work";
+			if (last && last.role === "assistant") {
+				const text = last.content
+					.flatMap((c) => (c.type === "text" ? [c.text] : []))
+					.join(" ")
+					.replace(/\s+/g, " ")
+					.trim();
+				if (text) summary = text.length > 240 ? `${text.slice(0, 237)}...` : text;
+			}
+			const title = "Pi finished";
+			const message = `${summary} in ${basename(process.cwd())} on {{ .chezmoi.username }}@{{ .chezmoi.hostname }}.`;
+			const form = new FormData();
+			form.set("token", {{ .pushoverApiToken | quote }});
+			form.set("user", {{ .pushoverUserKey | quote }});
+			form.set("sound", {{ index . "pushoverAgentSound" | default "classical" | quote }});
+			{{ if $enc -}}
+			form.set("title", encrypt(title));
+			form.set("message", encrypt(message));
+			form.set("encrypted", "1");
+			{{ else -}}
+			form.set("title", title);
+			form.set("message", message);
+			{{ end -}}
+			fetch("https://api.pushover.net/1/messages.json", { method: "POST", body: form }).catch(() => {});
+		} catch {}
+	});
+}

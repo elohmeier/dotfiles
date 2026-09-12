@@ -14,7 +14,6 @@ summarize() {
 case $agent in
     Codex) message=$([ "$#" -gt 1 ] && printf %s "$2" | summarize || summarize) ;;
     Claude) message=$(summarize) ;;
-    Pi) message=${2:-Finished work} ;;
     *) message=${2:-Finished work}; sound= ;;
 esac
 title="$agent finished"
