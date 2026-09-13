@@ -42,6 +42,7 @@ agent-publish = "scripts.agent_publish:cli"
 pi-config = "scripts.pi_config:main"
 mount-media = "scripts.media:main"
 umount-media = "scripts.media:main"
+syncthing-status = "scripts.syncthing_status:main"
 
 [build-system]
 requires = ["uv_build>=0.9.4,<0.13.0"]
