@@ -26,6 +26,20 @@ RUN --mount=type=secret,id=extra_ca \
       && cat /run/secrets/extra_ca >> /etc/ssl/certs/ca-certificates.crt; \
     fi
 
+# APK_REPOSITORY (PI_APK_REPOSITORY): replace the image's apk repository.
+# apk.cgr.dev serves APKINDEX inline but 303-redirects every package to a
+# presigned r2.cloudflarestorage.com URL; where those are blocked, apk maps the
+# 403 to EACCES and reports "Permission denied" for each package.
+# https://packages.wolfi.dev/os carries the same builds and versions and serves
+# them without a redirect, but is signed with the wolfi key rather than the
+# chainguard keys the image trusts — so that key is mounted alongside.
+ARG APK_REPOSITORY=""
+RUN --mount=type=secret,id=apk_key \
+    if [ -n "${APK_REPOSITORY}" ]; then \
+      install -m 644 /run/secrets/apk_key /etc/apk/keys/wolfi-signing.rsa.pub \
+      && echo "${APK_REPOSITORY}" > /etc/apk/repositories; \
+    fi
+
 # openssh-client: ssh binary for git-over-SSH (PI_SSH_AGENT=1) and ssh-add.
 RUN apk add --no-cache \
         curl \

@@ -38,6 +38,8 @@ done
 #                  image trust store. Passed as a secret so it stays out of the
 #                  build context; CA_ID fingerprints it because secret contents
 #                  are not part of the layer cache key.
+#   PI_APK_REPOSITORY apk repository to install from instead of the image's
+#                     own, with the vendored wolfi key added to the keyring.
 #   PI_BASE_REGISTRY  registry the pinned Chainguard base is pulled from.
 #   PI_BASE_IMAGE     replacement for the whole base reference.
 IMAGE_FLAGS=()
@@ -45,6 +47,12 @@ if [[ -n "${PI_CA_CERT:-}" ]]; then
   IMAGE_FLAGS+=(
     "--secret" "id=extra_ca,src=${PI_CA_CERT}"
     "--build-arg" "CA_ID=$(cksum < "${PI_CA_CERT}" | tr -d ' ')"
+  )
+fi
+if [[ -n "${PI_APK_REPOSITORY:-}" ]]; then
+  IMAGE_FLAGS+=(
+    "--build-arg" "APK_REPOSITORY=${PI_APK_REPOSITORY}"
+    "--secret" "id=apk_key,src=${REPO_ROOT}/wolfi-signing.rsa.pub"
   )
 fi
 [[ -n "${PI_BASE_REGISTRY:-}" ]] && IMAGE_FLAGS+=("--build-arg" "BASE_REGISTRY=${PI_BASE_REGISTRY}")
