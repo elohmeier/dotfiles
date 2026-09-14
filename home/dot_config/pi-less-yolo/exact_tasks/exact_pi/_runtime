@@ -5,8 +5,8 @@
 # below only touches the filesystem on hosts where the configured docker
 # credential helper is unusable.
 
-PI_IMAGE="pi-less-yolo:latest"
-PI_PROXY_IMAGE="pi-less-yolo-proxy:latest"
+PI_IMAGE="${PI_IMAGE:-pi-less-yolo:latest}"
+PI_PROXY_IMAGE="${PI_PROXY_IMAGE:-pi-less-yolo-proxy:latest}"
 
 # PI_CONTAINER_RUNTIME overrides; otherwise detect podman via version output or binary path.
 # || true: some docker-as-podman shims exit non-zero, which would abort under pipefail.

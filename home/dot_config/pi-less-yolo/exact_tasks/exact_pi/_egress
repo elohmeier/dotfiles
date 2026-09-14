@@ -23,9 +23,10 @@
 #   mitmproxy/   mitmproxy confdir — holds the generated CA (private key!)
 #   pending/ decisions/  interactive-approval handshake files
 #   egress.log   decision log
-#   flows.mitm   recorded flows (PI_EGRESS_RECORD=1), placeholders only
+#   flows.mitm   sanitized HTTP recordings; bodies may contain sensitive data
 
-PI_EGRESS_DIR="${PI_EGRESS_DIR:-${HOME}/.pi/agent/egress}"
+PI_EGRESS_DIR="${PI_EGRESS_DIR:-${HOME}/.local/state/pi-egress}"
+PI_EGRESS_WEB_PORT="${PI_EGRESS_WEB_PORT:-8081}"
 # Overridable so tests can run an isolated proxy/network alongside a real one.
 PI_EGRESS_NAME="${PI_EGRESS_NAME:-pi-egress}"
 PI_EGRESS_SUBNET="${PI_EGRESS_SUBNET:-10.223.0.0/24}"
@@ -34,6 +35,33 @@ PI_EGRESS_PROXY_IP="${PI_EGRESS_PROXY_IP:-10.223.0.2}"
 PI_EGRESS_NET_INTERNAL="${PI_EGRESS_NAME}-internal"
 PI_EGRESS_NET_EXTERNAL="${PI_EGRESS_NAME}-external"
 PI_EGRESS_PROXY="${PI_EGRESS_NAME}-proxy"
+
+egress_init() {
+  local old="${HOME}/.pi/agent/egress"
+  if [[ -d "${old}" && "${PI_EGRESS_DIR}" == "${HOME}/.local/state/pi-egress" ]]; then
+    if [[ -e "${PI_EGRESS_DIR}" ]]; then
+      echo "error: both ${old} and ${PI_EGRESS_DIR} exist; move the old proxy state outside ~/.pi/agent before continuing" >&2
+      exit 1
+    fi
+    mkdir -p "${HOME}/.local/state"
+    mv "${old}" "${PI_EGRESS_DIR}"
+    echo "Moved proxy state to ${PI_EGRESS_DIR}" >&2
+  fi
+  mkdir -p "${PI_EGRESS_DIR}/pending" "${PI_EGRESS_DIR}/decisions"
+  chmod 700 "${PI_EGRESS_DIR}"
+}
+
+# Reject directory mounts that would expose policy, credentials or recordings.
+egress_check_mount() {
+  local source="$1" state
+  [[ -e "${source}" ]] || return 0
+  source=$(realpath "${source}")
+  state=$(cd "${PI_EGRESS_DIR}" && pwd -P)
+  if [[ "${state}/" == "${source}/"* || "${source}/" == "${state}/"* ]]; then
+    echo "error: container mount ${source} exposes proxy state ${state}" >&2
+    exit 1
+  fi
+}
 
 # Hosts each provider needs. Used for both API-key env vars and OAuth entries
 # found in auth.json. Keep in sync with PI_ENV_VARS in _docker_flags.
@@ -110,7 +138,7 @@ _pi_egress_default_hosts() {
 # rules.allow / rules.deny and are never touched.
 egress_write_config() {
   local mode="$1"
-  mkdir -p "${PI_EGRESS_DIR}/pending" "${PI_EGRESS_DIR}/decisions"
+  egress_init
   # The state dir holds the interception CA key and real secret values.
   chmod 700 "${PI_EGRESS_DIR}"
   touch "${PI_EGRESS_DIR}/rules.allow" "${PI_EGRESS_DIR}/rules.deny"
@@ -123,7 +151,7 @@ egress_write_config() {
     if [[ -n "${PI_EGRESS_ALLOW_PRIVATE:-}" ]]; then
       echo "allow-private=1"
     fi
-    if [[ -n "${PI_EGRESS_RECORD:-}" ]]; then
+    if [[ "${PI_EGRESS_RECORD:-0}" == "1" ]]; then
       echo "record=1"
     fi
     # PI_EGRESS_INSPECT: extra hosts to TLS-intercept (pattern list, or
@@ -156,7 +184,8 @@ egress_prepare_secrets() {
         echo "warning: egress secret '${name}' has a rule but is not set in the environment — skipping" >&2
         continue
       fi
-      placeholder="pi-secret-${name}-$(head -c8 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+      placeholder=$(awk -F '\t' -v name="${name}" '$1 == name {print $2}' "${out}" 2>/dev/null || true)
+      placeholder="${placeholder:-pi-secret-${name}-$(head -c8 /dev/urandom | od -An -tx1 | tr -d ' \n')}"
       printf '%s\t%s\t%s\n' "${name}" "${placeholder}" "${value}" >> "${tmp}"
       PI_EGRESS_SECRET_ENV+=("--env" "${name}=${placeholder}")
       PI_EGRESS_SECRETS_ACTIVE=$((PI_EGRESS_SECRETS_ACTIVE + 1))
@@ -183,10 +212,12 @@ egress_ensure_proxy() {
 
   if [[ "${state}" == "true" ]]; then
     # Restart the sidecar if pi:build produced a newer proxy image.
-    local running_image current_image
+    local running_image current_image running_dir running_port
     running_image=$("${DOCKER_CMD}" inspect -f '{{.Image}}' "${PI_EGRESS_PROXY}")
     current_image=$("${DOCKER_CMD}" image inspect -f '{{.Id}}' "${PI_PROXY_IMAGE}")
-    if [[ "${running_image}" != "${current_image}" ]]; then
+    running_dir=$("${DOCKER_CMD}" inspect -f '{{range .Mounts}}{{if eq .Destination "/egress"}}{{.Source}}{{end}}{{end}}' "${PI_EGRESS_PROXY}")
+    running_port=$("${DOCKER_CMD}" port "${PI_EGRESS_PROXY}" 8081/tcp 2>/dev/null || true)
+    if [[ "${running_image}" != "${current_image}" || "${running_dir}" != "${PI_EGRESS_DIR}" || "${running_port}" != "127.0.0.1:${PI_EGRESS_WEB_PORT}" ]]; then
       "${DOCKER_CMD}" rm -f "${PI_EGRESS_PROXY}" > /dev/null
       state=absent
     fi
@@ -196,6 +227,7 @@ egress_ensure_proxy() {
   fi
 
   if [[ "${state}" == "absent" ]]; then
+    : > "${PI_EGRESS_DIR}/web-url"
     local run_flags=(
       "--detach"
       "--name" "${PI_EGRESS_PROXY}"
@@ -203,6 +235,7 @@ egress_ensure_proxy() {
       "--cap-drop=ALL"
       "--security-opt=no-new-privileges"
       "--network" "${PI_EGRESS_NET_EXTERNAL}"
+      "--publish" "127.0.0.1:${PI_EGRESS_WEB_PORT}:8081"
       # :z — the state dir is dedicated to the sidecar, so an SELinux shared
       # relabel is safe and required for rootless podman on Fedora; other
       # runtimes ignore it.
@@ -237,4 +270,10 @@ egress_ensure_proxy() {
     echo "       check '${DOCKER_CMD} logs ${PI_EGRESS_PROXY}'" >&2
     exit 1
   fi
+  for _i in $(seq 1 100); do
+    [[ -s "${PI_EGRESS_DIR}/web-url" ]] && return
+    sleep 0.2
+  done
+  echo "error: proxy web interface did not become ready" >&2
+  exit 1
 }

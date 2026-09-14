@@ -4,6 +4,11 @@
 #MISE dir="{{cwd}}"
 set -euo pipefail
 
+# An explicitly empty PI_EGRESS disables filtering; 0 disables recording.
+PI_EGRESS="${PI_EGRESS-interactive}"
+PI_EGRESS_RECORD="${PI_EGRESS_RECORD-1}"
+PI_EGRESS_INSPECT="${PI_EGRESS_INSPECT-all}"
+
 # shellcheck source=tasks/pi/_docker_flags
 source "$(dirname "$0")/_docker_flags"
 

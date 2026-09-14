@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-#MISE description="Manage egress filtering: watch approval requests, allow/deny hosts, list rules, status, stop"
+#MISE description="Manage egress filtering and open live traffic / browser approvals"
+#MISE raw=true
 set -euo pipefail
 
 # shellcheck source=tasks/pi/_runtime
@@ -22,14 +23,15 @@ Commands:
                      Scope secret $NAME to hosts (and optionally methods);
                      the container only ever sees a placeholder
   secrets remove <NAME>
-  web                Inspect recorded flows in mitmweb (record with
-                     PI_EGRESS_RECORD=1; secrets appear as placeholders)
+  web                Open live traffic and connection approvals in the browser
+  web --file <path>   Inspect a historical recording (separate viewer, port 8082)
   status             Show proxy container, networks, and recent decisions
   stop               Stop and remove the proxy sidecar
 EOF
 }
 
 rule_add() {
+  egress_init
   local file="${PI_EGRESS_DIR}/rules.$1" pattern="$2"
   mkdir -p "${PI_EGRESS_DIR}"
   touch "${file}"
@@ -52,6 +54,7 @@ print_rules_file() {
 }
 
 cmd_watch() {
+  egress_init
   mkdir -p "${PI_EGRESS_DIR}/pending" "${PI_EGRESS_DIR}/decisions"
   echo "Watching for egress approval requests in ${PI_EGRESS_DIR}/pending"
   echo "Requests are denied by default after the proxy timeout. Ctrl-C to stop."
@@ -108,6 +111,7 @@ cmd_list() {
 }
 
 cmd_secrets() {
+  egress_init
   local rules="${PI_EGRESS_DIR}/secrets.rules"
   local sub="${1:-list}"
   [[ $# -gt 0 ]] && shift
@@ -159,15 +163,34 @@ cmd_secrets() {
 }
 
 cmd_web() {
-  local flows="${PI_EGRESS_DIR}/flows.mitm"
+  if [[ "${1:-}" != "--file" ]]; then
+    egress_init
+    if [[ ! -f "${PI_EGRESS_DIR}/config" ]]; then
+      PI_EGRESS_RECORD="${PI_EGRESS_RECORD-1}"
+      PI_EGRESS_INSPECT="${PI_EGRESS_INSPECT-all}"
+      egress_write_config "${PI_EGRESS:-interactive}"
+      egress_prepare_secrets
+    fi
+    egress_ensure_proxy
+    local url
+    url=$(sed "s|http://[^/]*/|http://127.0.0.1:${PI_EGRESS_WEB_PORT}/|" "${PI_EGRESS_DIR}/web-url")
+    echo "${url}"
+    if command -v open > /dev/null; then
+      open "${url}"
+    elif command -v xdg-open > /dev/null; then
+      xdg-open "${url}" > /dev/null 2>&1 &
+    fi
+    return
+  fi
+  local flows="${2:?usage: pi:egress web --file <path>}"
+  flows="$(cd "$(dirname "${flows}")" && pwd)/$(basename "${flows}")"
   if [[ ! -s "${flows}" ]]; then
     echo "no recorded flows at ${flows}" >&2
-    echo "record a session first: PI_EGRESS=allowlist PI_EGRESS_RECORD=1 mise run pi" >&2
     exit 1
   fi
   "${DOCKER_CMD}" image inspect "${PI_PROXY_IMAGE}" > /dev/null 2>&1 || mise run pi:build
-  echo "Recorded flows contain placeholders only — secret values are redacted."
-  echo "Open the URL printed below, replacing 0.0.0.0 with 127.0.0.1. Ctrl-C to stop."
+  echo "Recordings may contain sensitive request/response bodies."
+  echo "Open the URL printed below at 127.0.0.1:8082. Ctrl-C to stop."
   # Only the flows file is mounted (read-only) — not the state dir, which
   # holds the CA key and secret values. The web UI is published on the host
   # loopback only; the pi container (internal network) cannot reach it.
@@ -176,7 +199,7 @@ cmd_web() {
     "--user" "$(id -u):$(id -g)"
     "--cap-drop=ALL"
     "--security-opt=no-new-privileges"
-    "--publish" "127.0.0.1:8081:8081"
+    "--publish" "127.0.0.1:8082:8081"
     "--volume" "${flows}:/flows.mitm:ro"
     "--entrypoint" "mitmweb"
   )
@@ -237,7 +260,7 @@ case "${command}" in
     ;;
   list)    cmd_list ;;
   secrets) cmd_secrets "$@" ;;
-  web)     cmd_web ;;
+  web)     cmd_web "$@" ;;
   status)  cmd_status ;;
   stop)    cmd_stop ;;
   ""|help|-h|--help) usage ;;

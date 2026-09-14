@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pi network approvals</title>
+<style>
+  :root { color-scheme: light dark; font: 16px system-ui, sans-serif; }
+  body { max-width: 64rem; margin: 3rem auto; padding: 0 1.5rem; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+  h1 { font-size: 1.6rem; } h2 { font: 600 1.1rem ui-monospace, monospace; overflow-wrap: anywhere; }
+  article { border: 1px solid #888; border-radius: .5rem; padding: 1rem; margin: 1rem 0; }
+  button, header a { font: inherit; padding: .6rem .8rem; margin: .3rem .3rem .3rem 0; }
+  button { cursor: pointer; } button:focus-visible, a:focus-visible { outline: 3px solid #5987ed; }
+  #error { color: light-dark(#a11616, #ffaaaa); }
+</style>
+<body data-xsrf="XSRF_TOKEN">
+<header><h1>Pi network approvals</h1><a href="/" target="_blank" rel="noopener">Open live traffic ↗</a></header>
+<p id="status" role="status">Connecting…</p>
+<p>Unanswered requests are denied when their timer expires. Session decisions last until the shared proxy stops;
+  “Always” decisions persist for this host and port. All Pi shells share this proxy.</p>
+<p id="error" role="alert"></p>
+<p id="empty">No requests waiting for approval.</p>
+<main id="requests"></main>
+<p>Live traffic supports inspecting, editing and resuming intercepted requests. Configured secrets and common
+  credential headers are redacted in the display and recordings; bodies may still contain sensitive data.</p>
+<script src="/egress/app.js" defer></script>
+</body>
+</html>

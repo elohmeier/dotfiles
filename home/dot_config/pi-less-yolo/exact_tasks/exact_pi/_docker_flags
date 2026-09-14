@@ -113,6 +113,9 @@ if [[ -n "${PI_EGRESS:-}" ]]; then
 
   # shellcheck source=tasks/pi/_egress
   source "$(dirname "${BASH_SOURCE[0]}")/_egress"
+  egress_init
+  egress_check_mount "$(pwd)"
+  egress_check_mount "${HOME}/.pi/agent"
   egress_write_config "${PI_EGRESS}"
   egress_prepare_secrets
   egress_ensure_proxy
@@ -170,6 +173,7 @@ if [[ -n "${PI_EXTRA_MOUNTS:-}" ]]; then
       _pi_tgt="${BASH_REMATCH[2]}"
       _pi_mode="${BASH_REMATCH[4]:-rw}"
       if [[ -e "${_pi_src}" ]]; then
+        [[ -z "${PI_EGRESS:-}" ]] || egress_check_mount "${_pi_src}"
         DOCKER_FLAGS+=("--volume" "${_pi_src}:${_pi_tgt}:${_pi_mode}")
       else
         echo "warning: PI_EXTRA_MOUNTS source '${_pi_src}' not found — skipping mount" >&2

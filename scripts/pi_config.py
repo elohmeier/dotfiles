@@ -60,7 +60,12 @@ SETTINGS = [
         "bool",
     ),
     Setting("PI_EGRESS_INSPECT", "Hosts to TLS-intercept: patterns, or 'all'"),
-    Setting("PI_EGRESS_RECORD", "Record flows for 'mise run pi:egress web'", "bool"),
+    Setting(
+        "PI_EGRESS_RECORD",
+        "Record flows (pi:shell defaults to 1)",
+        "choice",
+        ["1", "0"],
+    ),
     Setting("PI_EGRESS_TIMEOUT", "Interactive approval timeout in seconds, e.g. 60"),
     Setting("PI_SSH_AGENT", "Forward the SSH agent into the container", "bool"),
     Setting("PI_LOCAL_MODELS", "Host networking for local model servers", "bool"),
