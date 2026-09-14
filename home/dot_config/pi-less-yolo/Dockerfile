@@ -1,9 +1,26 @@
 # syntax=docker/dockerfile:1
 
-FROM cgr.dev/chainguard/node:latest-dev@sha256:6dd22b58ad748bd8cf94e8f922388f0b3d78636d8105967077429a3944f9ed75
+# BASE_IMAGE: set via PI_BASE_IMAGE to pull the base from a registry mirror.
+ARG BASE_IMAGE=cgr.dev/chainguard/node:latest-dev@sha256:6dd22b58ad748bd8cf94e8f922388f0b3d78636d8105967077429a3944f9ed75
+FROM ${BASE_IMAGE}
+
+USER root
+
+# Extra CA bundle for TLS-intercepting corporate proxies (built with
+# PI_CA_CERT=/path/to/ca.pem). Runs before any download so apk/curl/npm/uv see
+# it. No secret mounted -> no-op. Pointing NODE_EXTRA_CA_CERTS and
+# SSL_CERT_FILE at the system bundle is a no-op too when nothing was appended:
+# it is the same Mozilla root set Node and Python ship with.
+ARG CA_ID=none
+ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt \
+    SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+RUN --mount=type=secret,id=extra_ca \
+    if [ -s /run/secrets/extra_ca ]; then \
+      echo "# pi-less-yolo extra CA ${CA_ID}" >> /etc/ssl/certs/ca-certificates.crt \
+      && cat /run/secrets/extra_ca >> /etc/ssl/certs/ca-certificates.crt; \
+    fi
 
 # openssh-client: ssh binary for git-over-SSH (PI_SSH_AGENT=1) and ssh-add.
-USER root
 RUN apk add --no-cache \
         curl \
         ca-certificates \

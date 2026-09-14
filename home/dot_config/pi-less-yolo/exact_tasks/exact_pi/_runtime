@@ -1,7 +1,9 @@
 # Detects the container runtime and defines image names. Source this file; do
 # not execute directly. Split out of _docker_flags so tasks that only need the
 # runtime (e.g. pi:egress status/stop) can source it without _docker_flags'
-# side effects (image auto-build, directory creation).
+# side effects (image auto-build, directory creation). The credential fallback
+# below only touches the filesystem on hosts where the configured docker
+# credential helper is unusable.
 
 PI_IMAGE="pi-less-yolo:latest"
 PI_PROXY_IMAGE="pi-less-yolo-proxy:latest"
@@ -19,3 +21,42 @@ else
     DOCKER_CMD="podman"
   fi
 fi
+
+# Docker Desktop's WSL integration writes "credsStore": "desktop.exe" into
+# ~/.docker/config.json. With Windows interop disabled (corporate /etc/wsl.conf,
+# or binfmt_misc without a WSLInterop handler) every registry resolve dies with
+#   error getting credentials - err: fork/exec
+#   /usr/bin/docker-credential-desktop.exe: exec format error
+# Exit 126/127 means the helper cannot be executed at all — as opposed to
+# running and reporting an empty store — so swap in a helper-free config.
+# Public images still resolve anonymously; everything else in the config dir
+# (contexts/, buildx state, cli-plugins) is symlinked through so the active
+# context is preserved.
+pi_docker_credential_fallback() {
+  local src="${DOCKER_CONFIG:-${HOME}/.docker}" helper out rc=0
+
+  helper=$(sed -n 's/.*"credsStore"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+    "${src}/config.json" 2>/dev/null | head -1)
+  [[ -n "${helper}" ]] || return 0
+  "docker-credential-${helper}" list < /dev/null > /dev/null 2>&1 || rc=$?
+  (( rc == 126 || rc == 127 )) || return 0
+
+  out="${XDG_CACHE_HOME:-${HOME}/.cache}/pi-less-yolo/docker"
+  mkdir -p "${out}"
+  find "${src}" -mindepth 1 -maxdepth 1 ! -name config.json \
+    -exec ln -sfn {} "${out}/" \;
+  # Without python3, keep at least the active context so docker still talks to
+  # the same daemon; auths/proxies/plugins are dropped in that case.
+  python3 -c 'import json,sys
+c = json.load(open(sys.argv[1]))
+c.pop("credsStore", None)
+c.pop("credHelpers", None)
+json.dump(c, open(sys.argv[2], "w"))' "${src}/config.json" "${out}/config.json" 2>/dev/null ||
+    sed -n 's/.*"currentContext"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/{"currentContext": "\1"}/p' \
+      "${src}/config.json" > "${out}/config.json"
+  [[ -s "${out}/config.json" ]] || echo '{}' > "${out}/config.json"
+  export DOCKER_CONFIG="${out}"
+
+  echo "warning: docker-credential-${helper} cannot be executed (WSL interop disabled?) — using ${out}/config.json without credential helpers; registry logins stored in that helper are unavailable" >&2
+}
+pi_docker_credential_fallback

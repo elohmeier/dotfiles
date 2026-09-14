@@ -57,6 +57,50 @@ else
   fail "${DOCKER_CMD} daemon not running — start Docker Desktop, dockerd, or the Podman socket"
 fi
 
+# --- docker credential helper -----------------------------------------------
+# A credsStore the CLI cannot exec breaks every registry resolve, e.g. Docker
+# Desktop's desktop.exe helper in a WSL distro that cannot run Windows binaries.
+CRED_HELPER=$(sed -n 's/.*"credsStore"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+  "${DOCKER_CONFIG:-${HOME}/.docker}/config.json" 2>/dev/null | head -1)
+if [[ -n "${CRED_HELPER}" ]]; then
+  CRED_RC=0
+  "docker-credential-${CRED_HELPER}" list < /dev/null > /dev/null 2>&1 || CRED_RC=$?
+  if (( CRED_RC == 126 || CRED_RC == 127 )); then
+    warn "docker-credential-${CRED_HELPER} cannot be executed — image resolves fail with 'error getting credentials'; pi tasks fall back to a helper-free docker config (registry logins in that helper stay unavailable to them)"
+    if [[ -n "${WSL_DISTRO_NAME:-}" && ! -e /proc/sys/fs/binfmt_misc/WSLInterop ]]; then
+      # systemd-binfmt flushes binfmt_misc on boot, dropping the WSLInterop
+      # handler that /init registers — so .exe helpers stop working even
+      # though /etc/wsl.conf never disabled interop.
+      info "  fix: echo ':WSLInterop:M::MZ::/init:PF' | sudo tee /etc/binfmt.d/WSLInterop.conf && sudo systemctl restart systemd-binfmt"
+    else
+      info "  fix: remove \"credsStore\" from ~/.docker/config.json, or make the helper executable"
+    fi
+  else
+    pass "docker credential helper ${CRED_HELPER} usable"
+  fi
+fi
+
+# --- WSL --------------------------------------------------------------------
+if [[ -n "${WSL_DISTRO_NAME:-}" ]]; then
+  info "WSL distro ${WSL_DISTRO_NAME}"
+  if [[ "$(pwd)" == /mnt/* ]]; then
+    warn "working directory is on a Windows drive ($(pwd)) — bind mounts there are slow and lose Linux file modes; keep repos under the distro's own filesystem"
+  fi
+fi
+
+# --- container DNS ----------------------------------------------------------
+# A dockerd that sees only loopback resolvers (systemd-resolved) hands
+# containers 8.8.8.8, which corporate networks block. Docker Desktop resolves
+# in its own VM and is unaffected.
+if [[ "$(uname -s)" == "Linux" ]] &&
+   ! "${DOCKER_CMD}" info --format '{{.OperatingSystem}}' 2>/dev/null | grep -q "Docker Desktop"; then
+  NAMESERVERS=$(awk '/^nameserver/ {print $2}' /etc/resolv.conf 2>/dev/null)
+  ROUTABLE_NS=$(awk '/^nameserver/ && $2 !~ /^127\./ {print $2}' /etc/resolv.conf 2>/dev/null)
+  if [[ -n "${NAMESERVERS}" && -z "${ROUTABLE_NS}" ]]; then
+    warn "/etc/resolv.conf lists only loopback nameservers (${NAMESERVERS//$'\n'/, }) — containers fall back to 8.8.8.8. Add { \"dns\": [\"<upstream>\"] } to /etc/docker/daemon.json (upstream: resolvectl status | grep 'DNS Server') and restart dockerd"
+  fi
+fi
+
 # --- image ------------------------------------------------------------------
 if "${DOCKER_CMD}" image inspect "pi-less-yolo:latest" > /dev/null 2>&1; then
   pass "image pi-less-yolo:latest exists"

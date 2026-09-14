@@ -4,6 +4,12 @@ set -euo pipefail
 
 REPO_ROOT="${MISE_TASK_DIR}/../.."
 
+# Defines DOCKER_CMD and, where the host's docker credential helper cannot be
+# executed (Docker Desktop's desktop.exe helper under WSL without interop),
+# redirects DOCKER_CONFIG at a helper-free copy.
+# shellcheck source=tasks/pi/_runtime
+source "${MISE_TASK_DIR}/_runtime"
+
 # --network=host is only needed on Linux to work around systemd-resolved
 # binding to 127.0.0.53, which is unreachable from Docker's default bridge
 # network. Docker Desktop on macOS handles DNS natively without it.
@@ -12,11 +18,37 @@ REPO_ROOT="${MISE_TASK_DIR}/../.."
 #   1. Find your upstream nameserver:  resolvectl status | grep "DNS Server"
 #   2. Add to /etc/docker/daemon.json: { "dns": ["<upstream-ip>"] }
 #   3. Restart dockerd and remove the --network=host branch below.
-DOCKER_CMD="${PI_CONTAINER_RUNTIME:-docker}"
 BUILD_FLAGS=()
 [[ "$(uname -s)" == "Linux" ]] && BUILD_FLAGS+=("--network=host")
 
-"${DOCKER_CMD}" build "${BUILD_FLAGS[@]}" \
+# Corporate networks: forward the host's proxy settings as predefined build
+# args (BuildKit keeps those out of the image config) so apk/curl/npm/uv can
+# reach the internet from inside the build.
+for _pi_var in http_proxy https_proxy no_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY; do
+  [[ -n "${!_pi_var:-}" ]] && BUILD_FLAGS+=("--build-arg" "${_pi_var}=${!_pi_var}")
+done
+
+# PI_BUILDKIT_SYNTAX: registry path of the docker/dockerfile frontend that the
+# `# syntax=` line otherwise pulls from docker.io — point it at a mirror when
+# docker.io is unreachable.
+[[ -n "${PI_BUILDKIT_SYNTAX:-}" ]] && BUILD_FLAGS+=("--build-arg" "BUILDKIT_SYNTAX=${PI_BUILDKIT_SYNTAX}")
+
+# Flags for the pi image only (the proxy image consumes neither).
+#   PI_CA_CERT     PEM bundle of a TLS-intercepting proxy's CA, appended to the
+#                  image trust store. Passed as a secret so it stays out of the
+#                  build context; CA_ID fingerprints it because secret contents
+#                  are not part of the layer cache key.
+#   PI_BASE_IMAGE  replacement for the Chainguard base, e.g. a mirrored copy.
+IMAGE_FLAGS=()
+if [[ -n "${PI_CA_CERT:-}" ]]; then
+  IMAGE_FLAGS+=(
+    "--secret" "id=extra_ca,src=${PI_CA_CERT}"
+    "--build-arg" "CA_ID=$(cksum < "${PI_CA_CERT}" | tr -d ' ')"
+  )
+fi
+[[ -n "${PI_BASE_IMAGE:-}" ]] && IMAGE_FLAGS+=("--build-arg" "BASE_IMAGE=${PI_BASE_IMAGE}")
+
+"${DOCKER_CMD}" build "${BUILD_FLAGS[@]}" ${IMAGE_FLAGS[@]+"${IMAGE_FLAGS[@]}"} \
   --secret "id=mise_asc,src=${REPO_ROOT}/mise-release.asc" \
   -f "${REPO_ROOT}/Dockerfile" \
   -t "pi-less-yolo:latest" \
