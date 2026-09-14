@@ -94,6 +94,17 @@ end)
 -- ==========================================================================
 
 Config.now_if_args(function()
+  -- Parsers not shipped by nvim-treesitter must be registered on every
+  -- `User TSUpdate`, since the parser table is reloaded on each update.
+  Config.new_autocmd("User", "TSUpdate", function()
+    require("nvim-treesitter.parsers").rhai = {
+      install_info = {
+        url = "https://github.com/elkowar/tree-sitter-rhai",
+        revision = "4ac7384d487ffcb54e746ef1569585a749370c5b",
+      },
+    }
+  end, "Register custom Treesitter parsers")
+
   add({
     "https://github.com/nvim-treesitter/nvim-treesitter",
   })
@@ -122,6 +133,7 @@ Config.now_if_args(function()
     "python",
     "readline",
     "regex",
+    "rhai",
     "ruby",
     "rust",
     "svelte",

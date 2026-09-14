@@ -1,4 +1,4 @@
-vim.filetype.add({ extension = { bean = "beancount" } })
+vim.filetype.add({ extension = { bean = "beancount", rhai = "rhai" } })
 
 -- Autocmd to set filetype to helm for Helm chart files
 local helm_ft_group = vim.api.nvim_create_augroup("helm_filetype_detection", { clear = true })
