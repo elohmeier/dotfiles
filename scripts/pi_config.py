@@ -30,18 +30,44 @@ class Setting:
     choices: list[str] = field(default_factory=list)
 
 
+PROVIDERS = {
+    "ANTHROPIC_API_KEY": "Anthropic",
+    "AZURE_OPENAI_API_KEY": "Azure OpenAI",
+    "OPENAI_API_KEY": "OpenAI",
+    "GEMINI_API_KEY": "Gemini",
+    "MISTRAL_API_KEY": "Mistral",
+    "GROQ_API_KEY": "Groq",
+    "CEREBRAS_API_KEY": "Cerebras",
+    "XAI_API_KEY": "xAI",
+    "OPENROUTER_API_KEY": "OpenRouter",
+    "AI_GATEWAY_API_KEY": "Vercel AI Gateway",
+    "ZAI_API_KEY": "Z.ai",
+    "OPENCODE_API_KEY": "opencode",
+    "KIMI_API_KEY": "Kimi",
+    "MINIMAX_API_KEY": "MiniMax",
+    "MINIMAX_CN_API_KEY": "MiniMax CN",
+}
+
 SETTINGS = [
     Setting(
         "PI_EGRESS", "Egress filtering mode", "choice", ["allowlist", "interactive"]
     ),
+    Setting("PI_EGRESS_ALLOW", "Extra allowed hosts: comma- or space-separated"),
+    Setting("PI_EGRESS_ALLOW_PRIVATE", "Allow egress to private/loopback IPs", "bool"),
     Setting(
         "PI_EGRESS_BLOCK_DNS",
         "Route DNS through the egress proxy (docker only)",
         "bool",
     ),
+    Setting("PI_EGRESS_INSPECT", "Hosts to TLS-intercept: patterns, or 'all'"),
+    Setting("PI_EGRESS_RECORD", "Record flows for 'mise run pi:egress web'", "bool"),
+    Setting("PI_EGRESS_TIMEOUT", "Interactive approval timeout in seconds, e.g. 60"),
     Setting("PI_SSH_AGENT", "Forward the SSH agent into the container", "bool"),
     Setting("PI_LOCAL_MODELS", "Host networking for local model servers", "bool"),
     Setting("PI_NO_GITCONFIG", "Do not mount ~/.gitconfig", "bool"),
+    Setting(
+        "PI_NO_CONTAINER_PROMPT", "Do not append the sandbox system prompt", "bool"
+    ),
     Setting("PI_MEMORY", "Memory limit, e.g. 4g"),
     Setting("PI_CPUS", "CPU limit, e.g. 2"),
     Setting("PI_PIDS_LIMIT", "Max processes, e.g. 512"),
@@ -49,10 +75,14 @@ SETTINGS = [
     Setting(
         "PI_CONTAINER_RUNTIME", "Container runtime", "choice", ["docker", "podman"]
     ),
-    Setting("ANTHROPIC_API_KEY", "Anthropic API key", "secret"),
-    Setting("OPENAI_API_KEY", "OpenAI API key", "secret"),
-    Setting("GEMINI_API_KEY", "Gemini API key", "secret"),
-    Setting("OPENROUTER_API_KEY", "OpenRouter API key", "secret"),
+    Setting(
+        "PI_CACHE_RETENTION",
+        "Extended prompt cache (Anthropic 1h, OpenAI 24h)",
+        "choice",
+        ["long"],
+    ),
+    Setting("PI_SKIP_VERSION_CHECK", "Skip the pi version check at startup", "bool"),
+    *(Setting(var, f"{name} API key", "secret") for var, name in PROVIDERS.items()),
 ]
 
 
