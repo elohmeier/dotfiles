@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+#MISE description="Check host prerequisites for the Freifunk gateway"
+set -euo pipefail
+
+source "${MISE_TASK_DIR}/_runtime"
+profile_file="${MISE_TASK_DIR}/../../../ff-egress/profiles/${FF_PROFILE}/profile"
+# shellcheck source=/dev/null
+source "${profile_file}"
+[[ "$(uname -s)" == "Linux" ]] || {
+	echo "Freifunk container networking requires Linux" >&2
+	exit 1
+}
+if [[ "${FF_PROVIDER}" == "fastd" ]]; then
+	[[ -c /dev/net/tun ]] || { echo "/dev/net/tun is unavailable" >&2; exit 1; }
+	grep -q '^batman_adv ' /proc/modules || { echo "load batman-adv with: sudo modprobe batman-adv" >&2; exit 1; }
+elif [[ "${FF_PROVIDER}" == "parker" ]]; then
+	modinfo wireguard >/dev/null
+else
+	grep -q '^batman_adv ' /proc/modules
+	for module in l2tp_core l2tp_netlink l2tp_eth; do
+		grep -q "^${module} " /proc/modules || { echo "load L2TP with: sudo modprobe -a l2tp_core l2tp_netlink l2tp_eth" >&2; exit 1; }
+	done
+fi
+command -v "${FF_RUNTIME}" >/dev/null
+echo "${FF_RUNTIME} and ${FF_PROVIDER} prerequisites are ready"

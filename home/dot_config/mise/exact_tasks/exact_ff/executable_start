@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+#MISE description="Start the Freifunk gateway"
+set -euo pipefail
+
+source "${MISE_TASK_DIR}/_runtime"
+ff_start
+echo "${FF_GATEWAY_CONTAINER} is ready"

@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+#MISE description="Stop the Freifunk gateway"
+set -euo pipefail
+
+source "${MISE_TASK_DIR}/_runtime"
+"${FF_RUNTIME}" rm -f "${FF_GATEWAY_CONTAINER}" >/dev/null 2>&1 || true

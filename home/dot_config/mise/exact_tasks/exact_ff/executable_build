@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+#MISE description="Build the Freifunk gateway image"
+set -euo pipefail
+
+source "${MISE_TASK_DIR}/_runtime"
+context="${MISE_TASK_DIR}/../../../ff-egress"
+"${FF_RUNTIME}" build -t "${FF_GATEWAY_IMAGE}" "${context}"

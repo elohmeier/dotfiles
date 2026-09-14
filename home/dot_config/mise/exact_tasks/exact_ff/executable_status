@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+#MISE description="Show Freifunk tunnel, mesh, addresses, and routes"
+set -euo pipefail
+
+source "${MISE_TASK_DIR}/_runtime"
+"${FF_RUNTIME}" exec "${FF_GATEWAY_CONTAINER}" bash -c '
+  source "/profiles/${FF_PROFILE}/profile"
+  ip route show
+  ip -6 route show
+  if [[ "${FF_PROVIDER}" != "parker" ]]; then
+    ip -brief address show "${FF_CLIENT_INTERFACE}"
+    batctl meshif "${FF_MESH_INTERFACE}" neighbors
+    batctl meshif "${FF_MESH_INTERFACE}" gateways
+  else
+    wg show
+    echo "selected: $(cat "/state/${FF_PROFILE}/selected")"
+  fi
+'

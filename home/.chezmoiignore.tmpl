@@ -9,6 +9,8 @@ Applications/Firefox.app
 {{ if ne .chezmoi.os "linux" }}
 .chezmoiscripts/linux/**
 .config/systemd/**
+.config/ff-egress/**
+.config/mise/tasks/ff/**
 .config/fish/completions/mount-media.fish
 .config/fish/completions/umount-media.fish
 {{ end -}}

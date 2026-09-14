@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+
+FF_PROFILE="${FF_PROFILE:-ffhb}"
+FF_GATEWAY_IMAGE="${FF_GATEWAY_IMAGE:-ff-egress-gateway:latest}"
+FF_GATEWAY_CONTAINER="${FF_GATEWAY_CONTAINER:-ff-egress-${FF_PROFILE}}"
+FF_STATE_DIR="${FF_STATE_DIR:-${HOME}/.local/state/ff-egress}"
+
+if [[ -n "${FF_CONTAINER_RUNTIME:-}" ]]; then
+	FF_RUNTIME="${FF_CONTAINER_RUNTIME}"
+elif command -v podman >/dev/null; then
+	FF_RUNTIME="podman"
+else
+	FF_RUNTIME="docker"
+fi
+
+ff_start() {
+	local container_image image_id state running
+	local run_flags=(
+		--detach
+		--name "${FF_GATEWAY_CONTAINER}"
+		--entrypoint /usr/local/bin/entrypoint.sh
+		--cap-drop=ALL
+		--cap-add=NET_ADMIN
+		--cap-add=NET_RAW
+		--security-opt=no-new-privileges
+		--device=/dev/net/tun
+		--env "FF_PROFILE=${FF_PROFILE}"
+		--env "FF_CONCENTRATOR=${FF_CONCENTRATOR:-}"
+		--volume "${FF_STATE_DIR}:/state:z"
+	)
+	[[ "${FF_RUNTIME}" == "podman" ]] && run_flags+=(--security-opt=label=disable)
+	state="${FF_STATE_DIR}/${FF_PROFILE}"
+	mkdir -p "${state}"
+	chmod 700 "${FF_STATE_DIR}" "${state}"
+
+	"${FF_RUNTIME}" image inspect "${FF_GATEWAY_IMAGE}" >/dev/null 2>&1 || mise run ff:build
+	running=$("${FF_RUNTIME}" inspect -f '{{.State.Running}}' "${FF_GATEWAY_CONTAINER}" 2>/dev/null || true)
+	image_id=$("${FF_RUNTIME}" image inspect -f '{{.Id}}' "${FF_GATEWAY_IMAGE}")
+	container_image=$("${FF_RUNTIME}" inspect -f '{{.Image}}' "${FF_GATEWAY_CONTAINER}" 2>/dev/null || true)
+	if [[ -n "${container_image}" && "${container_image}" != "${image_id}" ]]; then
+		"${FF_RUNTIME}" rm -f "${FF_GATEWAY_CONTAINER}" >/dev/null
+		running=""
+	fi
+	[[ "${running}" == "true" ]] || {
+		[[ -z "${running}" ]] || "${FF_RUNTIME}" rm -f "${FF_GATEWAY_CONTAINER}" >/dev/null
+		"${FF_RUNTIME}" run "${run_flags[@]}" "${FF_GATEWAY_IMAGE}" >/dev/null
+	}
+
+	local i
+	for ((i = 0; i < 1800; i++)); do
+		"${FF_RUNTIME}" exec "${FF_GATEWAY_CONTAINER}" test -e /run/ff-egress-ready 2>/dev/null && return
+		if [[ "$("${FF_RUNTIME}" inspect -f '{{.State.Running}}' "${FF_GATEWAY_CONTAINER}" 2>/dev/null || true)" != "true" ]]; then
+			"${FF_RUNTIME}" logs "${FF_GATEWAY_CONTAINER}" >&2
+			return 1
+		fi
+		sleep 0.1
+	done
+	echo "Freifunk gateway did not become ready" >&2
+	"${FF_RUNTIME}" logs "${FF_GATEWAY_CONTAINER}" >&2
+	return 1
+}

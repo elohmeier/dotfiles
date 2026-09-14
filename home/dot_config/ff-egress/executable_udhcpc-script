@@ -1,0 +1,16 @@
+#!/usr/bin/env sh
+# shellcheck disable=SC2154 # udhcpc supplies interface, ip, mask, router, and dns
+set -eu
+
+case "$1" in
+deconfig)
+	ip address flush dev "$interface" scope global
+	;;
+bound | renew)
+	ip address flush dev "$interface" scope global
+	ip address add "$ip/${mask:-32}" dev "$interface"
+	gateway=${router%% *}
+	[ -z "$gateway" ] || ip route replace default via "$gateway" dev "$interface" metric 10
+	printf '%s\n' "${dns:-}" | tr ' ' '\n' | sed '/^$/d; s/^/nameserver /' >>"/state/${FF_PROFILE}/resolv.conf"
+	;;
+esac

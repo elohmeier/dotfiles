@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+#MISE description="Run a container through a Freifunk gateway; defaults to the ffhb profile"
+#MISE raw=true
+#MISE dir="{{cwd}}"
+set -euo pipefail
+
+source "${MISE_TASK_DIR}/_runtime"
+image="${FF_IMAGE:-${FF_GATEWAY_IMAGE}}"
+
+"${FF_RUNTIME}" image inspect "${image}" >/dev/null 2>&1 || {
+	echo "image is not local: ${image} (pull it before entering the Freifunk network)" >&2
+	exit 1
+}
+ff_start
+
+flags=(
+	--rm
+	--pull=never
+	--interactive
+	--network "container:${FF_GATEWAY_CONTAINER}"
+	--cap-drop=ALL
+	--security-opt=no-new-privileges
+	--user "$(id -u):$(id -g)"
+	--volume "$(pwd):$(pwd):z"
+	--volume "${FF_STATE_DIR}/${FF_PROFILE}/resolv.conf:/etc/resolv.conf:ro,z"
+	--workdir "$(pwd)"
+	--env HOME=/tmp
+)
+[[ -t 0 && -t 1 ]] && flags+=(--tty)
+[[ "${FF_RUNTIME}" == "podman" ]] && flags+=(--userns=keep-id)
+
+"${FF_RUNTIME}" run "${flags[@]}" "${image}" "$@"
