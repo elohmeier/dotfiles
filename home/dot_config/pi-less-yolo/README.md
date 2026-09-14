@@ -59,6 +59,13 @@ is published on host loopback, and requires authentication. Proxy requests
 targeting that administration address are rejected even with an allow rule.
 Do not share the authenticated URL printed by `pi:egress web`.
 
+For corporate upstream certificates, set `PI_CA_CERT` to the trusted PEM CA
+bundle when running `mise run pi:build`. Both images include those CAs; the
+proxy retains mitmproxy's public roots and verifies upstream certificates.
+Rebuild after changing the bundle. A proxy-generated 502 saying “Certificate
+verify failed” indicates missing upstream trust even when curl successfully
+verifies the proxy's interception certificate.
+
 Configured secret values are replaced with placeholders in live displays,
 exports and recordings. Common credential headers, such as Authorization,
 Cookie and X-API-Key, are also masked unless they carry a configured placeholder.

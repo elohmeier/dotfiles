@@ -124,6 +124,28 @@ def test_record_boolean_and_mount_isolation(tmp_path, record):
     assert b"exposes proxy state" in result.stderr
 
 
+def test_build_forwards_ca_to_both_images(tmp_path):
+    runtime = tmp_path / "docker"
+    runtime.write_text('#!/bin/sh\nprintf "%s\\n" "$@" >> "$BUILD_LOG"\n')
+    runtime.chmod(0o755)
+    ca = tmp_path / "ca.pem"
+    ca.write_text("test CA bundle\n")
+    (tmp_path / "config.json").write_text("{}\n")
+    log = tmp_path / "build.log"
+    env = dict(
+        os.environ,
+        PI_CONTAINER_RUNTIME=str(runtime),
+        PI_CA_CERT=str(ca),
+        MISE_TASK_DIR=str(TASKS),
+        DOCKER_CONFIG=str(tmp_path),
+        BUILD_LOG=str(log),
+    )
+    run("bash", str(TASKS / "executable_build"), env=env)
+    arguments = log.read_text().splitlines()
+    assert arguments.count(f"id=extra_ca,src={ca}") == 2
+    assert sum(argument.startswith("CA_ID=") for argument in arguments) == 2
+
+
 @pytest.fixture(scope="module")
 def live(tmp_path_factory):
     image = os.environ.get("PI_EGRESS_TEST_IMAGE")
@@ -132,18 +154,71 @@ def live(tmp_path_factory):
     state = tmp_path_factory.mktemp("pi-egress")
     name = "pi-egress-test-" + uuid.uuid4().hex[:8]
     upstream = name + "-upstream"
+    trusted_image = name + ":trusted"
+    run(
+        "openssl",
+        "req",
+        "-x509",
+        "-newkey",
+        "rsa:2048",
+        "-nodes",
+        "-keyout",
+        str(state / "root.key"),
+        "-out",
+        str(state / "root.pem"),
+        "-subj",
+        "/CN=Pi egress test root",
+        "-days",
+        "1",
+        "-addext",
+        "basicConstraints=critical,CA:TRUE",
+    )
+    run(
+        "openssl",
+        "req",
+        "-new",
+        "-newkey",
+        "rsa:2048",
+        "-nodes",
+        "-keyout",
+        str(state / "server.key"),
+        "-out",
+        str(state / "server.csr"),
+        "-subj",
+        f"/CN={upstream}",
+    )
+    (state / "server.ext").write_text(
+        f"subjectAltName=DNS:{upstream}\nextendedKeyUsage=serverAuth\n"
+    )
+    run(
+        "openssl",
+        "x509",
+        "-req",
+        "-in",
+        str(state / "server.csr"),
+        "-CA",
+        str(state / "root.pem"),
+        "-CAkey",
+        str(state / "root.key"),
+        "-CAcreateserial",
+        "-out",
+        str(state / "server.pem"),
+        "-days",
+        "1",
+        "-extfile",
+        str(state / "server.ext"),
+    )
     (state / "secrets.rules").write_text(
         f"TOKEN hosts={upstream}:8000,{upstream}:8443 methods=GET\n"
     )
     (state / "mitmproxy").mkdir()
-    (state / "mitmproxy/config.yaml").write_text("ssl_insecure: true\n")
     env = dict(
         os.environ,
         PI_EGRESS_DIR=str(state),
         PI_EGRESS_NAME=name,
         PI_EGRESS_SUBNET="10.225.0.0/24",
         PI_EGRESS_PROXY_IP="10.225.0.2",
-        PI_PROXY_IMAGE=image,
+        PI_PROXY_IMAGE=trusted_image,
         DOCKER_CMD="docker",
         PI_EGRESS_WEB_PORT="18081",
         PI_EGRESS_RECORD="1",
@@ -155,6 +230,18 @@ def live(tmp_path_factory):
     proxy = name + "-proxy"
     try:
         run(
+            "docker",
+            "build",
+            "-q",
+            "-t",
+            trusted_image,
+            "--secret",
+            f"id=extra_ca,src={state / 'root.pem'}",
+            "--build-arg",
+            f"CA_ID={name}",
+            str(PROXY),
+        )
+        run(
             "bash",
             "-c",
             'set -euo pipefail; source "$1/_egress"; egress_write_config interactive; egress_prepare_secrets; egress_ensure_proxy',
@@ -163,7 +250,7 @@ def live(tmp_path_factory):
             env=env,
         )
         server = """
-import http.server, json, ssl, subprocess, threading, time
+import http.server, json, ssl, threading, time
 class Echo(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/events":
@@ -184,12 +271,11 @@ class Echo(http.server.BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
-subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", "/tmp/key.pem", "-out", "/tmp/cert.pem", "-subj", "/CN=test", "-days", "1"], check=True, capture_output=True)
 plain = http.server.ThreadingHTTPServer(("0.0.0.0", 8000), Echo)
 threading.Thread(target=plain.serve_forever, daemon=True).start()
 secure = http.server.ThreadingHTTPServer(("0.0.0.0", 8443), Echo)
 context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-context.load_cert_chain("/tmp/cert.pem", "/tmp/key.pem")
+context.load_cert_chain("/tls/server.pem", "/tls/server.key")
 secure.socket = context.wrap_socket(secure.socket, server_side=True)
 secure.serve_forever()
 """
@@ -203,6 +289,10 @@ secure.serve_forever()
             name + "-external",
             "--network-alias",
             "blocked.test",
+            "--volume",
+            f"{state}/server.pem:/tls/server.pem:ro",
+            "--volume",
+            f"{state}/server.key:/tls/server.key:ro",
             "--entrypoint",
             "python",
             image,
@@ -276,6 +366,7 @@ secure.serve_forever()
             subprocess.run(["docker", "rm", "-f", container], capture_output=True)
         for network in (name + "-internal", name + "-external"):
             subprocess.run(["docker", "network", "rm", network], capture_output=True)
+        subprocess.run(["docker", "image", "rm", trusted_image], capture_output=True)
 
 
 def test_web_approval_and_https_recording(live):
@@ -307,6 +398,45 @@ def test_web_approval_and_https_recording(live):
         for flow in flows
     )
     assert b"integration-real-secret" not in (live["state"] / "flows.mitm").read_bytes()
+
+
+def test_upstream_ca_verification(live):
+    client, curl = live["client"], live["curl"]
+    proxy = live["name"] + "-proxy"
+    public_ca = run(
+        "docker",
+        "exec",
+        proxy,
+        "python",
+        "-c",
+        "import certifi; print(certifi.where())",
+    )
+    run(
+        "docker",
+        "exec",
+        proxy,
+        "python",
+        "-c",
+        "import certifi; from pathlib import Path; "
+        "bundle = Path('/etc/pi-egress/upstream-ca.pem').read_bytes(); "
+        "assert bundle.startswith(Path(certifi.where()).read_bytes()); "
+        "assert Path('/egress/root.pem').read_bytes() in bundle",
+    )
+    assert client.get("/options").json()["ssl_insecure"]["value"] is False
+    client.put("/options", json={"ssl_verify_upstream_trusted_ca": public_ca})
+    try:
+        assert "Certificate verify failed" in curl(
+            f"https://{live['upstream']}:8443/untrusted"
+        )
+    finally:
+        client.put(
+            "/options",
+            json={"ssl_verify_upstream_trusted_ca": "/etc/pi-egress/upstream-ca.pem"},
+        )
+    assert (
+        json.loads(curl(f"https://{live['upstream']}:8443/trusted"))["path"]
+        == "/trusted"
+    )
 
 
 def test_live_redaction_and_native_editing(live):

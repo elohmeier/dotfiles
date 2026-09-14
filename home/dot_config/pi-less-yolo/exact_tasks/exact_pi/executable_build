@@ -33,7 +33,7 @@ done
 # docker.io is unreachable.
 [[ -n "${PI_BUILDKIT_SYNTAX:-}" ]] && BUILD_FLAGS+=("--build-arg" "BUILDKIT_SYNTAX=${PI_BUILDKIT_SYNTAX}")
 
-# Flags for the pi image only (the proxy image consumes neither).
+# CA trust is needed by both the Pi image and the intercepting proxy.
 #   PI_CA_CERT     PEM bundle of a TLS-intercepting proxy's CA, appended to the
 #                  image trust store. Passed as a secret so it stays out of the
 #                  build context; CA_ID fingerprints it because secret contents
@@ -43,13 +43,14 @@ done
 #   PI_GITHUB_BASE_URL  mirror for GitHub release downloads (uv and Python).
 #   PI_BASE_REGISTRY  registry the pinned Chainguard base is pulled from.
 #   PI_BASE_IMAGE     replacement for the whole base reference.
-IMAGE_FLAGS=()
+CA_FLAGS=()
 if [[ -n "${PI_CA_CERT:-}" ]]; then
-  IMAGE_FLAGS+=(
+  CA_FLAGS+=(
     "--secret" "id=extra_ca,src=${PI_CA_CERT}"
     "--build-arg" "CA_ID=$(cksum < "${PI_CA_CERT}" | tr -d ' ')"
   )
 fi
+IMAGE_FLAGS=()
 if [[ -n "${PI_APK_REPOSITORY:-}" ]]; then
   IMAGE_FLAGS+=(
     "--build-arg" "APK_REPOSITORY=${PI_APK_REPOSITORY}"
@@ -60,7 +61,7 @@ fi
 [[ -n "${PI_BASE_REGISTRY:-}" ]] && IMAGE_FLAGS+=("--build-arg" "BASE_REGISTRY=${PI_BASE_REGISTRY}")
 [[ -n "${PI_BASE_IMAGE:-}" ]] && IMAGE_FLAGS+=("--build-arg" "BASE_IMAGE=${PI_BASE_IMAGE}")
 
-"${DOCKER_CMD}" build "${BUILD_FLAGS[@]}" ${IMAGE_FLAGS[@]+"${IMAGE_FLAGS[@]}"} \
+"${DOCKER_CMD}" build "${BUILD_FLAGS[@]}" ${CA_FLAGS[@]+"${CA_FLAGS[@]}"} ${IMAGE_FLAGS[@]+"${IMAGE_FLAGS[@]}"} \
   --secret "id=mise_asc,src=${REPO_ROOT}/mise-release.asc" \
   -f "${REPO_ROOT}/Dockerfile" \
   -t "pi-less-yolo:latest" \
@@ -68,7 +69,7 @@ fi
 
 echo "Image 'pi-less-yolo:latest' built successfully."
 
-"${DOCKER_CMD}" build "${BUILD_FLAGS[@]}" \
+"${DOCKER_CMD}" build "${BUILD_FLAGS[@]}" ${CA_FLAGS[@]+"${CA_FLAGS[@]}"} \
   -f "${REPO_ROOT}/proxy/Dockerfile" \
   -t "pi-less-yolo-proxy:latest" \
   "${REPO_ROOT}/proxy"

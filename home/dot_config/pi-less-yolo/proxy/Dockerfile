@@ -2,6 +2,17 @@
 
 FROM docker.io/mitmproxy/mitmproxy:latest@sha256:00b77b5d8804c8ad18cb6caefbf9d5849e895e8986c5ce011f4ae30f4385962f
 
+# mitmproxy uses certifi, independently of the Pi image's system trust store.
+# Preserve its public roots and append PI_CA_CERT for corporate upstreams.
+ARG CA_ID=none
+RUN --mount=type=secret,id=extra_ca \
+    mkdir -p /etc/pi-egress \
+    && cp "$(python -c 'import certifi; print(certifi.where())')" /etc/pi-egress/upstream-ca.pem \
+    && if [ -s /run/secrets/extra_ca ]; then \
+      printf '\n# pi-less-yolo extra CA %s\n' "${CA_ID}" >> /etc/pi-egress/upstream-ca.pem \
+      && cat /run/secrets/extra_ca >> /etc/pi-egress/upstream-ca.pem; \
+    fi
+
 COPY *.py /addons/
 COPY approvals.html approvals.js /addons/
 
@@ -19,4 +30,5 @@ EXPOSE 3128
 ENTRYPOINT ["python", "-u", "/addons/pi_web.py", \
   "--listen-port", "3128", \
   "--set", "confdir=/egress/mitmproxy", \
+  "--set", "ssl_verify_upstream_trusted_ca=/etc/pi-egress/upstream-ca.pem", \
   "--set", "connection_strategy=lazy"]
