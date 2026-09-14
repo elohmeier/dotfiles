@@ -59,17 +59,35 @@ set -e \
 && rm /tmp/mise-install.sh.sig /tmp/mise-install.sh \
 && apk del gpg gpg-agent
 
-# ARG (not ENV): available during build, not baked in. At runtime mise defaults
-# to ~/.local/share/mise, which the container user can write to.
-ARG MISE_DATA_DIR=/usr/local/share/mise
-
-# Install uv via mise and expose uv and uvx on PATH.
+# GITHUB_BASE_URL (PI_GITHUB_BASE_URL): base for GitHub release downloads. A
+# mirror with the same <owner>/<repo>/releases/download/<tag>/<file> layout
+# (e.g. Artifactory's generic-github-remote) works where github.com does not.
+#
+# uv is fetched here rather than with `mise install uv`: mise's release binaries
+# are built with rustls, which rejects TLS-intercepting proxy certificates that
+# carry a critical extension it does not recognise, and that rejection cannot be
+# configured away. curl (OpenSSL) accepts them.
+ARG UV_VERSION=0.12.9
+ARG GITHUB_BASE_URL=https://github.com
 RUN set -e \
-&& mise install uv@0.12.9 \
-&& ln -s "$(mise exec uv@0.12.9 -- which uv)" /usr/local/bin/uv \
-&& ln -s "$(mise exec uv@0.12.9 -- which uvx)" /usr/local/bin/uvx
+&& triple="$(uname -m)-unknown-linux-gnu" \
+&& url="${GITHUB_BASE_URL}/astral-sh/uv/releases/download/${UV_VERSION}/uv-${triple}.tar.gz" \
+&& cd /tmp \
+&& curl -fsSLO "${url}" \
+&& curl -fsSLO "${url}.sha256" \
+&& sha256sum -c "uv-${triple}.tar.gz.sha256" \
+&& tar -xzf "uv-${triple}.tar.gz" -C /usr/local/bin --strip-components=1 \
+     "uv-${triple}/uv" "uv-${triple}/uvx" \
+&& rm "uv-${triple}.tar.gz" "uv-${triple}.tar.gz.sha256"
 
-ENV UV_PYTHON_INSTALL_DIR=/usr/local/share/uv/python
+# uv picks up its extra trust roots from SSL_CERT_FILE (set above). Neither
+# --system-certs nor the deprecated --native-tls changes that, and none of the
+# three modes makes rustls accept a chain carrying a critical extension it does
+# not recognise — an intercepting proxy that sends one stays unreachable for uv
+# whatever is configured, so GITHUB_BASE_URL has to point somewhere it is not in
+# the path. The mirror default matches uv's own and is inert unless overridden.
+ENV UV_PYTHON_INSTALL_DIR=/usr/local/share/uv/python \
+    UV_PYTHON_INSTALL_MIRROR=${GITHUB_BASE_URL}/astral-sh/python-build-standalone/releases/download
 
 # Install Python via uv and expose it on PATH
 RUN uv python install 3.14.7 \

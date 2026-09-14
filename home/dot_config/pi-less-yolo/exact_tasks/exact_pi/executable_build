@@ -40,6 +40,7 @@ done
 #                  are not part of the layer cache key.
 #   PI_APK_REPOSITORY apk repository to install from instead of the image's
 #                     own, with the vendored wolfi key added to the keyring.
+#   PI_GITHUB_BASE_URL  mirror for GitHub release downloads (uv and Python).
 #   PI_BASE_REGISTRY  registry the pinned Chainguard base is pulled from.
 #   PI_BASE_IMAGE     replacement for the whole base reference.
 IMAGE_FLAGS=()
@@ -55,6 +56,7 @@ if [[ -n "${PI_APK_REPOSITORY:-}" ]]; then
     "--secret" "id=apk_key,src=${REPO_ROOT}/wolfi-signing.rsa.pub"
   )
 fi
+[[ -n "${PI_GITHUB_BASE_URL:-}" ]] && IMAGE_FLAGS+=("--build-arg" "GITHUB_BASE_URL=${PI_GITHUB_BASE_URL}")
 [[ -n "${PI_BASE_REGISTRY:-}" ]] && IMAGE_FLAGS+=("--build-arg" "BASE_REGISTRY=${PI_BASE_REGISTRY}")
 [[ -n "${PI_BASE_IMAGE:-}" ]] && IMAGE_FLAGS+=("--build-arg" "BASE_IMAGE=${PI_BASE_IMAGE}")
 
