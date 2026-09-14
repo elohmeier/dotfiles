@@ -80,18 +80,28 @@ RUN set -e \
      "uv-${triple}/uv" "uv-${triple}/uvx" \
 && rm "uv-${triple}.tar.gz" "uv-${triple}.tar.gz.sha256"
 
-# uv picks up its extra trust roots from SSL_CERT_FILE (set above). Neither
-# --system-certs nor the deprecated --native-tls changes that, and none of the
-# three modes makes rustls accept a chain carrying a critical extension it does
-# not recognise — an intercepting proxy that sends one stays unreachable for uv
-# whatever is configured, so GITHUB_BASE_URL has to point somewhere it is not in
-# the path. The mirror default matches uv's own and is inert unless overridden.
 ENV UV_PYTHON_INSTALL_DIR=/usr/local/share/uv/python \
     UV_PYTHON_INSTALL_MIRROR=${GITHUB_BASE_URL}/astral-sh/python-build-standalone/releases/download
 
-# Install Python via uv and expose it on PATH
-RUN uv python install 3.14.7 \
-    && ln -s "$(uv python find 3.14.7)" /usr/local/bin/python3
+# Python comes down with curl for the same reason uv does: `uv python install`
+# would fetch it over rustls, which no uv option talks into accepting an
+# intercepting proxy's certificate. This is the identical artifact, unpacked
+# into the directory name uv derives, so uv still sees it as a managed install.
+ARG PYTHON_VERSION=3.14.7
+ARG PYTHON_RELEASE=20260901
+RUN set -e \
+&& arch="$(uname -m)" \
+&& name="cpython-${PYTHON_VERSION}+${PYTHON_RELEASE}-${arch}-unknown-linux-gnu-install_only_stripped.tar.gz" \
+&& base="${UV_PYTHON_INSTALL_MIRROR}/${PYTHON_RELEASE}" \
+&& cd /tmp \
+&& curl -fsSLO "${base}/${name}" \
+&& curl -fsSL "${base}/SHA256SUMS" -o SHA256SUMS \
+&& grep " ${name}$" SHA256SUMS | sha256sum -c - \
+&& dir="${UV_PYTHON_INSTALL_DIR}/cpython-${PYTHON_VERSION}-linux-${arch}-gnu" \
+&& mkdir -p "${dir}" \
+&& tar -xzf "${name}" -C "${dir}" --strip-components=1 \
+&& ln -s "${dir}/bin/python3" /usr/local/bin/python3 \
+&& rm "${name}" SHA256SUMS
 
 # Install pi globally
 RUN npm install -g "@earendil-works/pi-coding-agent@0.85.1"
