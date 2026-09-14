@@ -2,3 +2,16 @@
 # Replaces that repo's `mise run install`; task sources live in ~/.config/pi-less-yolo/tasks.
 [task_config]
 includes = ["{{ .chezmoi.homeDir }}/.config/pi-less-yolo/tasks"]
+{{- if .isWSL }}
+
+[env]
+# cgr.dev redirects blob fetches to presigned *.r2.cloudflarestorage.com URLs,
+# which the proxy here answers with 403. Docker Hub serves the same digests
+# from CloudFront and is reachable.
+PI_BASE_REGISTRY = "docker.io"
+{{- with .customCABundle }}
+# TLS interception: build the image against the bundle the shell already points
+# SSL_CERT_FILE at, so apk, curl, npm and uv trust the proxy.
+PI_CA_CERT = {{ . | quote }}
+{{- end }}
+{{- end }}

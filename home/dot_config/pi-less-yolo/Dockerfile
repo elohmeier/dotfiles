@@ -1,7 +1,13 @@
 # syntax=docker/dockerfile:1
 
-# BASE_IMAGE: set via PI_BASE_IMAGE to pull the base from a registry mirror.
-ARG BASE_IMAGE=cgr.dev/chainguard/node:latest-dev@sha256:6dd22b58ad748bd8cf94e8f922388f0b3d78636d8105967077429a3944f9ed75
+# BASE_REGISTRY (PI_BASE_REGISTRY): swap just the registry, keeping the pin.
+# docker.io/chainguard/* carries the same digests behind CloudFront, which
+# helps where cgr.dev's presigned r2.cloudflarestorage.com blob redirects are
+# answered with 403 by a corporate proxy.
+# BASE_IMAGE (PI_BASE_IMAGE): replace the whole reference, for mirrors that
+# lay the image out under a different path.
+ARG BASE_REGISTRY=cgr.dev
+ARG BASE_IMAGE=${BASE_REGISTRY}/chainguard/node:latest-dev@sha256:6dd22b58ad748bd8cf94e8f922388f0b3d78636d8105967077429a3944f9ed75
 FROM ${BASE_IMAGE}
 
 USER root

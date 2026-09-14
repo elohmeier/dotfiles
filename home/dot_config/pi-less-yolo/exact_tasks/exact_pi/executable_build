@@ -38,7 +38,8 @@ done
 #                  image trust store. Passed as a secret so it stays out of the
 #                  build context; CA_ID fingerprints it because secret contents
 #                  are not part of the layer cache key.
-#   PI_BASE_IMAGE  replacement for the Chainguard base, e.g. a mirrored copy.
+#   PI_BASE_REGISTRY  registry the pinned Chainguard base is pulled from.
+#   PI_BASE_IMAGE     replacement for the whole base reference.
 IMAGE_FLAGS=()
 if [[ -n "${PI_CA_CERT:-}" ]]; then
   IMAGE_FLAGS+=(
@@ -46,6 +47,7 @@ if [[ -n "${PI_CA_CERT:-}" ]]; then
     "--build-arg" "CA_ID=$(cksum < "${PI_CA_CERT}" | tr -d ' ')"
   )
 fi
+[[ -n "${PI_BASE_REGISTRY:-}" ]] && IMAGE_FLAGS+=("--build-arg" "BASE_REGISTRY=${PI_BASE_REGISTRY}")
 [[ -n "${PI_BASE_IMAGE:-}" ]] && IMAGE_FLAGS+=("--build-arg" "BASE_IMAGE=${PI_BASE_IMAGE}")
 
 "${DOCKER_CMD}" build "${BUILD_FLAGS[@]}" ${IMAGE_FLAGS[@]+"${IMAGE_FLAGS[@]}"} \
