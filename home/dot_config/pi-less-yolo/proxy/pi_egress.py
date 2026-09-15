@@ -106,7 +106,15 @@ class Policy:
         self.secrets = []  # active secrets (rule + value present)
 
 
-_POLICY_FILES = ["config", "rules.allow", "rules.deny", "secrets.rules", "secrets.env"]
+_POLICY_FILES = [
+    "config",
+    "rules.allow",
+    "rules.deny",
+    "secrets.rules",
+    "secrets.env",
+    "project.allow",
+    "project.deny",
+]
 _policy_cache = {"key": None, "policy": Policy()}
 
 
@@ -142,6 +150,8 @@ def load_policy():
                 policy.intercept.append(v.lower())
     policy.allow.extend(ln.lower() for ln in _read_lines(paths[1]))
     policy.deny.extend(ln.lower() for ln in _read_lines(paths[2]))
+    policy.allow.extend(ln.lower() for ln in _read_lines(paths[5]))
+    policy.deny.extend(ln.lower() for ln in _read_lines(paths[6]))
 
     # secrets.rules: NAME hosts=<pat,pat> [methods=GET,POST]
     scopes = {}

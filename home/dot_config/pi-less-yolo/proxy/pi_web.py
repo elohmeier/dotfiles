@@ -5,6 +5,7 @@ The underlying live flows remain available for native editing/resume/replay.
 """
 
 import os
+import json
 from pathlib import Path
 import socket
 import sys
@@ -18,6 +19,21 @@ from mitmproxy.addons import export
 from pi_egress import DECISIONS_DIR, PENDING_DIR, STATE_DIR, PiEgress, load_policy
 
 ASSETS = Path(__file__).parent
+
+
+def save_context():
+    state = Path(STATE_DIR)
+    ready = state / "bridge-ready"
+    scope = state / "save-scope"
+    project = state / "project"
+    return dict(
+        save_scope=scope.read_text().strip() if scope.exists() else "global",
+        project=project.read_text().strip() if project.exists() else "global",
+        can_save=ready.exists() and time.time() - ready.stat().st_mtime < 5,
+        save_error=(state / "save-error").read_text()
+        if (state / "save-error").exists()
+        else "",
+    )
 
 
 class Approvals(app.RequestHandler):
@@ -47,15 +63,27 @@ class Pending(app.RequestHandler):
                         id=path.name,
                         target=path.read_text().strip(),
                         expires=path.stat().st_mtime + policy.timeout_s,
+                        saving=(Path(STATE_DIR) / "save" / path.name).exists(),
                     )
                 )
-        self.write(dict(requests=requests, mode=policy.mode, record=policy.record))
+        self.write(
+            dict(
+                requests=requests,
+                mode=policy.mode,
+                record=policy.record,
+                **save_context(),
+            )
+        )
 
 
 class Decision(app.RequestHandler):
     def post(self, request_id) -> None:  # ty: ignore[invalid-method-override]
         path = Path(PENDING_DIR) / request_id
-        if not path.is_file() or (Path(DECISIONS_DIR) / request_id).exists():
+        if (
+            not path.is_file()
+            or (Path(DECISIONS_DIR) / request_id).exists()
+            or (Path(STATE_DIR) / "save" / request_id).exists()
+        ):
             raise app.APIError(409, "Request expired or already answered")
         choice = self.json.get("choice")
         if choice not in (
@@ -70,10 +98,19 @@ class Decision(app.RequestHandler):
         if time.time() >= path.stat().st_mtime + load_policy().timeout_s:
             raise app.APIError(409, "Request expired")
         if choice.endswith("-always"):
+            context = save_context()
+            if not context["can_save"]:
+                raise app.APIError(409, "Start mise run pi:egress web to enable saving")
             choice = choice.split("-")[0]
-            with open(Path(STATE_DIR) / f"rules.{choice}", "a") as rules:
-                rules.write(path.read_text())
-        (Path(DECISIONS_DIR) / request_id).write_text(choice)
+            scope = self.json.get("scope")
+            if scope != context["save_scope"]:
+                raise app.APIError(409, "Save scope changed; refresh and try again")
+            queue = Path(STATE_DIR) / "save"
+            temporary = queue / f".{request_id}"
+            temporary.write_text(json.dumps(dict(kind=choice, scope=scope)))
+            temporary.replace(queue / request_id)
+        else:
+            (Path(DECISIONS_DIR) / request_id).write_text(choice)
         self.write(dict(ok=True))
 
 

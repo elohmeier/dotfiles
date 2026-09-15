@@ -3,6 +3,7 @@ PI_EGRESS_TEST_IMAGE=pi-less-yolo-proxy:egress-test.
 """
 
 import concurrent.futures
+import hashlib
 import importlib.util
 import json
 import os
@@ -124,6 +125,22 @@ def test_record_boolean_and_mount_isolation(tmp_path, record):
     assert b"exposes proxy state" in result.stderr
 
 
+def test_layered_policy_deny_precedence_and_snapshot_isolation(tmp_path, monkeypatch):
+    monkeypatch.setattr(egress, "STATE_DIR", str(tmp_path))
+    (tmp_path / "config").write_text("allow=provider.test\n")
+    (tmp_path / "rules.allow").write_text("global.test:443\n")
+    (tmp_path / "project.allow").write_text("project.test:443\nblocked.test:443\n")
+    (tmp_path / "rules.deny").write_text("blocked.test:443\n")
+    (tmp_path / "project.deny").write_text("global.test:443\n")
+    policy = egress.load_policy()
+    assert egress.check_rules(policy, "blocked.test", 443) == "deny"
+    assert egress.check_rules(policy, "global.test", 443) == "deny"
+    assert egress.check_rules(policy, "project.test", 443) == "project.test:443"
+    assert egress.check_rules(policy, "provider.test", 443) == "provider.test"
+    (tmp_path / "mise.toml").write_text('[env]\nPI_EGRESS_ALLOW="agent.test:443"\n')
+    assert egress.check_rules(egress.load_policy(), "agent.test", 443) is None
+
+
 def test_build_forwards_ca_to_both_images(tmp_path):
     runtime = tmp_path / "docker"
     runtime.write_text('#!/bin/sh\nprintf "%s\\n" "$@" >> "$BUILD_LOG"\n')
@@ -144,6 +161,23 @@ def test_build_forwards_ca_to_both_images(tmp_path):
     arguments = log.read_text().splitlines()
     assert arguments.count(f"id=extra_ca,src={ca}") == 2
     assert sum(argument.startswith("CA_ID=") for argument in arguments) == 2
+
+
+def test_saved_web_url_without_runtime(tmp_path):
+    saved = tmp_path / "web-url"
+    saved.write_text("http://172.18.0.2:8081/egress?token=test-token\n")
+    env = dict(
+        os.environ,
+        PI_EGRESS_DIR=str(tmp_path),
+        PI_EGRESS_WEB_PORT="18081",
+        PI_CONTAINER_RUNTIME="/does-not-exist",
+    )
+    expected = "http://127.0.0.1:18081/egress?token=test-token"
+    assert run("bash", str(TASKS / "executable_egress"), "url", env=env) == expected
+    assert saved.read_text().strip() == expected
+    assert saved.stat().st_mode & 0o777 == 0o600
+    del env["PI_EGRESS_WEB_PORT"]
+    assert run("bash", str(TASKS / "executable_egress"), "url", env=env) == expected
 
 
 @pytest.fixture(scope="module")
@@ -249,6 +283,8 @@ def live(tmp_path_factory):
             str(TASKS),
             env=env,
         )
+        run("pi-egress-control", "start-bridge", "docker", proxy, env=env)
+        eventually(lambda: (state / "bridge-ready").exists())
         server = """
 import http.server, json, ssl, threading, time
 class Echo(http.server.BaseHTTPRequestHandler):
@@ -299,11 +335,8 @@ secure.serve_forever()
             "-c",
             server,
         )
-        url = re.sub(
-            r"http://[^/]+",
-            "http://127.0.0.1:18081",
-            (state / "web-url").read_text().strip(),
-        )
+        url = (state / "web-url").read_text().strip()
+        assert url.startswith("http://127.0.0.1:18081/egress?token=")
         client = httpx.Client(base_url="http://127.0.0.1:18081", trust_env=False)
         page = client.get(url)
         assert page.status_code == 200, page.text
@@ -379,7 +412,12 @@ def test_web_approval_and_https_recording(live):
         request = pool.submit(curl, "http://blocked.test:8000/approved")
         pending = eventually(lambda: client.get("/egress/pending").json()["requests"])
         decision = f"/egress/decision/{pending[0]['id']}"
-        assert client.post(decision, json={"choice": "allow-always"}).status_code == 200
+        assert (
+            client.post(
+                decision, json={"choice": "allow-always", "scope": "global"}
+            ).status_code
+            == 200
+        )
         assert json.loads(request.result())["path"] == "/approved"
         assert client.post(decision, json={"choice": "allow"}).status_code == 409
     assert "blocked.test:8000" in (live["state"] / "rules.allow").read_text()
@@ -398,6 +436,27 @@ def test_web_approval_and_https_recording(live):
         for flow in flows
     )
     assert b"integration-real-secret" not in (live["state"] / "flows.mitm").read_bytes()
+
+
+def test_repeated_web_prints_url_without_restarting(live):
+    bin_dir = live["state"] / "bin"
+    bin_dir.mkdir()
+    opener = bin_dir / "open"
+    opener.write_text("#!/bin/sh\nexit 0\n")
+    opener.chmod(0o755)
+    env = dict(
+        live["env"],
+        PATH=f"{bin_dir}:{os.environ['PATH']}",
+        PI_PROXY_IMAGE="pi-egress-do-not-build:missing",
+    )
+    del env["PI_EGRESS_WEB_PORT"]
+    expected = (live["state"] / "web-url").read_text().strip()
+    original = run("docker", "inspect", "-f", "{{.Id}}", live["name"] + "-proxy")
+    for _ in range(2):
+        assert run("bash", str(TASKS / "executable_egress"), "web", env=env) == expected
+    assert (
+        run("docker", "inspect", "-f", "{{.Id}}", live["name"] + "-proxy") == original
+    )
 
 
 def test_upstream_ca_verification(live):
@@ -626,3 +685,181 @@ def test_event_stream_is_incremental_and_recorded(live):
         ]
     assert events and events[0].response
     assert b"data: done" in (events[0].response.content or b"")
+
+
+def test_two_project_proxies_and_project_browser_save(live, tmp_path):
+    contexts = []
+    upstream = "pi-project-upstream-" + uuid.uuid4().hex[:8]
+    try:
+        for label in ("a", "b"):
+            root = tmp_path / label
+            root.mkdir()
+            (root / "mise.toml").write_text("# shared team settings\n[env]\n")
+            key = hashlib.sha256(str(root.resolve()).encode()).hexdigest()[:16]
+            name = "pi-egress-" + key
+            state = tmp_path / "state/projects" / key
+            env = {
+                k: v for k, v in os.environ.items() if not k.startswith("PI_EGRESS_")
+            }
+            env.update(
+                PI_EGRESS_GLOBAL_DIR=str(tmp_path / "state"),
+                PI_EGRESS_PROJECT_ROOT=str(root),
+                PI_EGRESS_ALLOW="scope.test:8000" if label == "a" else "",
+                PI_EGRESS_ALLOW_PRIVATE="1",
+                PI_EGRESS_TIMEOUT="15",
+                PI_PROXY_IMAGE=live["env"]["PI_PROXY_IMAGE"],
+                DOCKER_CMD="docker",
+            )
+            contexts.append(dict(root=root, name=name, state=state, env=env))
+            run(
+                "bash",
+                "-c",
+                'set -euo pipefail; source "$1/_egress"; egress_write_config interactive; egress_prepare_secrets; egress_ensure_proxy; pi-egress-control start-bridge --scope project docker "$PI_EGRESS_PROXY"',
+                "test",
+                str(TASKS),
+                env=env,
+            )
+        a, b = contexts
+        assert (a["state"] / "web-port").read_text() != (
+            b["state"] / "web-port"
+        ).read_text()
+        run(
+            "docker",
+            "run",
+            "-d",
+            "--name",
+            upstream,
+            "--network",
+            a["name"] + "-external",
+            "--network-alias",
+            "scope.test",
+            "--entrypoint",
+            "python",
+            live["env"]["PI_PROXY_IMAGE"],
+            "-m",
+            "http.server",
+            "8000",
+        )
+        run(
+            "docker",
+            "network",
+            "connect",
+            "--alias",
+            "scope.test",
+            b["name"] + "-external",
+            upstream,
+        )
+        eventually(
+            lambda: (
+                subprocess.run(
+                    [
+                        "docker",
+                        "exec",
+                        upstream,
+                        "python",
+                        "-c",
+                        "import socket; socket.create_connection(('127.0.0.1',8000)).close()",
+                    ],
+                    capture_output=True,
+                ).returncode
+                == 0
+            )
+        )
+
+        def curl(ctx):
+            ip = run(
+                "docker",
+                "inspect",
+                "-f",
+                '{{(index .NetworkSettings.Networks "'
+                + ctx["name"]
+                + '-internal").IPAddress}}',
+                ctx["name"] + "-proxy",
+            )
+            return run(
+                "docker",
+                "run",
+                "--rm",
+                "--network",
+                ctx["name"] + "-internal",
+                "--entrypoint",
+                "curl",
+                "pi-less-yolo:latest",
+                "-sS",
+                "--max-time",
+                "20",
+                "--proxy",
+                f"http://{ip}:3128",
+                "http://scope.test:8000/",
+            )
+
+        assert "Directory listing" in curl(a)
+        url = (b["state"] / "web-url").read_text().strip()
+        assert url.startswith("http://127.0.0.1:")
+        with httpx.Client(base_url=url.split("/egress")[0], trust_env=False) as client:
+            token = re.search(r'data-xsrf="([^"]+)"', client.get(url).text)
+            assert token
+            client.headers["X-XSRFToken"] = token[1]
+            eventually(lambda: client.get("/egress/pending").json()["can_save"])
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                request = pool.submit(curl, b)
+                pending = eventually(
+                    lambda: client.get("/egress/pending").json()["requests"]
+                )
+                assert not list((a["state"] / "pending").iterdir())
+                endpoint = f"/egress/decision/{pending[0]['id']}"
+                assert (
+                    client.post(
+                        endpoint, json={"choice": "allow-always", "scope": "global"}
+                    ).status_code
+                    == 409
+                )
+                assert (
+                    client.post(
+                        endpoint, json={"choice": "allow-always", "scope": "project"}
+                    ).status_code
+                    == 200
+                )
+                assert "Directory listing" in request.result()
+        assert "scope.test:8000" in (b["root"] / "mise.toml").read_text()
+        assert "scope.test" not in (a["root"] / "mise.toml").read_text()
+        assert not (tmp_path / "state/rules.allow").read_text().strip()
+        # Global denials immediately reach both already-running proxies.
+        run(
+            "bash",
+            str(TASKS / "executable_egress"),
+            "deny",
+            "--scope",
+            "global",
+            "scope.test:8000",
+            env=b["env"],
+        )
+        assert "deny rule" in curl(a)
+        assert "deny rule" in curl(b)
+        # Allocated ports/networks are reused on a second ensure.
+        before = run("docker", "inspect", "-f", "{{.Id}}", a["name"] + "-proxy")
+        run(
+            "bash",
+            "-c",
+            'set -euo pipefail; source "$1/_egress"; egress_ensure_proxy',
+            "test",
+            str(TASKS),
+            env=a["env"],
+        )
+        assert run("docker", "inspect", "-f", "{{.Id}}", a["name"] + "-proxy") == before
+    finally:
+        subprocess.run(["docker", "rm", "-f", upstream], capture_output=True)
+        for ctx in contexts:
+            subprocess.run(
+                ["docker", "rm", "-f", ctx["name"] + "-proxy"], capture_output=True
+            )
+            subprocess.run(
+                [
+                    "docker",
+                    "network",
+                    "rm",
+                    ctx["name"] + "-internal",
+                    ctx["name"] + "-external",
+                ],
+                capture_output=True,
+            )

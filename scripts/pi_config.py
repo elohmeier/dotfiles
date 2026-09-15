@@ -53,6 +53,13 @@ SETTINGS = [
         "PI_EGRESS", "Egress filtering mode", "choice", ["allowlist", "interactive"]
     ),
     Setting("PI_EGRESS_ALLOW", "Extra allowed hosts: comma- or space-separated"),
+    Setting("PI_EGRESS_DENY", "Denied hosts: comma- or space-separated; deny wins"),
+    Setting(
+        "PI_EGRESS_RULE_SCOPE",
+        "Save egress approvals in",
+        "choice",
+        ["global", "project"],
+    ),
     Setting("PI_EGRESS_ALLOW_PRIVATE", "Allow egress to private/loopback IPs", "bool"),
     Setting(
         "PI_EGRESS_BLOCK_DNS",

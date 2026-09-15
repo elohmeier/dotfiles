@@ -18,6 +18,7 @@ dependencies = [
   "pydantic-settings",
   "pillow",
   "watchdog",
+  "tomlkit",
 ]
 
 [project.scripts]
@@ -40,6 +41,7 @@ typst-watch = "scripts.typst_watch:main"
 foreman-job = "scripts.foreman_job:main"
 agent-publish = "scripts.agent_publish:cli"
 pi-config = "scripts.pi_config:main"
+pi-egress-control = "scripts.pi_egress_control:main"
 mount-media = "scripts.media:main"
 umount-media = "scripts.media:main"
 syncthing-status = "scripts.syncthing_status:main"
