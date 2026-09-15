@@ -80,6 +80,18 @@ container instead of prompting.
 Fish completes options and available media devices. These commands are installed
 by `home/.chezmoiscripts/run_onchange_after_install-uv-tools.sh.tmpl`.
 
+### Btrfs home snapshots (Fedora Atomic / Bluefin)
+
+Enable 30 daily read-only snapshots of the `/home` subvolume:
+
+```bash
+./scripts/setup-btrfs-home-snapshots.sh
+```
+
+Set `SNAPSHOT_CALENDAR` and `SNAPSHOT_KEEP` to change the schedule and retention.
+Snapshots live in the root-only `/home/.snapshots` subvolume and do not replace
+an off-device backup.
+
 ## Agent Skills
 
 Install or update the skills from [elohmeier/skills](https://github.com/elohmeier/skills) for Claude Code and Codex:
