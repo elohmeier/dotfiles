@@ -1,36 +1,36 @@
 from __future__ import annotations
 
+import json
+import threading
+import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from http.server import ThreadingHTTPServer
 from io import StringIO
-import json
 from types import SimpleNamespace
-import threading
-import unittest
 from unittest.mock import patch
 
 import httpx
 from click.exceptions import UsageError
 from rich.console import Console
 
-from scripts.grafana_query import (
-    ELASTICSEARCH_EXPLORE_LINK_START,
-    GrafanaQueryApiProxyHandler,
-    ProxyStats,
-    RequestSample,
+from scripts.grafana.alerts import (
     build_elasticsearch_explore_link,
     cmd_alert_rule_create,
     cmd_alert_rule_delete,
     cmd_alert_rule_edit,
     cmd_alert_rule_patch,
     cmd_alert_rule_reconcile_explore_links,
-    cmd_alert_rules,
-    cmd_folders,
-    cmd_show,
-    client,
     elasticsearch_alert_query,
-    percentile,
     reconcile_elasticsearch_explore_description,
+)
+from scripts.grafana.api import cmd_alert_rules, cmd_folders, cmd_show
+from scripts.grafana.common import ELASTICSEARCH_EXPLORE_LINK_START
+from scripts.grafana.http import client
+from scripts.grafana.proxy import (
+    GrafanaQueryApiProxyHandler,
+    ProxyStats,
+    RequestSample,
+    percentile,
     render_dashboard,
 )
 
@@ -122,7 +122,7 @@ def elasticsearch_alert_rule(
 
 class ClientTest(unittest.TestCase):
     def test_configures_basic_auth(self) -> None:
-        with patch("scripts.grafana_query.httpx.Client") as client_class:
+        with patch("scripts.grafana.http.httpx.Client") as client_class:
             client(
                 "https://grafana.invalid",
                 None,
@@ -323,7 +323,7 @@ class AlertRuleManagementTest(unittest.TestCase):
         try:
             with (
                 patch(
-                    "scripts.grafana_query.load_document",
+                    "scripts.grafana.alerts.load_document",
                     return_value=alert_rule(),
                 ),
                 redirect_stdout(StringIO()),
@@ -367,7 +367,9 @@ class AlertRuleManagementTest(unittest.TestCase):
         )
         try:
             with (
-                patch("scripts.grafana_query.load_document", return_value=alert_rule()),
+                patch(
+                    "scripts.grafana.alerts.load_document", return_value=alert_rule()
+                ),
                 redirect_stdout(StringIO()),
                 redirect_stderr(StringIO()),
             ):
@@ -410,7 +412,7 @@ class AlertRuleManagementTest(unittest.TestCase):
         output = StringIO()
         try:
             with (
-                patch("scripts.grafana_query.click.edit", side_effect=edit_rule),
+                patch("scripts.grafana.alerts.click.edit", side_effect=edit_rule),
                 redirect_stdout(StringIO()),
                 redirect_stderr(output),
             ):
@@ -451,7 +453,7 @@ class AlertRuleManagementTest(unittest.TestCase):
         try:
             with (
                 patch(
-                    "scripts.grafana_query.load_document",
+                    "scripts.grafana.alerts.load_document",
                     return_value={"spec": {"title": "Updated title"}},
                 ),
                 redirect_stdout(StringIO()),
@@ -743,7 +745,7 @@ class FoldersTest(unittest.TestCase):
         output = StringIO()
         try:
             with (
-                patch("scripts.grafana_query.FOLDER_SEARCH_PAGE_SIZE", 2),
+                patch("scripts.grafana.api.FOLDER_SEARCH_PAGE_SIZE", 2),
                 redirect_stdout(output),
             ):
                 result = cmd_folders(

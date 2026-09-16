@@ -99,3 +99,5 @@ Install or update the skills from [elohmeier/skills](https://github.com/elohmeie
 ```bash
 djust install-skills
 ```
+
+Grafana utilities are installed on PATH by chezmoi. See [Grafana tools](docs/grafana-tools.md) for commands, validation, and stable-release updates.

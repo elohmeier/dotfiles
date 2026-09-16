@@ -16,6 +16,8 @@ brew "fish"
 {{- end }}
 brew "fzf"
 brew "just"
+brew "go"
+brew "node"
 brew "ncdu"
 brew "sops"
 brew "uv"
@@ -27,7 +29,7 @@ set -u
 
 echo "Installing packages..."
 
-"{{ $apk }}" add bat btop curl eza fd fish fzf git just ncdu ncurses python3 ripgrep sops uv vivid zoxide
+"{{ $apk }}" add bat btop curl eza fd fish fzf git go just ncdu ncurses nodejs npm python3 ripgrep sops uv vivid zoxide
 {{ else -}}
 exit 0
 {{ end -}}

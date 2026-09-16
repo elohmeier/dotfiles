@@ -3,3 +3,8 @@ packages/
 melange.rsa
 melange.rsa.pub
 melange-cache/
+
+# Grafana tool build artifacts
+tools/**/node_modules/
+tools/**/dist/
+tools/grafana-inspect/grafana-version.json

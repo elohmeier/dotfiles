@@ -1,0 +1,2 @@
+#!/bin/sh
+exec "{{ lookPath "node" | default "node" }}" "$HOME/.local/share/ennos-dotfiles/grafana-inspect/dist/cli.js" "$@"

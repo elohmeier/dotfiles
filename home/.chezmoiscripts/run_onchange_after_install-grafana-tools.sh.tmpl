@@ -1,0 +1,27 @@
+#!/bin/sh
+set -eu
+# Grafana tool sources and locked dependencies:
+{{ range glob (joinPath .chezmoi.sourceDir "../tools/grafana-dashboard/*") -}}
+{{ if not (stat .).isDir -}}
+# {{ base . }}: {{ include . | sha256sum }}
+{{ end -}}
+{{ end -}}
+{{ range $pattern := list "*.ts" "*.tsx" "*.cjs" "package.json" "package-lock.json" "tsconfig.json" -}}
+{{ range glob (joinPath $.chezmoi.sourceDir "../tools/grafana-inspect" $pattern) -}}
+# {{ base . }}: {{ include . | sha256sum }}
+{{ end -}}
+{{ end -}}
+# release: {{ include "../tools/grafana-version.json" | sha256sum }}
+
+source_dir="{{ .chezmoi.sourceDir }}/../tools"
+runtime_dir="$HOME/.local/share/ennos-dotfiles/grafana-inspect"
+"{{ lookPath "mkdir" }}" -p "$HOME/.local/bin" "$runtime_dir"
+cd "$source_dir/grafana-dashboard"
+"{{ lookPath "go" | default "go" }}" build -trimpath -o "$HOME/.local/bin/grafana-dashboard" .
+cd "$source_dir/grafana-inspect"
+"{{ lookPath "npm" | default "npm" }}" ci --no-audit --no-fund
+"{{ lookPath "npm" | default "npm" }}" run build
+"{{ lookPath "cp" }}" package.json package-lock.json grafana-version.json "$runtime_dir/"
+"{{ lookPath "rm" }}" -rf "$runtime_dir/dist"
+"{{ lookPath "cp" }}" -R dist "$runtime_dir/"
+"{{ lookPath "npm" | default "npm" }}" ci --prefix "$runtime_dir" --omit=dev --no-audit --no-fund

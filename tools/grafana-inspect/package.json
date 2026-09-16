@@ -1,0 +1,31 @@
+{
+  "name": "grafana-inspect",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc && cp *.cjs *harness.test.ts* dist/ && cp ../grafana-version.json .",
+    "test": "tsx --test dashboard_visible_data.test.ts",
+    "typecheck": "tsc --noEmit",
+    "test:editor": "tsx --test editor.integration.ts"
+  },
+  "dependencies": {
+    "@grafana/data": "13.2.2",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "rxjs": "7.8.2",
+    "corepack": "0.36.0"
+  },
+  "devDependencies": {
+    "@types/node": "25.9.3",
+    "tsx": "4.22.4",
+    "typescript": "6.0.3"
+  },
+  "overrides": {
+    "dompurify": "3.4.12",
+    "js-cookie": "3.0.8",
+    "react-use": "17.6.1"
+  },
+  "bin": {
+    "grafana-inspect": "dist/cli.js"
+  }
+}

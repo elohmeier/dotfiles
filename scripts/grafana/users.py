@@ -5,27 +5,14 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 import questionary
-import requests
 import rich_click as click
 from rich.console import Console
 from rich.table import Table
 
+from .common import GRAFANA_VERSION, REQUEST_EXTENSIONS
+from .http import client
+
 console = Console(stderr=True)
-
-
-def _build_session(api_key, cookie, user, password):
-    session = requests.Session()
-    if api_key:
-        session.headers["Authorization"] = f"Bearer {api_key}"
-    elif cookie:
-        session.cookies.set("grafana_session", cookie)
-    elif password:
-        session.auth = (user, password)
-    else:
-        raise click.UsageError(
-            "Provide --api-key, --cookie, or --user/--password for authentication."
-        )
-    return session
 
 
 def _fetch_all_users(session, url):
@@ -35,6 +22,7 @@ def _fetch_all_users(session, url):
         resp = session.get(
             f"{url.rstrip('/')}/api/users/search",
             params={"perpage": 1000, "page": page},
+            extensions=REQUEST_EXTENSIONS,
         )
         resp.raise_for_status()
         data = resp.json()
@@ -72,19 +60,33 @@ def _users_table(users, title="Users"):
 
 
 @click.group()
+@click.version_option(GRAFANA_VERSION, message="Grafana %(version)s")
 @click.option("--url", envvar="GRAFANA_URL", required=True, help="Grafana base URL.")
-@click.option("--api-key", envvar="GRAFANA_API_KEY", help="API key (Bearer token).")
-@click.option("--cookie", envvar="GRAFANA_COOKIE", help="grafana_session cookie value.")
 @click.option(
-    "--user", envvar="GRAFANA_USER", default="admin", help="Basic auth username."
+    "--username",
+    envvar="GRAFANA_USERNAME",
+    default="admin",
+    help="Server administrator username.",
 )
-@click.option("--password", envvar="GRAFANA_PASSWORD", help="Basic auth password.")
+@click.option(
+    "--password",
+    envvar="GRAFANA_PASSWORD",
+    required=True,
+    help="Server administrator password.",
+)
+@click.option("--verify/--no-verify", envvar="GRAFANA_TLS_VERIFY", default=True)
+@click.option("--ca-file", envvar="GRAFANA_CA_FILE", help="PEM CA bundle.")
+@click.option("--host", envvar="GRAFANA_HOST_HEADER")
+@click.option("--sni-hostname", envvar="GRAFANA_SNI_HOSTNAME")
+@click.option("--timeout", envvar="GRAFANA_TIMEOUT", default=60.0)
 @click.pass_context
-def cli(ctx, url, api_key, cookie, user, password):
-    """Grafana user management."""
-    ctx.ensure_object(dict)
-    ctx.obj["url"] = url
-    ctx.obj["session"] = _build_session(api_key, cookie, user, password)
+def cli(ctx, url, username, password, verify, ca_file, host, sni_hostname, timeout):
+    """Grafana server-wide user administration (Basic authentication)."""
+    session = client(
+        url, None, username, password, host, sni_hostname, verify, timeout, ca_file
+    )
+    ctx.obj = {"url": url, "session": session}
+    ctx.call_on_close(session.close)
 
 
 @cli.command("list")
@@ -149,16 +151,23 @@ def delete(ctx, min_days, max_days, yes):
     else:
         selected = [u["id"] for u in candidates]
 
+    deleted = 0
     for uid in selected:
-        resp = session.delete(f"{url.rstrip('/')}/api/admin/users/{uid}")
-        if resp.ok:
+        resp = session.delete(
+            f"{url.rstrip('/')}/api/admin/users/{uid}", extensions=REQUEST_EXTENSIONS
+        )
+        if resp.is_success:
+            deleted += 1
             console.print(f"  Deleted user {uid}")
         else:
             console.print(
                 f"  [red]Failed to delete user {uid}: {resp.status_code}[/red]"
             )
 
-    console.print(f"\nDone. Deleted {len(selected)} user(s).")
+    console.print(f"\nDone. Deleted {deleted} of {len(selected)} selected user(s).")
+
+    if deleted != len(selected):
+        raise click.ClickException("Some users could not be deleted")
 
 
 def main():
