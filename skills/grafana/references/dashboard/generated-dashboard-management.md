@@ -6,7 +6,7 @@ Use this when users ask about Jsonnet, dashboards-as-code, GitOps dashboards, ge
 
 Treat Jsonnet or another generator input as the source of truth outside the dashboard spec. Compile it to classic dashboard JSON or a `dashboard.grafana.app` resource, and store the source in git, object storage, or a companion system.
 
-When the source is classic JSON but the generator patches stable v2, convert the baseline first with `scripts/dashboard-v2 render`. The Jsonnet program should read `std.extVar('grafanaDashboardV2')`; it must not contain a handwritten classic-to-v2 converter. For new dashboards, author stable v2 directly with the thin constructors in `assets/dashboard/v2.libsonnet`. See `dashboard-v2-tooling.md` for the exact boundary and validation commands.
+When the source is classic JSON but the generator patches stable v2, convert the baseline first with `grafana-dashboard render`. The Jsonnet program should read `std.extVar('grafanaDashboardV2')`; it must not contain a handwritten classic-to-v2 converter. For new dashboards, author stable v2 directly with the thin constructors in `assets/dashboard/v2.libsonnet`. See `dashboard-v2-tooling.md` for the exact boundary and validation commands.
 
 Do not recommend a custom top-level dashboard field for full Jsonnet source or generator state if the user needs normal Grafana UI round trips. Legacy dashboard storage can physically keep arbitrary JSON in `Dashboard.Data`, but the frontend save path rebuilds the save model from known `DashboardModel` fields, so unknown fields can be dropped after edit/save/export/migration. V2 dashboard specs are also explicit; custom state belongs in resource metadata, not `spec`.
 

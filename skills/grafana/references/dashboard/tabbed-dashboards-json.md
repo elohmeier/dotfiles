@@ -204,7 +204,7 @@ Use `kind: "Dashboard"` for create/update payloads. `DashboardWithAccessInfo` is
 Validate a complete resource or raw `spec` with the skill script:
 
 ```bash
-scripts/dashboard-v2 validate \
+grafana-dashboard validate \
   --input assets/dashboard/tabbed-dashboard-v2.json \
   --input-format resource
 ```
@@ -212,7 +212,7 @@ scripts/dashboard-v2 validate \
 For the authoritative target-server check, follow with:
 
 ```bash
-scripts/dashboard-v2 validate-live \
+grafana-dashboard validate-live \
   --input assets/dashboard/tabbed-dashboard-v2.json \
   --namespace default
 ```

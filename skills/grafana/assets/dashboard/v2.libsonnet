@@ -1,7 +1,7 @@
 // Stable dashboard.grafana.app/v2 constructors.
 //
 // This library deliberately does not convert classic dashboards and does not
-// invent datasource UIDs or plugin versions. Use scripts/dashboard-v2 convert
+// invent datasource UIDs or plugin versions. Use grafana-dashboard convert
 // for conversion through Grafana's implementation.
 {
   resource(name, spec, namespace=null, labels={}, annotations={}):: {

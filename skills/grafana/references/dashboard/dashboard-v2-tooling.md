@@ -1,14 +1,14 @@
 # Stable Dashboard v2 Tooling
 
-Use `scripts/dashboard-v2` for stable `dashboard.grafana.app/v2` conversion, canonical and code-editor validation, strict live validation, and conversion-first Jsonnet rendering. The tool imports Grafana's own dashboard migration, conversion, generated Go types, OpenAPI definitions, and embedded CUE validator at the exact module revision printed by:
+Use `grafana-dashboard` for stable `dashboard.grafana.app/v2` conversion, canonical and code-editor validation, strict live validation, and conversion-first Jsonnet rendering. The tool imports Grafana's own dashboard migration, conversion, generated Go types, OpenAPI definitions, and embedded CUE validator at the module revision printed by:
 
 ```bash
-scripts/dashboard-v2 version
+grafana-dashboard version
 ```
 
-It intentionally does not support `v2alpha1`, `v2beta1`, approximate conversion, or compatibility with the retired helper interfaces.
+The converter intentionally does not support `v2alpha1`, `v2beta1`, approximate conversion, or compatibility with the retired helper interfaces.
 
-The wrapper requires the Go version declared in `scripts/dashboard-v2-tool/go.mod`; with normal Go toolchain selection, the first invocation can download that toolchain and the pinned modules. Only `render` additionally requires the `jsonnet` executable. Conversion and validation do not require a Grafana source checkout.
+The commands are installed by the dotfiles repository. Conversion and canonical validation run a compiled Go binary and need no source checkout or Go toolchain at invocation time. Only `render` additionally requires `jsonnet`. Advanced editor checks lazily cache the exact pinned Grafana source and frontend runtime.
 
 ## Conversion contract
 
@@ -28,7 +28,7 @@ Grafana conversion depends on server-side datasource and library-element indexes
 ```bash
 export GRAFANA_URL=https://grafana.example.test
 export GRAFANA_TOKEN=...
-scripts/dashboard-v2 export-context --output conversion-context.json
+grafana-dashboard export-context --output conversion-context.json
 ```
 
 The token must be able to list every datasource and library element that the Grafana conversion service would see. The snapshot contains no datasource secrets. Commit it only if datasource names, UIDs, folder UIDs, and library panel models are acceptable repository data.
@@ -36,7 +36,7 @@ The token must be able to list every datasource and library element that the Gra
 Convert raw classic dashboard JSON:
 
 ```bash
-scripts/dashboard-v2 convert \
+grafana-dashboard convert \
   --input dashboard.json \
   --input-format classic \
   --context conversion-context.json \
@@ -66,7 +66,7 @@ base {
 Then render it through the same conversion and validation boundary:
 
 ```bash
-scripts/dashboard-v2 render \
+grafana-dashboard render \
   --input dashboard.json \
   --input-format classic \
   --context conversion-context.json \
@@ -85,25 +85,25 @@ For new dashboards, author stable v2 directly. `assets/dashboard/v2.libsonnet` c
 Local validation uses the pinned generated stable-v2 Go types, Grafana's embedded `ValidateDashboardSpec` CUE validator, and an exact layout-to-element reference audit:
 
 ```bash
-scripts/dashboard-v2 validate --input dashboard.v2.json --input-format resource
-scripts/dashboard-v2 validate --input dashboard-spec.json --input-format spec
+grafana-dashboard validate --input dashboard.v2.json --input-format resource
+grafana-dashboard validate --input dashboard-spec.json --input-format spec
 ```
 
-This is deterministic and offline after Go has populated its module cache. It validates the canonical schema model but cannot reproduce every API-server admission rule, installed-plugin constraint, or client-side editor restriction.
+This is deterministic and offline once the binary is installed. It validates the canonical schema model but cannot reproduce every API-server admission rule, installed-plugin constraint, or client-side editor restriction.
 
 Grafana's v2 code editor converts the served OpenAPI definitions into Draft-07 JSON Schema and applies several frontend-specific schema repairs before registering the result with Monaco. Run the separate editor compatibility check before pasting or applying JSON in that editor:
 
 ```bash
-scripts/dashboard-v2 validate-editor --input dashboard.v2.json --input-format resource
-scripts/dashboard-v2 validate-editor --input dashboard-spec.json --input-format spec
+grafana-inspect editor-schema dashboard.v2.json --input-format resource
+grafana-inspect editor-schema dashboard-spec.json --input-format spec
 ```
 
-`validate-editor` first runs canonical validation and the layout audit, then reproduces the pinned editor schema conversion. Keep it separate from `validate`: editor compatibility can be stricter than the canonical v2 contract. For example, the pinned Grafana editor rejects `null` threshold values as non-numeric even though the CUE contract defines `null` as the negative-infinity threshold. Treat such failures as compatibility errors for dashboards that must pass through the editor.
+`grafana-inspect editor-schema` first runs canonical validation and the layout audit, then executes the pinned upstream schema converter and Monaco JSON worker. Keep it separate from `grafana-dashboard validate`: editor compatibility can be stricter than the canonical v2 contract. For example, the pinned Grafana editor rejects `null` threshold values as non-numeric even though the CUE contract defines `null` as the negative-infinity threshold. Treat such failures as compatibility errors for dashboards that must pass through the editor.
 
 The authoritative check is Grafana's stable-v2 resource API with strict field validation and a dry run:
 
 ```bash
-scripts/dashboard-v2 validate-live \
+grafana-dashboard validate-live \
   --input dashboard.v2.json \
   --namespace default
 ```
@@ -118,10 +118,4 @@ It does not persist the dashboard. Use a CA file when needed; reserve `--insecur
 
 ## Updating the Grafana pin
 
-Treat a pin update as a behavior change:
-
-1. Update the direct Grafana dashboard and apimachinery module versions in `scripts/dashboard-v2-tool/go.mod` and the version constant in `main.go`.
-2. Run `go mod tidy` and `go test ./...` in `scripts/dashboard-v2-tool`.
-3. Run the relevant conversion golden tests in the matching Grafana checkout.
-4. Convert fixtures containing rows, library panels, transformations, variables, annotations, datasource strings, explicit datasource refs, and null threshold steps.
-5. Review the JSON diff and preservation-audit failures before accepting the update.
+Pins and dependency updates belong to the dotfiles repository. Run `node tools/update-grafana.mjs --check` there to compare the installed source pins with the latest stable release, or omit `--check` to update the Go/npm dependencies and release manifest together. Review conversion fixtures, editor checks, and live integration before accepting an update. Do not pin an independent Grafana version in the skill.

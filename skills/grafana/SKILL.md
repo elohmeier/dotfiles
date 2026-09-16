@@ -20,6 +20,10 @@ Before loading references, classify the task:
 - Grafana app plugins, `@grafana/scenes`, routing, SceneAppPage, EmbeddedScene, VizPanel, PanelBuilders, scene variables, custom scene objects, scenes-react: use the scenes app track.
 - Both can apply when building a scenes app that embeds dashboard-like panels. In that case, use scenes references for app structure and dashboard references for panel/data-shape decisions.
 
+## Installed tools
+
+Executable tools are maintained in `elohmeier/dotfiles` and installed on PATH by chezmoi. Use `grafana-dashboard` for migration and canonical/live validation, `grafana-inspect` for structure, data, and upstream editor checks, `grafana-query` for API operations/proxies, and `grafana-users` for server administration. Run their help/version commands to inspect the installed interface and Grafana pin. Do not install dependencies inside this skill or invoke skill-local scripts.
+
 ## Dashboard Track
 
 First steps:
@@ -85,19 +89,19 @@ Dashboard JSON guardrails:
 Dashboard schema validation:
 
 - Read `references/dashboard/dashboard-v2-tooling.md` before converting or generating v2 JSON.
-- Use `scripts/dashboard-v2 convert` for classic or v1 inputs. It runs Grafana's pinned migration and direct stable-v2 converter, requires a complete datasource/library context, validates with Grafana's CUE validator, and fails its own preservation audit. Do not convert dashboards with Jsonnet.
-- Use `scripts/dashboard-v2 validate` for deterministic local checks against the pinned stable-v2 Go types and Grafana validator. Pass `--input-format resource` or `--input-format spec` explicitly.
-- Use `scripts/dashboard-v2 validate-editor` before pasting or applying v2 JSON through Grafana's code editor. It reproduces the pinned editor's OpenAPI-to-Draft-07 schema conversion and can reject JSON that the canonical CUE validator accepts.
-- Use `scripts/dashboard-v2 validate-live` for the authoritative `dryRun=All&fieldValidation=Strict` check against the target Grafana namespace.
+- Use `grafana-dashboard convert` for classic or v1 inputs. It runs Grafana's pinned migration and direct stable-v2 converter, requires a complete datasource/library context, validates with Grafana's CUE validator, and fails its own preservation audit. Do not convert dashboards with Jsonnet.
+- Use `grafana-dashboard validate` for deterministic local checks against the pinned stable-v2 Go types and Grafana validator. Pass `--input-format resource` or `--input-format spec` explicitly.
+- Use `grafana-inspect editor-schema` before pasting or applying v2 JSON through Grafana's code editor. It executes the pinned upstream schema converter and Monaco JSON worker and can reject JSON that the canonical CUE validator accepts.
+- Use `grafana-dashboard validate-live` for the authoritative `dryRun=All&fieldValidation=Strict` check against the target Grafana namespace.
 - Stable v2 is the target. Do not produce `v2alpha1` or `v2beta1` for new work and do not preserve obsolete helper interfaces.
 
 Dashboard live-data validation:
 
-- Use `scripts/dashboard_visible_data.ts` after schema validation to query a live Grafana instance and inspect the values users receive after variables, standard transformations, field overrides, units, mappings, reducers, and table sorting.
-- Use `scripts/dashboard_editor_diagnostics.ts` for panels with transformations when Grafana editor diagnostics must participate in validation. It supplies one synthetic frame per query and mounts the skill-pinned Grafana release's real transformation rows and editors under jsdom, so neither a Grafana server nor a source-path environment variable is required. It caches the pinned upstream source/runtime automatically on first use and fails on semantic editor alerts such as ineffective transformations. Do not replace it with dashboard-specific warning rules.
-- Both scripts support classic and v2 dashboard JSON. Start live-data work with `dashboard_visible_data.ts --list-panels`, then select bounded panels, time ranges, and variable scopes. Do not run every panel against production by default.
-- Install the pinned Node dependencies from `scripts/package.json`. Editor diagnostics need no connection configuration; configure `GRAFANA_URL` and `GRAFANA_TOKEN` only for the separate visible-data CLI. Keep tokens out of arguments, output, and version control.
-- The automatically cached Grafana release is trusted upstream code pinned by the skill. Use only a trusted checkout when overriding it with `--grafana-source`: the headless harness executes that checkout's Jest configuration and frontend code.
+- Use `grafana-inspect data` after schema validation to query a live Grafana instance and inspect the values users receive after variables, standard transformations, field overrides, units, mappings, reducers, and table sorting.
+- Use `grafana-inspect editor-diagnostics` for panels with transformations when Grafana editor diagnostics must participate in validation. It supplies one synthetic frame per query and mounts the tool-pinned Grafana release's real transformation rows and editors under jsdom, so neither a Grafana server nor a source-path environment variable is required. It caches the pinned upstream source/runtime automatically on first use and fails on semantic editor alerts such as ineffective transformations. Do not replace it with dashboard-specific warning rules.
+- Data and transformation-editor checks support classic and v2 dashboard JSON. Start live-data work with `grafana-inspect data --list-panels`, then select bounded panels, time ranges, and variable scopes. Do not run every panel against production by default.
+- Editor diagnostics need no connection configuration; configure `GRAFANA_URL` and `GRAFANA_TOKEN` for live data checks. Dependencies are installed by the dotfiles tools. Keep tokens out of arguments, output, and version control.
+- The automatically cached Grafana release is trusted upstream code pinned by the dotfiles tools. Use only a trusted checkout when overriding it with `--grafana-source`: the headless harness executes that checkout's Jest configuration and frontend code.
 - This is a data-pipeline check, not a browser renderer. Pair it with task-based browser checks for layout, interaction, links, themes, narrow widths, and accessibility. Read `references/dashboard/dashboard-visible-data.md` for setup, examples, limitations, and exit codes.
 
 ## Scenes App Track
