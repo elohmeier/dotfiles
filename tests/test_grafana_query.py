@@ -176,11 +176,17 @@ class AlertRuleManagementTest(unittest.TestCase):
         link = build_elasticsearch_explore_link(query)
         self.assertIn("{{ externalURL }}explore?", link)
         self.assertNotIn("{{ externalURL }}/explore", link)
+        self.assertIn("Logs (30 Minuten vor Auslösung):", link)
         self.assertIn("{{ $panes | urlquery }}", link)
         self.assertIn('printf "%s AND host.name:%q"', link)
         self.assertIn('\\"log\\"', link)
         self.assertIn('\\"type\\":\\"logs\\"', link)
         self.assertIn('\\"limit\\":\\"500\\"', link)
+        self.assertIn('("-30m" | parseDuration | toDuration', link)
+        self.assertIn("(now | toTime).UnixMilli", link)
+        self.assertIn('\\"range\\":{\\"from\\":\\"%d\\",\\"to\\":\\"%d\\"}', link)
+        self.assertIn("$query $from $to", link)
+        self.assertNotIn("now-30m", link)
 
     def test_replaces_legacy_explore_link_and_is_idempotent(self) -> None:
         query = elasticsearch_alert_query(elasticsearch_alert_rule(), frozenset())
@@ -274,13 +280,20 @@ class AlertRuleManagementTest(unittest.TestCase):
 
     def test_reconcile_explore_links_skips_managed_rules(self) -> None:
         requests: list[httpx.Request] = []
+        managed_rule = elasticsearch_alert_rule(provenance="file")
+        multi_query_rule = elasticsearch_alert_rule(
+            name="multi-query-rule", provenance="file"
+        )
+        multi_query_rule["spec"]["expressions"]["B"] = multi_query_rule["spec"][
+            "expressions"
+        ]["A"]
 
         def respond(request: httpx.Request) -> httpx.Response:
             requests.append(request)
             return httpx.Response(
                 200,
                 json={
-                    "items": [elasticsearch_alert_rule(provenance="file")],
+                    "items": [managed_rule, multi_query_rule],
                     "metadata": {},
                 },
             )
@@ -308,6 +321,7 @@ class AlertRuleManagementTest(unittest.TestCase):
         self.assertEqual(result, 0)
         self.assertEqual([request.method for request in requests], ["GET"])
         self.assertIn("provenance file", output.getvalue())
+        self.assertIn("2 managed skipped, 0 errors", output.getvalue())
 
     def test_create_uses_grouped_provisioning_api_and_returns_app_rule(self) -> None:
         requests: list[httpx.Request] = []

@@ -139,7 +139,7 @@ ELASTICSEARCH_EXPLORE_LINK_END = (
 )
 
 
-ELASTICSEARCH_EXPLORE_LINK_LABEL = "Logs (letzte 30 Minuten):"
+ELASTICSEARCH_EXPLORE_LINK_LABEL = "Logs (30 Minuten vor Auslösung):"
 
 
 ELASTICSEARCH_EXPLORE_LINK_RE = re.compile(
@@ -151,7 +151,8 @@ ELASTICSEARCH_EXPLORE_LINK_RE = re.compile(
 
 
 ELASTICSEARCH_LEGACY_EXPLORE_LINK_RE = re.compile(
-    rf"^{re.escape(ELASTICSEARCH_EXPLORE_LINK_LABEL)} .*explore\?[^\n]*(?:\n|$)",
+    rf"^(?:{re.escape(ELASTICSEARCH_EXPLORE_LINK_LABEL)}|"
+    rf"{re.escape('Logs (letzte 30 Minuten):')}) .*explore\?[^\n]*(?:\n|$)",
     re.MULTILINE,
 )
 

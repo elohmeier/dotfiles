@@ -210,6 +210,8 @@ def build_elasticsearch_explore_link(query: ElasticsearchAlertQuery) -> str:
     parts = [
         ELASTICSEARCH_EXPLORE_LINK_START,
         f"{{{{ $query := {go_template_string(runtime_query)} }}}}",
+        '{{ $from := ("-30m" | parseDuration | toDuration | (now | toTime).Add).UnixMilli }}',
+        "{{ $to := (now | toTime).UnixMilli }}",
     ]
     for field_name in query.term_fields:
         escaped_field = lucene_escape_term(field_name).replace("%", "%%")
@@ -237,16 +239,19 @@ def build_elasticsearch_explore_link(query: ElasticsearchAlertQuery) -> str:
         "log": {
             "datasource": query.datasource_uid,
             "queries": [explore_query],
-            "range": {"from": "now-30m", "to": "now"},
+            "range": {"from": "grafana-query-from", "to": "grafana-query-to"},
         }
     }
     panes_format = json.dumps(panes, ensure_ascii=False, separators=(",", ":"))
-    panes_format = panes_format.replace("%", "%%").replace(
-        go_template_string(ELASTICSEARCH_EXPLORE_QUERY_SENTINEL), "%q"
+    panes_format = (
+        panes_format.replace("%", "%%")
+        .replace(go_template_string(ELASTICSEARCH_EXPLORE_QUERY_SENTINEL), "%q")
+        .replace(go_template_string("grafana-query-from"), '"%d"')
+        .replace(go_template_string("grafana-query-to"), '"%d"')
     )
     parts.extend(
         (
-            f"{{{{ $panes := printf {go_template_string(panes_format)} $query }}}}",
+            f"{{{{ $panes := printf {go_template_string(panes_format)} $query $from $to }}}}",
             f"{ELASTICSEARCH_EXPLORE_LINK_LABEL} "
             "{{ externalURL }}explore?schemaVersion=1&panes="
             "{{ $panes | urlquery }}&orgId=1",
@@ -621,10 +626,16 @@ def cmd_alert_rule_reconcile_explore_links(c: httpx.Client, args: Any) -> int:
         title = spec.get("title") if isinstance(spec, dict) else None
         display_name = name if isinstance(name, str) and name else "<unnamed>"
         display_title = title if isinstance(title, str) and title else display_name
+        manager = alert_rule_manager(rule)
 
         try:
             query = elasticsearch_alert_query(rule, datasource_uids)
         except ValueError as error:
+            if manager and not args.allow_managed:
+                matched += 1
+                managed += 1
+                print(f"SKIP {display_name}: {display_title} ({manager})")
+                continue
             errors.append(f"{display_name}: {error}")
             continue
         if query is None:
@@ -662,7 +673,6 @@ def cmd_alert_rule_reconcile_explore_links(c: httpx.Client, args: Any) -> int:
             unchanged += 1
             continue
 
-        manager = alert_rule_manager(rule)
         if manager and not args.allow_managed:
             managed += 1
             print(f"SKIP {name}: {display_title} ({manager})")
