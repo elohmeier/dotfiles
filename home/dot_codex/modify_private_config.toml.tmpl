@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import json
 import sys
 import tomllib
 
@@ -57,7 +58,7 @@ def value(v):
     if isinstance(v, int | float):
         return str(v)
     if isinstance(v, str):
-        return repr(v).replace("'", '"')
+        return json.dumps(v, ensure_ascii=False)
     if isinstance(v, list):
         return "[" + ", ".join(value(x) for x in v) + "]"
     raise TypeError(type(v))
