@@ -935,15 +935,20 @@ function targetDatasource(target: JsonObject): string {
   return dsType && uid ? `${dsType}:${uid}` : uid || dsType;
 }
 
-function prepareTargets(panel: Panel, variables: Record<string, TemplateValue>, stepMs?: number): JsonObject[] {
+export function prepareTargets(panel: Panel, variables: Record<string, TemplateValue>, stepMs?: number): JsonObject[] {
   const substituted = substituteVars(panel.targets, variables);
   if (!Array.isArray(substituted)) {
     return [];
   }
   const targets = substituted.filter(isObject);
+  const data = isObject(panel.raw.data) ? panel.raw.data : {};
+  const spec = isObject(data.spec) ? data.spec : {};
+  const queryOptions = panel.source === "v2" && isObject(spec.queryOptions) ? spec.queryOptions : panel.raw;
   for (const target of targets) {
     const datasource = isObject(target.datasource) ? target.datasource : {};
     const dsType = datasource.type;
+    if (queryOptions.maxDataPoints != null) target.maxDataPoints ??= queryOptions.maxDataPoints;
+    if (dsType === "prometheus" && queryOptions.interval) target.interval ??= queryOptions.interval;
     if (stepMs != null && (dsType === "prometheus" || dsType === "loki")) {
       target.intervalMs ??= stepMs;
       target.maxDataPoints ??= 1_000_000;
@@ -1021,22 +1026,26 @@ async function queryPanel(
     body,
   });
 
-  if (response.statusCode >= 400) {
-    result.errors.push(`HTTP ${response.statusCode}: ${response.text.trim()}`);
-    return result;
-  }
-
-  if (!isObject(response.json)) {
-    result.errors.push("Grafana returned a non-object JSON response");
-    return result;
-  }
-  const [frames, errors] = framesFromResponse(response.json);
+  const [frames, errors] = queryResponseFrames(response, targets.map(t => asText(t.refId)));
   result.frames = frames;
   result.errors.push(...errors);
   return result;
 }
 
-function framesFromResponse(payload: JsonObject): [DataFrame[], string[]] {
+export function queryResponseFrames(response: { statusCode: number; json: unknown; text: string }, refs: string[]): [DataFrame[], string[]] {
+  const payload = response.json;
+  if (isObject(payload) && isObject(payload.results)) {
+    const [frames, errors] = framesFromResponse(payload, refs);
+    // Mixed datasource requests can return HTTP 400 with successful sibling
+    // frames. Keep that evidence and report only errors, not the entire payload.
+    if (response.statusCode >= 400) errors.unshift(`HTTP ${response.statusCode}`);
+    return [frames, errors];
+  }
+  const message = isObject(payload) ? asText(payload.message || payload.error) : "non-object JSON response";
+  return [[], [`HTTP ${response.statusCode}: ${message || "response has no results object"}`]];
+}
+
+export function framesFromResponse(payload: JsonObject, expectedRefs: string[] = []): [DataFrame[], string[]] {
   const frames: DataFrame[] = [];
   const errors: string[] = [];
   const results = isObject(payload.results) ? payload.results : undefined;
@@ -1044,8 +1053,13 @@ function framesFromResponse(payload: JsonObject): [DataFrame[], string[]] {
     return [frames, ["response has no results object"]];
   }
 
+  for (const refId of expectedRefs) {
+    if (!(refId in results)) errors.push(`${refId}: query result missing from response`);
+  }
+
   for (const [refId, rawResult] of Object.entries(results)) {
     if (!isObject(rawResult)) {
+      errors.push(`${refId}: malformed query result`);
       continue;
     }
     if (rawResult.error) {

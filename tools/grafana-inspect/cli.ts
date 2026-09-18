@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import { parseArgs } from "node:util";
 import { main as data, loadJson, unwrapDashboard, collectPanels, collectVariables } from "./dashboard_visible_data.js";
 import { main as editorDiagnostics } from "./dashboard_editor_diagnostics.js";
+import { main as queryCheck } from "./query_check.js";
 import { release, resolveGrafanaSource, runHarness } from "./upstream.js";
 
 async function main(): Promise<number> {
@@ -12,9 +13,10 @@ async function main(): Promise<number> {
     return 0;
   }
   if (command === "data") return data(args);
+  if (command === "query-check") return queryCheck(args);
   if (command === "editor-diagnostics") return editorDiagnostics(args);
   if (!command || command === "--help" || command === "help") {
-    console.log("Usage: grafana-inspect <structure|data|editor-schema|editor-diagnostics|version> [options]\nUse a command with --help for details.");
+    console.log("Usage: grafana-inspect <structure|data|query-check|editor-schema|editor-diagnostics|version> [options]\nUse a command with --help for details.");
     return 0;
   }
   const { values, positionals } = parseArgs({ args, allowPositionals: true, options: {

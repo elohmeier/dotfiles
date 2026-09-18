@@ -33,6 +33,8 @@ func run(args []string) error {
 		return runRender(args[1:])
 	case "validate":
 		return runValidate(args[1:])
+	case "validate-promql":
+		return runValidatePromQL(args[1:])
 	case "schema":
 		return writeOpenAPI()
 	case "validate-live":
@@ -66,6 +68,7 @@ Commands:
   convert          Convert classic JSON or a v1 resource to stable v2
   render           Convert a baseline, then apply a Jsonnet patch to its stable-v2 spec
   validate         Validate with Grafana's pinned stable-v2 Go types and CUE validator
+  validate-promql  Parse interpolated PromQL query records with the upstream parser
   schema           Export pinned upstream OpenAPI for editor validation
   validate-live    Validate a v2 resource through Grafana's strict dry-run API
   export-context   Export conversion context from a live Grafana instance

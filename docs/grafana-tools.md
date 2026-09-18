@@ -15,6 +15,7 @@ Python commands are installed through `pyproject.toml` and `home/.chezmoiscripts
 grafana-inspect structure dashboard.json
 grafana-dashboard validate --input dashboard.json --input-format resource
 grafana-inspect editor-schema dashboard.json
+grafana-inspect query-check dashboard.json
 grafana-inspect data dashboard.json --panel-id 3 --from now-30m --var service=checkout
 grafana-inspect editor-diagnostics dashboard.json --panel-id 3
 grafana-dashboard validate-live --input dashboard.json --namespace default
@@ -27,6 +28,21 @@ Run each command with `--help` for options. `grafana-dashboard render` additiona
 Use `GRAFANA_URL` and `GRAFANA_TOKEN`, or `GRAFANA_USERNAME`/`GRAFANA_PASSWORD`. Server administration requires administrator credentials. TLS verification defaults to true; use `GRAFANA_CA_FILE` for a CA bundle and `GRAFANA_TLS_VERIFY` for an explicit verification setting. `GRAFANA_HOST_HEADER` and `GRAFANA_SNI_HOSTNAME` handle virtual-host routing. Go and Node additionally accept `GRAFANA_RESOLVE` DNS overrides. Supply environment variables through the shell or `mise exec`; the tools do not parse project environment files themselves.
 
 Canonical validation uses upstream Go types and CUE. Editor-schema validation uses the actual upstream schema converter and Monaco JSON worker. Transformation diagnostics use upstream React editors with synthetic frames. Data inspection executes `@grafana/data` transformations and fails on unsupported transformations or processing errors. It does not rewrite the dashboard's joins or aggregations.
+
+`query-check` parses PromQL using the upstream Prometheus parser through
+`grafana-dashboard validate-promql`. It includes inactive tabs and hidden targets,
+interpolates saved variable values, and substitutes known duration/time macros
+only in syntax probes. It fails on unresolved variables or invalid syntax (such
+as single-backslash regex escapes inside PromQL strings), without repairing the
+query behind the operator's back. Non-PromQL languages are explicitly reported as
+unchecked. This is not a metric-existence, runtime, or health check; follow it
+with bounded `data` queries against the intended server. Syntax acceptance uses
+the parser version in go.mod (aligned with Grafana's Prometheus dependency);
+older datasource backends can support a different language subset.
+
+Data inspection distinguishes an empty successful response from missing/malformed
+query results and propagates errors even when the outer response is HTTP 200.
+It carries panel maxDataPoints and Prometheus minimum interval into requests.
 
 Data inspection is not a browser renderer: variable queries, datasource frontend processing, panel plugin UI, repeats, section-scoped variables, conditional rendering, and selected-tab visibility are not fully emulated. Use bounded panel selections and explicit variable values. Use browser checks when those behaviors matter.
 

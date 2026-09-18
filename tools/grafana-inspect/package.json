@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc && cp *.cjs *harness.test.ts* dist/ && cp ../grafana-version.json .",
-    "test": "tsx --test dashboard_visible_data.test.ts",
+    "test": "tsx --test dashboard_visible_data.test.ts query_check.test.ts",
     "typecheck": "tsc --noEmit",
     "test:editor": "tsx --test editor.integration.ts"
   },
