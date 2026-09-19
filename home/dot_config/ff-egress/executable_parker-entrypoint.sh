@@ -5,6 +5,12 @@ profile="${FF_PROFILE:-ffbs}"
 # shellcheck source=/dev/null
 source "/profiles/${profile}/profile"
 state="/state/${profile}"
+# Ports opened inward for a workload sharing this namespace. Empty by default,
+# which leaves the namespace inbound-closed. Defined here rather than inside
+# the nftables heredoc because that runs in a pipeline subshell.
+ingress_tcp_ports="${FF_INGRESS_TCP_PORTS:-}"
+# Routing table holding the reply route for those ports.
+FF_INGRESS_TABLE="${FF_INGRESS_TABLE:-100}"
 mkdir -p "${state}"
 chmod 700 "${state}"
 umask 077
@@ -67,6 +73,13 @@ done < <(jq -r '.concentrators[] | [.id,.endpoint,.address4,.address6] | @tsv' "
 	echo '    type filter hook input priority filter; policy drop;'
 	echo '    iifname "lo" accept'
 	echo '    ct state established,related accept'
+	# Published ports reach a workload sharing this namespace as new inbound
+	# connections on the uplink interface, so the drop policy would swallow
+	# them. Only ports named in FF_INGRESS_TCP_PORTS are opened; the default
+	# is empty, which leaves the namespace inbound-closed as before.
+	for port in ${ingress_tcp_ports//,/ }; do
+		printf '    tcp dport %s accept\n' "${port}"
+	done
 	echo '  }'
 	echo '  chain output {'
 	echo '    type filter hook output priority filter; policy drop;'
@@ -74,6 +87,13 @@ done < <(jq -r '.concentrators[] | [.id,.endpoint,.address4,.address6] | @tsv' "
 	for interface in "${interfaces[@]}"; do printf '    oifname "%s" accept\n' "${interface}"; done
 	for i in "${!endpoint_ips[@]}"; do
 		printf '    oifname "%s" ip daddr %s udp dport %s accept\n' "${uplink_if}" "${endpoint_ips[i]}" "${endpoint_ports[i]}"
+	done
+	# Replies to accepted ingress. Without this the inbound SYN is accepted and
+	# the SYN-ACK is dropped, so a published port looks reachable on loopback
+	# but times out from the LAN. Scoped to the ingress source ports and to
+	# established conntrack state, so no new outbound can take this path.
+	for port in ${ingress_tcp_ports//,/ }; do
+		printf '    oifname "%s" tcp sport %s ct state established accept\n' "${uplink_if}" "${port}"
 	done
 	echo '  }'
 	echo '}'
@@ -116,6 +136,22 @@ ip route flush default
 ip -6 route flush default
 ip route add default dev "${interface}"
 ip -6 route add default dev "${interface}"
+# Replies to published ports must leave through the uplink, not the tunnel.
+# The default route points into WireGuard, so without this an inbound
+# connection is accepted and its reply is routed into the tunnel and lost — the
+# port answers on loopback but times out from anywhere else. Matching on the
+# source port rather than the client address keeps this correct for every
+# caller: LAN hosts, Tailscale peers, and the host itself, which rootless
+# Podman's pasta presents as a link-local address. The uplink interface is
+# pasta's tap, so sending replies there hands them back for translation.
+if [[ -n "${ingress_tcp_ports}" ]]; then
+	ip route replace default dev "${uplink_if}" scope link table "${FF_INGRESS_TABLE}"
+	ip -6 route replace default dev "${uplink_if}" table "${FF_INGRESS_TABLE}" 2>/dev/null || true
+	for port in ${ingress_tcp_ports//,/ }; do
+		ip rule add ipproto 6 sport "${port}" lookup "${FF_INGRESS_TABLE}" priority 100
+		ip -6 rule add ipproto 6 sport "${port}" lookup "${FF_INGRESS_TABLE}" priority 100 2>/dev/null || true
+	done
+fi
 printf '%s\n' "${interface}" >"${state}/selected"
 {
 	for dns in ${FF_DNS_SERVERS}; do echo "nameserver ${dns}"; done
