@@ -1,0 +1,14 @@
+{{- $npmVersion := "0.0.0" -}}
+{{- with lookPath "npm" -}}
+{{- $npmVersion = output . "--version" | trim -}}
+{{- end -}}
+prefix=${HOME}/.local
+{{ if semverCompare ">=11.16.0" $npmVersion -}}
+strict-allow-scripts=true
+{{ if semverCompare ">=12.0.0" $npmVersion -}}
+strict-npmrc=true
+{{ end -}}
+{{ else -}}
+ignore-scripts=true
+{{ end -}}
+update-notifier=false

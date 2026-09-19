@@ -37,6 +37,17 @@ disable-agent-publish:
     "{{ lookPath "systemctl" }}" --user disable --now agent-publish.service
 {{- end }}
 
+# Install or update global npm tools
+install-npm-tools:
+    "{{ lookPath "mkdir" }}" -p "$HOME/.local/lib"
+    "{{ lookPath "npm" | default "npm" }}" install --global --no-audit --no-fund --allow-scripts=@anthropic-ai/claude-code,@google/genai,esbuild,protobufjs @anthropic-ai/claude-code@latest @earendil-works/pi-coding-agent@latest hunkdiff@latest markdownlint-cli@latest svelte-language-server@latest
+
+# Check global npm tools and clean the package cache
+npm-maintain:
+    -"{{ lookPath "npm" | default "npm" }}" outdated --global --depth=0
+    "{{ lookPath "npm" | default "npm" }}" cache verify
+    -"{{ lookPath "npm" | default "npm" }}" doctor
+
 # Install Neovim and its language tooling
 install-nvim:
     #!/bin/bash
@@ -90,7 +101,7 @@ install-nvim:
     brew "yaml-language-server"
     EOF
 
-    npm install -g svelte-language-server
+    "{{ lookPath "just" | default "just" }}" --justfile {{"{{"}} justfile() {{"}}"}} install-npm-tools
     uv tool install --upgrade djade
     uv tool install --upgrade jupytext
     uv tool install --upgrade rumdl
@@ -201,8 +212,6 @@ install-extras: install-nvim
     cask "stats"
 {{- end }}
     EOF
-
-    npm install -g hunkdiff@latest
 
     echo "Extra packages installed successfully!"
 
