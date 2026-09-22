@@ -8,9 +8,14 @@ import type { DataFrame } from "@grafana/data";
 
 import {
   applyGrafanaTransformations,
+  applyVariableOverrides,
+  collectPanels,
+  collectVariables,
   collectDashboardEditorDiagnosticsInput,
   dataTransformerConfigs,
+  formatVariableValue,
   initGrafanaDataForCli,
+  prepareTargets,
   type JsonObject,
 } from "./dashboard_visible_data.js";
 
@@ -200,4 +205,132 @@ test("unsupported active transformations fail; disabled ones are not executed", 
   initGrafanaDataForCli();
   await assert.rejects(applyGrafanaTransformations([], [{ id: "not-a-transform", options: {} }], {}), /unsupported transformation/);
   assert.deepEqual(await applyGrafanaTransformations([], [{ id: "not-a-transform", disabled: true, options: {} }], {}), []);
+});
+
+test("variable formatters match the pinned Grafana formatter behavior", () => {
+  assert.equal(formatVariableValue(["test", "test2"], "raw"), "test,test2");
+  assert.equal(formatVariableValue(["test", "test2"], "csv"), "test,test2");
+  assert.equal(formatVariableValue(["test", "test2"], "text", ["Server 1", "Server 2"]), "Server 1 + Server 2");
+  assert.equal(formatVariableValue(["test", "test2"], "glob"), "{test,test2}");
+  assert.equal(formatVariableValue(["test.", "test2"], "regex"), "(test\\.|test2)");
+  assert.equal(formatVariableValue("Gi3/14", "regex"), "Gi3\\/14");
+  assert.equal(formatVariableValue(["test", "test2"], "pipe"), "test|test2");
+  assert.equal(formatVariableValue(["test", "test'2"], "singlequote"), "'test','test\\'2'");
+  assert.equal(formatVariableValue(["test", 'test"2'], "doublequote"), '"test","test\\"2"');
+  assert.equal(formatVariableValue(["test", "test'value2"], "sqlstring"), "'test','test''value2'");
+  assert.equal(formatVariableValue(["foo()bar BAZ", "test2"], "percentencode"), "%7Bfoo%28%29bar%20BAZ%2Ctest2%7D");
+  assert.equal(formatVariableValue(["foo()bar BAZ", "test2"], "uriencode"), "%7Bfoo%28%29bar%20BAZ,test2%7D");
+  assert.equal(formatVariableValue(["test", "test2"], "json"), '["test","test2"]');
+  assert.equal(formatVariableValue(["test", "test2"], "unknown"), "{test,test2}");
+});
+
+test("MSSQL interpolation keeps custom All raw and expands saved non-custom All options", () => {
+  const dashboard: JsonObject = {
+    templating: { list: [
+      {
+        name: "custom",
+        multi: true,
+        includeAll: true,
+        allValue: "*",
+        current: { text: "All", value: "$__all" },
+        options: [{ text: "All", value: "$__all" }, { text: "Monitoring", value: "Monitoring" }],
+      },
+      {
+        name: "saved",
+        multi: true,
+        includeAll: true,
+        current: { text: "All", value: "$__all" },
+        options: [
+          { text: "All", value: "$__all" },
+          { text: "O'Brien", value: "O'Brien" },
+          { text: "Perimeter", value: "Perimeter" },
+        ],
+      },
+    ] },
+    panels: [{
+      id: 1,
+      title: "SQL",
+      type: "table",
+      datasource: { type: "mssql", uid: "sql" },
+      targets: [{
+        refId: "A",
+        rawSql: "SELECT * FROM events WHERE ('*' IN (${custom:singlequote}) OR team IN ($saved))",
+      }],
+    }],
+  };
+  const panel = collectPanels("classic", dashboard, { includeCollapsed: true, includeHiddenTargets: true })[0];
+  const target = prepareTargets(panel, collectVariables("classic", dashboard))[0];
+  assert.equal(target.rawSql, "SELECT * FROM events WHERE ('*' IN (*) OR team IN ('O''Brien','Perimeter'))");
+});
+
+test("repeated overrides preserve variable metadata and select multiple SQL values", () => {
+  const dashboard: JsonObject = {
+    templating: { list: [{
+      name: "team",
+      multi: true,
+      includeAll: true,
+      allValue: "*",
+      current: { text: "All", value: "$__all" },
+    }] },
+    panels: [{
+      id: 1,
+      title: "SQL",
+      type: "table",
+      datasource: { type: "mssql", uid: "sql" },
+      targets: [{
+        refId: "A",
+        rawSql: "SELECT * FROM events WHERE team IN ($team) AND safe IN (${team:sqlstring}) AND generic IN (${team:singlequote})",
+      }],
+    }],
+  };
+  const variables = collectVariables("classic", dashboard);
+  applyVariableOverrides(variables, ["team=Monitoring", "team=O'Brien"]);
+  assert.equal(variables.team.multi, true);
+  assert.equal(variables.team.includeAll, true);
+  assert.equal(variables.team.isAll, false);
+  const panel = collectPanels("classic", dashboard, { includeCollapsed: true, includeHiddenTargets: true })[0];
+  const target = prepareTargets(panel, variables)[0];
+  assert.equal(
+    target.rawSql,
+    "SELECT * FROM events WHERE team IN ('Monitoring','O''Brien') AND safe IN ('Monitoring','O''Brien') AND generic IN ('Monitoring','O\\'Brien')",
+  );
+});
+
+test("stable-v2 MSSQL targets use the same datasource interpolation", () => {
+  const dashboard: JsonObject = {
+    variables: [{
+      kind: "QueryVariable",
+      spec: {
+        name: "team",
+        multi: true,
+        includeAll: true,
+        current: { text: "O'Brien", value: "O'Brien" },
+      },
+    }],
+    elements: {
+      sql: {
+        kind: "Panel",
+        spec: {
+          id: 9,
+          title: "SQL",
+          vizConfig: { kind: "VizConfig", group: "table", spec: {} },
+          data: { kind: "QueryGroup", spec: { queries: [{
+            kind: "PanelQuery",
+            spec: {
+              refId: "A",
+              query: {
+                kind: "DataQuery",
+                group: "mssql",
+                datasource: { type: "mssql", uid: "sql" },
+                spec: { rawSql: "SELECT * FROM events WHERE team IN ($team)" },
+              },
+            },
+          }] } },
+        },
+      },
+    },
+  };
+  const panel = collectPanels("v2", dashboard, { includeCollapsed: true, includeHiddenTargets: true })[0];
+  const target = prepareTargets(panel, collectVariables("v2", dashboard))[0];
+  assert.equal(target.rawSql, "SELECT * FROM events WHERE team IN ('O''Brien')");
 });

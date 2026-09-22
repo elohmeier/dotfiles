@@ -26,6 +26,7 @@ const {
   createTheme,
   dataFrameFromJSON,
   displayNameOverrideProcessor,
+  escapeRegex,
   FieldConfigOptionsRegistry,
   FieldType,
   formattedValueToString,
@@ -116,37 +117,79 @@ function ensureBrowserShimForGrafanaData(): void {
   };
 }
 
-class TemplateValue {
+type VariableValue = string | string[];
+type VariableFormatter = (value: VariableValue, variable: TemplateValue) => string;
+
+export class TemplateValue {
   constructor(
     readonly values: string[],
-    readonly text = "",
+    readonly text: string | string[] = "",
     readonly multi = false,
+    readonly includeAll = false,
     readonly isAll = false,
     readonly allValue?: string,
+    readonly allValues: string[] = [],
+    readonly arrayValue = false,
   ) {}
 
-  render(fmt?: string): string {
-    if (this.isAll) {
-      return this.allValue || ".*";
+  render(fmt?: string, defaultFormatter?: VariableFormatter): string {
+    const customAll = this.isAll && this.allValue !== undefined;
+    if (customAll && fmt !== "text" && fmt !== "percentencode") {
+      return this.allValue!;
     }
-    const values = this.values.filter((value) => value != null).map(String);
-    if (!values.length) {
-      return "";
+    const value = this.isAll
+      ? this.allValue ?? this.allValues
+      : this.arrayValue || this.values.length > 1
+      ? this.values
+      : this.values[0] ?? "";
+    if (!fmt && defaultFormatter) {
+      return defaultFormatter(value, this);
     }
-    if (fmt === "raw" || fmt === "csv") {
-      return values.join(",");
-    }
-    if (fmt === "text") {
-      return this.text || values.join(",");
-    }
-    if (fmt === "regex" || (this.multi && values.length > 1)) {
-      return values.map(escapeRegex).join("|");
-    }
-    return values[0];
+    return formatVariableValue(value, fmt, this.isAll ? "All" : this.text);
   }
 
   display(): string {
     return this.render("raw");
+  }
+}
+
+export function formatVariableValue(
+  value: VariableValue,
+  format?: string,
+  text: string | string[] = value,
+): string {
+  const [name, ...args] = (format || "glob").split(":");
+  const values = Array.isArray(value) ? value : [value];
+  switch (name) {
+    case "raw":
+    case "csv":
+      return values.join(",");
+    case "text":
+      return Array.isArray(text) ? text.join(" + ") : text;
+    case "regex": {
+      const escaped = values.map(escapeRegex);
+      return escaped.length > 1 ? `(${escaped.join("|")})` : escaped[0] || "";
+    }
+    case "pipe":
+      return values.join("|");
+    case "singlequote":
+      return values.map((item) => `'${item.replaceAll("'", "\\'")}'`).join(",");
+    case "doublequote":
+      return values.map((item) => `"${item.replaceAll('"', '\\"')}"`).join(",");
+    case "sqlstring":
+      return values.map((item) => `'${item.replace(/['"]/g, match => match === "'" ? "''" : '\\"')}'`).join(",");
+    case "percentencode":
+      return encodeURIComponentStrict(Array.isArray(value) ? `{${values.join(",")}}` : value);
+    case "uriencode":
+      return encodeURIStrict(Array.isArray(value) ? `{${values.join(",")}}` : value);
+    case "json":
+      return Array.isArray(value) ? JSON.stringify(value) : value;
+    case "join":
+      return values.join(args[0] ?? ",");
+    case "glob":
+      return values.length > 1 ? `{${values.join(",")}}` : values[0] || "";
+    default:
+      return formatVariableValue(value, "glob", text);
   }
 }
 
@@ -338,7 +381,7 @@ export function collectDashboardEditorDiagnosticsInput(
   }
 
   const variables = collectVariables(shape, dashboard);
-  Object.assign(variables, parseVarOverrides(options.vars || []));
+  applyVariableOverrides(variables, options.vars || []);
 
   return {
     schemaVersion: 1,
@@ -397,7 +440,7 @@ async function queryDashboardVisibleData(
   const start = options.start || defaultStart;
   const end = options.end || defaultEnd;
   const variables = collectVariables(shape, dashboard);
-  Object.assign(variables, parseVarOverrides(options.vars || []));
+  applyVariableOverrides(variables, options.vars || []);
   const queryVariables = { ...variables };
   const stepMs = options.step ? parseStepMs(options.step) : undefined;
 
@@ -575,10 +618,23 @@ function templateValue(variable: JsonObject): TemplateValue {
   const spec = isObject(variable.spec) ? variable.spec : variable;
   const current = isObject(spec.current) ? spec.current : {};
   const values = asValues(current.value);
-  const text = Array.isArray(current.text) ? current.text.map(asText).join(",") : asText(current.text);
+  const text = Array.isArray(current.text) ? current.text.map(asText) : asText(current.text);
   const isAll = values.includes("$__all");
   const allValue = asText(spec.allValue) || undefined;
-  return new TemplateValue(values, text, Boolean(spec.multi), isAll, allValue);
+  const allValues = (Array.isArray(spec.options) ? spec.options : [])
+    .filter(isObject)
+    .map(option => asText(option.value))
+    .filter(value => value !== "$__all");
+  return new TemplateValue(
+    values,
+    text,
+    Boolean(spec.multi),
+    Boolean(spec.includeAll),
+    isAll,
+    allValue,
+    allValues,
+    Array.isArray(current.value),
+  );
 }
 
 export function collectVariables(shape: "classic" | "v2", dashboard: JsonObject): Record<string, TemplateValue> {
@@ -604,8 +660,8 @@ export function collectVariables(shape: "classic" | "v2", dashboard: JsonObject)
   return variables;
 }
 
-function parseVarOverrides(items: string[]): Record<string, TemplateValue> {
-  const result: Record<string, TemplateValue> = {};
+export function applyVariableOverrides(variables: Record<string, TemplateValue>, items: string[]): void {
+  const valuesByName = new Map<string, string[]>();
   for (const item of items) {
     const index = item.indexOf("=");
     if (index < 0) {
@@ -616,9 +672,27 @@ function parseVarOverrides(items: string[]): Record<string, TemplateValue> {
     if (!name) {
       throw new DashboardDataError(`--var expects a non-empty name, got ${JSON.stringify(item)}`);
     }
-    result[name] = new TemplateValue([value], value);
+    const values = valuesByName.get(name) || [];
+    values.push(value);
+    valuesByName.set(name, values);
   }
-  return result;
+  for (const [name, values] of valuesByName) {
+    const existing = variables[name];
+    const isAll = values.includes("$__all");
+    if (isAll && values.length > 1) {
+      throw new DashboardDataError(`--var ${name} cannot combine $__all with selected values`);
+    }
+    variables[name] = new TemplateValue(
+      values,
+      isAll ? "All" : values,
+      existing?.multi ?? values.length > 1,
+      existing?.includeAll ?? false,
+      isAll,
+      existing?.allValue,
+      existing?.allValues || [],
+      Boolean(existing?.multi) || values.length > 1,
+    );
+  }
 }
 
 function templateVariableModels(variables: Record<string, TemplateValue>): JsonObject[] {
@@ -626,20 +700,25 @@ function templateVariableModels(variables: Record<string, TemplateValue>): JsonO
     type: "custom",
     name,
     multi: variable.multi,
-    includeAll: variable.isAll,
+    includeAll: variable.includeAll,
     ...(variable.allValue ? { allValue: variable.allValue } : {}),
     current: {
-      text: variable.text || variable.values.join(","),
+      text: variable.text || variable.values,
       value: variable.isAll
         ? "$__all"
-        : variable.multi
+        : variable.arrayValue
         ? variable.values
         : variable.values[0] || "",
     },
   }));
 }
 
-function replaceVariables(value: string, variables: Record<string, TemplateValue>, scopedVars?: unknown): string {
+function replaceVariables(
+  value: string,
+  variables: Record<string, TemplateValue>,
+  scopedVars?: unknown,
+  defaultFormatter?: VariableFormatter,
+): string {
   let result = value;
   const dataContext = scopedDataContext(scopedVars);
   if (dataContext?.field) {
@@ -656,20 +735,26 @@ function replaceVariables(value: string, variables: Record<string, TemplateValue
     (match, braced: string | undefined, fmt: string | undefined, named: string | undefined) => {
       const name = braced || named;
       const variable = name ? variables[name] : undefined;
-      return variable ? variable.render(fmt) : match;
+      return variable ? variable.render(fmt, defaultFormatter) : match;
     },
   );
 }
 
-function substituteVars(value: unknown, variables: Record<string, TemplateValue>): unknown {
+function substituteVars(
+  value: unknown,
+  variables: Record<string, TemplateValue>,
+  defaultFormatter?: VariableFormatter,
+): unknown {
   if (typeof value === "string") {
-    return replaceVariables(value, variables);
+    return replaceVariables(value, variables, undefined, defaultFormatter);
   }
   if (Array.isArray(value)) {
-    return value.map((item) => substituteVars(item, variables));
+    return value.map((item) => substituteVars(item, variables, defaultFormatter));
   }
   if (isObject(value)) {
-    return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, substituteVars(child, variables)]));
+    return Object.fromEntries(
+      Object.entries(value).map(([key, child]) => [key, substituteVars(child, variables, defaultFormatter)]),
+    );
   }
   return value;
 }
@@ -936,11 +1021,17 @@ function targetDatasource(target: JsonObject): string {
 }
 
 export function prepareTargets(panel: Panel, variables: Record<string, TemplateValue>, stepMs?: number): JsonObject[] {
-  const substituted = substituteVars(panel.targets, variables);
-  if (!Array.isArray(substituted)) {
-    return [];
-  }
-  const targets = substituted.filter(isObject);
+  const targets = panel.targets.map(target => {
+    const substituted = substituteVars(target, variables, legacyTargetFormatter);
+    if (!isObject(substituted)) {
+      return substituted;
+    }
+    const datasource = isObject(substituted.datasource) ? substituted.datasource : {};
+    if (isSqlDatasource(asText(datasource.type)) && typeof target.rawSql === "string") {
+      substituted.rawSql = replaceVariables(target.rawSql, variables, undefined, sqlVariableFormatter);
+    }
+    return substituted;
+  }).filter(isObject);
   const data = isObject(panel.raw.data) ? panel.raw.data : {};
   const spec = isObject(data.spec) ? data.spec : {};
   const queryOptions = panel.source === "v2" && isObject(spec.queryOptions) ? spec.queryOptions : panel.raw;
@@ -955,6 +1046,31 @@ export function prepareTargets(panel: Panel, variables: Record<string, TemplateV
     }
   }
   return targets;
+}
+
+function isSqlDatasource(type: string): boolean {
+  return type === "mssql" || type === "mysql" || type === "grafana-postgresql-datasource";
+}
+
+function sqlVariableFormatter(value: VariableValue, variable: TemplateValue): string {
+  if (Array.isArray(value)) {
+    return value.map(quoteSqlLiteral).join(",");
+  }
+  return variable.multi || variable.includeAll ? quoteSqlLiteral(value) : value.replaceAll("'", "''");
+}
+
+function quoteSqlLiteral(value: string): string {
+  return `'${value.replaceAll("'", "''")}'`;
+}
+
+function legacyTargetFormatter(value: VariableValue, variable: TemplateValue): string {
+  if (Array.isArray(value)) {
+    if (variable.multi && value.length > 1) {
+      return value.map(escapeRegex).join("|");
+    }
+    return value[0] || "";
+  }
+  return value;
 }
 
 async function queryPanels(
@@ -1637,7 +1753,7 @@ Options:
   --panel-type TYPE          Filter panels by type, e.g. table or stat; repeatable/comma-separated
   --from TIME                Time range start; defaults to dashboard time
   --to TIME                  Time range end; defaults to dashboard time
-  --var NAME=VALUE           Override a dashboard variable; repeatable
+  --var NAME=VALUE           Override a variable; repeat the same name for multiple selected values
   --step DURATION            Set intervalMs for Prometheus/Loki targets, e.g. 30s
   --max-rows N               Max table rows per frame (default: 50)
   --max-series N             Max numeric series rows per panel (default: 50)
@@ -1669,8 +1785,12 @@ function deepClone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
-function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function encodeURIComponentStrict(value: string): string {
+  return encodeURIComponent(value).replace(/[!'()*]/g, char => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
+}
+
+function encodeURIStrict(value: string): string {
+  return encodeURI(value).replace(/[!'()*]/g, char => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
 }
 
 function cryptoRandomHex(): string {

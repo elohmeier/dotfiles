@@ -17,6 +17,7 @@ grafana-dashboard validate --input dashboard.json --input-format resource
 grafana-inspect editor-schema dashboard.json
 grafana-inspect query-check dashboard.json
 grafana-inspect data dashboard.json --panel-id 3 --from now-30m --var service=checkout
+grafana-inspect data dashboard.json --panel-id 3 --var team=Monitoring --var team=Perimeter
 grafana-inspect editor-diagnostics dashboard.json --panel-id 3
 grafana-dashboard validate-live --input dashboard.json --namespace default
 ```
@@ -44,7 +45,16 @@ Data inspection distinguishes an empty successful response from missing/malforme
 query results and propagates errors even when the outer response is HTTP 200.
 It carries panel maxDataPoints and Prometheus minimum interval into requests.
 
-Data inspection is not a browser renderer: variable queries, datasource frontend processing, panel plugin UI, repeats, section-scoped variables, conditional rendering, and selected-tab visibility are not fully emulated. Use bounded panel selections and explicit variable values. Use browser checks when those behaviors matter.
+Data inspection is not a browser renderer: variable queries, non-SQL datasource
+frontend processing, panel plugin UI, repeats, section-scoped variables,
+conditional rendering, and selected-tab visibility are not fully emulated.
+The common explicit variable formats (`raw`, `csv`, `text`, `glob`, `regex`,
+`pipe`, quoting, URL encoding, and JSON) and MSSQL/MySQL/PostgreSQL `rawSql`
+interpolation match the pinned Grafana release. Custom All values remain
+deliberately unescaped, as they do in Grafana. Repeat `--var NAME=VALUE` with
+the same name to select multiple values. Use bounded panel selections and
+explicit variable values. Use browser checks when the remaining frontend
+behaviors matter.
 
 Grouped alert creation intentionally retains the provisioning API: integration against 13.2.2 confirmed that app-resource creation rejects setting a rule group. The Python converter preserves that existing capability. Mutation confirmations, managed-resource protections, and the distinction between local-only alert dry runs and server dashboard dry runs remain intact.
 
