@@ -44,6 +44,8 @@ chezmoi init --apply https://github.com/elohmeier/dotfiles.git
 
 On Workbrew-managed Macs, the package hooks use `/opt/workbrew/bin/brew`.
 Keep that wrapper ahead of `/opt/homebrew/bin` on `PATH`.
+The font hook uses cask metadata to install fonts in `~/Library/Fonts` as the
+login user, so they do not appear as installed casks.
 
 ## Manual Setup
 
