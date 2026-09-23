@@ -1,4 +1,4 @@
-{{ with lookPath "brew" -}}
+{{ with (lookPath "/opt/workbrew/bin/brew" | default (lookPath "brew")) -}}
 export PATH="{{ dir . }}:$PATH"
 {{ end -}}
 export PATH="$HOME/.cargo/bin:$HOME/go/bin:$PATH"

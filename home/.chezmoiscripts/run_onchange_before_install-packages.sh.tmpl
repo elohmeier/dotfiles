@@ -1,4 +1,4 @@
-{{- $brew := lookPath "brew" -}}
+{{- $brew := lookPath "/opt/workbrew/bin/brew" | default (lookPath "brew") -}}
 {{- $apk := lookPath "apk" -}}
 #!/bin/sh
 {{ if $brew -}}
@@ -6,24 +6,7 @@ set -u
 
 echo "Installing packages..."
 
-"{{ $brew }}" bundle --file=/dev/stdin <<EOF
-brew "bat"
-brew "btop"
-brew "eza"
-brew "fd"
-{{- if not (lookPath "fish") }}
-brew "fish"
-{{- end }}
-brew "fzf"
-brew "just"
-brew "go"
-brew "node"
-brew "ncdu"
-brew "sops"
-brew "uv"
-brew "vivid"
-brew "zoxide"
-EOF
+"{{ $brew }}" install bat btop eza fd fzf just go node ncdu sops uv vivid zoxide{{ if not (lookPath "fish") }} fish{{ end }}
 {{ else if $apk -}}
 set -u
 

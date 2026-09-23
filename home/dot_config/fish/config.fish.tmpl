@@ -1,5 +1,5 @@
 {{/* vim: set filetype=fish: */}}
-{{- $brew := lookPath "brew" -}}
+{{- $brew := lookPath "/opt/homebrew/bin/brew" | default (lookPath "brew") -}}
 {{- with lookPath "nvim" }}
 set -gx EDITOR {{ . }}
 {{- end }}
@@ -19,6 +19,9 @@ if status is-interactive
 {{- end }}
 {{- if stat "/usr/local/bin" }}
   fish_add_path /usr/local/bin /usr/local/sbin
+{{- end }}
+{{- if lookPath "/opt/workbrew/bin/brew" }}
+  fish_add_path --move /opt/workbrew/bin
 {{- end }}
 
 {{- if eq .chezmoi.os "darwin" }}

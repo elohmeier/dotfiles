@@ -42,6 +42,9 @@ For existing macOS installations:
 chezmoi init --apply https://github.com/elohmeier/dotfiles.git
 ```
 
+On Workbrew-managed Macs, the package hooks use `/opt/workbrew/bin/brew`.
+Keep that wrapper ahead of `/opt/homebrew/bin` on `PATH`.
+
 ## Manual Setup
 
 ```bash

@@ -2,8 +2,10 @@
 
 set -uo pipefail
 
-if ! command -v brew &>/dev/null; then
-	exit 0
+if [[ -x /opt/workbrew/bin/brew ]]; then
+	brew=/opt/workbrew/bin/brew
+else
+	brew=$(command -v brew) || exit 0
 fi
 
 CASKS=(
@@ -14,6 +16,4 @@ CASKS=(
 
 echo "Installing fonts..."
 
-for cask in "${CASKS[@]}"; do
-	echo "cask \"$cask\""
-done | brew bundle --file=/dev/stdin || true
+"$brew" install --cask "${CASKS[@]}" || true
