@@ -16,4 +16,4 @@ CASKS=(
 
 echo "Installing fonts..."
 
-"$brew" install --cask "${CASKS[@]}" || true
+"$brew" install --cask --fontdir="$HOME/Library/Fonts" "${CASKS[@]}" || true

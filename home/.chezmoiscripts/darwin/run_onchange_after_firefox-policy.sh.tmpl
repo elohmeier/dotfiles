@@ -25,6 +25,6 @@ install_policy() {
     echo "warning: skipping /Applications/Firefox.app because it requires admin permissions" >&2
 }
 
-[ "$FOUND" ] && {
+if [ "$FOUND" ]; then
     echo "warning: Firefox policy was not installed" >&2
-}
+fi
