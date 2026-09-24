@@ -9,6 +9,7 @@ from typing import Any
 
 import requests
 import rich_click as click
+import urllib3
 from rich.console import Console
 from rich.progress import Progress
 
@@ -47,7 +48,11 @@ def _fetch_paginated(
 
 
 def _fetch_all_repos(
-    base_url: str, session: requests.Session, project_filter: tuple[str, ...]
+    base_url: str,
+    session: requests.Session,
+    project_filter: tuple[str, ...],
+    include_personal: bool,
+    include_forks: bool,
 ) -> list[dict[str, Any]]:
     """Fetch all repositories from all projects."""
     console.print("Fetching projects...")
@@ -59,14 +64,30 @@ def _fetch_all_repos(
         projects = [p for p in projects if p["key"].upper() in filter_set]
         console.print(f"Filtered to {len(projects)} projects")
 
+    if not include_personal:
+        projects = [
+            p
+            for p in projects
+            if p.get("type") != "PERSONAL" and not p["key"].startswith("~")
+        ]
+        console.print(f"Excluding personal projects: {len(projects)} remain")
+
     all_repos: list[dict[str, Any]] = []
+    skipped_forks = 0
     for project in projects:
         key = project["key"]
         repos = _fetch_paginated(
             session, f"{base_url}/rest/api/1.0/projects/{key}/repos"
         )
+        if not include_forks:
+            non_forks = [repo for repo in repos if not repo.get("origin")]
+            skipped_forks += len(repos) - len(non_forks)
+            repos = non_forks
         console.print(f"  {key}: {len(repos)} repositories")
         all_repos.extend(repos)
+
+    if not include_forks:
+        console.print(f"Excluded {skipped_forks} forks")
 
     return all_repos
 
@@ -94,6 +115,13 @@ def _clone_repo(
 @click.option(
     "--url", envvar="BITBUCKET_URL", required=True, help="Bitbucket Server base URL"
 )
+@click.option("--host", envvar="BITBUCKET_HOST", help="Override HTTP Host header")
+@click.option(
+    "--insecure",
+    is_flag=True,
+    envvar="BITBUCKET_INSECURE",
+    help="Skip TLS verification",
+)
 @click.option(
     "--username", envvar="BITBUCKET_USERNAME", required=True, help="Bitbucket username"
 )
@@ -103,6 +131,8 @@ def _clone_repo(
 @click.option(
     "--project", "-p", multiple=True, help="Filter by project key (can be repeated)"
 )
+@click.option("--include-personal", is_flag=True, help="Include personal projects")
+@click.option("--include-forks", is_flag=True, help="Include forked repositories")
 @click.option("--dry-run", is_flag=True, help="Show what would be done without cloning")
 @click.option("--verbose", "-v", is_flag=True, help="Show ghq command output")
 @click.option(
@@ -110,9 +140,13 @@ def _clone_repo(
 )
 def main(
     url: str,
+    host: str | None,
+    insecure: bool,
     username: str,
     token: str,
     project: tuple[str, ...],
+    include_personal: bool,
+    include_forks: bool,
     dry_run: bool,
     verbose: bool,
     parallel: int,
@@ -120,15 +154,23 @@ def main(
     """Clone all Bitbucket Server repositories into ghq."""
     session = requests.Session()
     session.auth = (username, token)
+    if host:
+        session.headers["Host"] = host
+    if insecure:
+        session.verify = False
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
     base_url = url.rstrip("/")
-    all_repos = _fetch_all_repos(base_url, session, project)
+    all_repos = _fetch_all_repos(
+        base_url, session, project, include_personal, include_forks
+    )
 
     if not all_repos:
         console.print("[yellow]No repositories found[/yellow]")
         sys.exit(0)
 
     console.print(f"Found {len(all_repos)} repositories total")
+    failed: list[str] = []
 
     with Progress() as progress:
         task = progress.add_task("Processing repos...", total=len(all_repos))
@@ -144,10 +186,12 @@ def main(
                 elif dry_run:
                     console.print(f"[dim]Would run: ghq get --update {ssh_url}[/dim]")
                 else:
-                    subprocess.run(
+                    result = subprocess.run(
                         ["ghq", "get", "--update", ssh_url],
                         capture_output=not verbose,
                     )
+                    if result.returncode != 0:
+                        failed.append(name)
 
                 progress.update(task, advance=1)
         else:
@@ -166,10 +210,19 @@ def main(
                         progress.update(task, description=f"Processed {repo_name}")
                         if dry_run and isinstance(result, str):
                             console.print(f"[dim]{result}[/dim]")
+                        elif result is False:
+                            failed.append(repo_name)
                     except Exception as exc:  # noqa: BLE001
                         console.print(f"[red]Error processing {name}: {exc}[/red]")
+                        failed.append(name)
 
                     progress.update(task, advance=1)
+
+    if failed:
+        console.print(f"[red]Failed: {len(failed)} repositories[/red]")
+        for name in failed:
+            console.print(f"[red]{name}[/red]")
+        sys.exit(1)
 
     console.print("[green]Done![/green]")
 
