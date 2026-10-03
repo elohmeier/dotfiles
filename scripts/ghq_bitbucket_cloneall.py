@@ -102,7 +102,7 @@ def _clone_repo(
     if not ssh_url:
         return False, name
 
-    command = ["ghq", "get", "--update", ssh_url]
+    command = ["ghq", "get", "--update", "--no-recursive", ssh_url]
 
     if dry_run:
         return f"Would run: {' '.join(command)}", name
@@ -184,10 +184,12 @@ def main(
                 if not ssh_url:
                     console.print(f"[yellow]No SSH URL for {name}[/yellow]")
                 elif dry_run:
-                    console.print(f"[dim]Would run: ghq get --update {ssh_url}[/dim]")
+                    console.print(
+                        f"[dim]Would run: ghq get --update --no-recursive {ssh_url}[/dim]"
+                    )
                 else:
                     result = subprocess.run(
-                        ["ghq", "get", "--update", ssh_url],
+                        ["ghq", "get", "--update", "--no-recursive", ssh_url],
                         capture_output=not verbose,
                     )
                     if result.returncode != 0:

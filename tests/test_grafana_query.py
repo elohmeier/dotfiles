@@ -21,10 +21,12 @@ from scripts.grafana.alerts import (
     cmd_alert_rule_patch,
     cmd_alert_rule_reconcile_explore_links,
     elasticsearch_alert_query,
+    load_document,
     reconcile_elasticsearch_explore_description,
 )
 from scripts.grafana.api import cmd_alert_rules, cmd_folders, cmd_show
 from scripts.grafana.common import ELASTICSEARCH_EXPLORE_LINK_START
+from scripts.grafana.dashboards import cmd_dashboard_patch, cmd_dashboard_upload
 from scripts.grafana.http import client
 from scripts.grafana.proxy import (
     GrafanaQueryApiProxyHandler,
@@ -79,6 +81,141 @@ def alert_rule(
         },
         "status": {"operatorStates": {}},
     }
+
+
+def dashboard() -> dict:
+    return {
+        "apiVersion": "dashboard.grafana.app/v2",
+        "kind": "Dashboard",
+        "metadata": {
+            "name": "dash-1",
+            "resourceVersion": "7",
+            "annotations": {"grafana.app/folder": "folder-1"},
+        },
+        "spec": {"title": "Original", "elements": {}, "layout": {}},
+        "status": {"state": "ok"},
+    }
+
+
+class DashboardCommandsTest(unittest.TestCase):
+    def test_json_document_preserves_exponent_numbers(self) -> None:
+        with patch("sys.stdin", StringIO('{"from": 1e-05}')):
+            self.assertEqual(load_document("-"), {"from": 1e-05})
+
+    def test_upload_updates_spec_and_preserves_live_metadata(self) -> None:
+        requests: list[httpx.Request] = []
+
+        def respond(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return httpx.Response(200, json=dashboard())
+
+        source = dashboard()
+        source["spec"]["title"] = "Updated"
+        source["metadata"] = {"name": "dash-1"}
+        with (
+            httpx.Client(
+                base_url="https://grafana.invalid",
+                transport=httpx.MockTransport(respond),
+            ) as grafana,
+            patch("scripts.grafana.dashboards.load_document", return_value=source),
+            redirect_stdout(StringIO()),
+        ):
+            result = cmd_dashboard_upload(
+                grafana,
+                SimpleNamespace(
+                    file="dashboard.json",
+                    uid=None,
+                    namespace="default",
+                    folder_uid=None,
+                    dry_run=False,
+                    yes=True,
+                ),
+            )
+        self.assertEqual(result, 0)
+        self.assertEqual([request.method for request in requests], ["GET", "PUT"])
+        body = json.loads(requests[-1].content)
+        self.assertEqual(body["metadata"]["resourceVersion"], "7")
+        self.assertEqual(
+            body["metadata"]["annotations"]["grafana.app/folder"], "folder-1"
+        )
+        self.assertEqual(body["spec"], source["spec"])
+        self.assertNotIn("status", body)
+
+    def test_upload_creates_unwrapped_spec_in_folder(self) -> None:
+        requests: list[httpx.Request] = []
+
+        def respond(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            if request.method == "GET":
+                return httpx.Response(404)
+            return httpx.Response(201, json=dashboard())
+
+        spec = dashboard()["spec"]
+        with (
+            httpx.Client(
+                base_url="https://grafana.invalid",
+                transport=httpx.MockTransport(respond),
+            ) as grafana,
+            patch("scripts.grafana.dashboards.load_document", return_value=spec),
+            redirect_stdout(StringIO()),
+        ):
+            result = cmd_dashboard_upload(
+                grafana,
+                SimpleNamespace(
+                    file="dashboard.json",
+                    uid="dash-1",
+                    namespace="default",
+                    folder_uid="folder-1",
+                    dry_run=False,
+                    yes=True,
+                ),
+            )
+        self.assertEqual(result, 0)
+        self.assertEqual([request.method for request in requests], ["GET", "POST"])
+        body = json.loads(requests[-1].content)
+        self.assertEqual(body["metadata"]["name"], "dash-1")
+        self.assertEqual(
+            body["metadata"]["annotations"], {"grafana.app/folder": "folder-1"}
+        )
+
+    def test_merge_patch_uses_current_resource_version(self) -> None:
+        requests: list[httpx.Request] = []
+
+        def respond(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return httpx.Response(200, json=dashboard())
+
+        with (
+            httpx.Client(
+                base_url="https://grafana.invalid",
+                transport=httpx.MockTransport(respond),
+            ) as grafana,
+            patch(
+                "scripts.grafana.dashboards.load_document",
+                return_value={"spec": {"title": "Updated"}},
+            ),
+            redirect_stdout(StringIO()),
+        ):
+            result = cmd_dashboard_patch(
+                grafana,
+                SimpleNamespace(
+                    file="patch.json",
+                    uid="dash-1",
+                    namespace="default",
+                    patch_type="merge",
+                    dry_run=False,
+                    yes=True,
+                ),
+            )
+        self.assertEqual(result, 0)
+        self.assertEqual([request.method for request in requests], ["GET", "PATCH"])
+        body = json.loads(requests[-1].content)
+        self.assertEqual(
+            body, {"spec": {"title": "Updated"}, "metadata": {"resourceVersion": "7"}}
+        )
+        self.assertEqual(
+            requests[-1].headers["Content-Type"], "application/merge-patch+json"
+        )
 
 
 def elasticsearch_alert_rule(

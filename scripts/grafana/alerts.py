@@ -59,9 +59,12 @@ def alert_rule_path(namespace: str, name: str | None = None) -> str:
 def load_document(path: str) -> Any:
     raw = sys.stdin.read() if path == "-" else open(path, encoding="utf-8").read()
     try:
-        return yaml.safe_load(raw)
-    except yaml.YAMLError as e:
-        raise click.UsageError(f"invalid JSON/YAML in {path}: {e}") from e
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        try:
+            return yaml.safe_load(raw)
+        except yaml.YAMLError as e:
+            raise click.UsageError(f"invalid JSON/YAML in {path}: {e}") from e
 
 
 def print_response(r: httpx.Response) -> int:

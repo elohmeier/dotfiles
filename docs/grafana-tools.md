@@ -20,7 +20,19 @@ grafana-inspect data dashboard.json --panel-id 3 --from now-30m --var service=ch
 grafana-inspect data dashboard.json --panel-id 3 --var team=Monitoring --var team=Perimeter
 grafana-inspect editor-diagnostics dashboard.json --panel-id 3
 grafana-dashboard validate-live --input dashboard.json --namespace default
+grafana-query dashboard get pwf877 > live-dashboard.json
+grafana-query dashboard upload dashboard.json --dry-run
+grafana-query dashboard upload dashboard.json --yes
+grafana-query dashboard patch pwf877 patch.json --dry-run
 ```
+
+`dashboard upload` accepts a wrapped `dashboard.grafana.app/v2` resource or an
+unwrapped editor spec with `--uid`. It fetches the current resource before an
+update, keeps its folder and resource version, and creates a missing dashboard
+with `--folder-uid` when supplied. `dashboard patch` accepts a resource-level
+JSON merge patch or `--type json` patch and includes a resource-version check.
+Both commands prompt before writing unless `--yes` is set; `--dry-run` makes no
+write request.
 
 Run each command with `--help` for options. `grafana-dashboard render` additionally needs `jsonnet`. `editor-schema` and `editor-diagnostics` lazily download the pinned Grafana source into `~/.cache/grafana-tools` (or `$XDG_CACHE_HOME/grafana-tools`) and install its locked frontend dependencies using the private Corepack dependency. Other commands do not need that checkout. A `--grafana-source` override must be a clean checkout of the pinned commit with its dependencies installed.
 

@@ -29,6 +29,7 @@ from .common import (
     GRAFANA_VERSION,
     SHOW_RESOURCES,
 )
+from .dashboards import cmd_dashboard_get, cmd_dashboard_patch, cmd_dashboard_upload
 from .http import client
 from .proxy import cmd_prom_api, cmd_query_api
 
@@ -430,6 +431,68 @@ def alert_rule_delete_command(
 ) -> None:
     """Delete one alert rule."""
     run_command(cmd_alert_rule_delete(c, SimpleNamespace(**locals())))
+
+
+@cli.group("dashboard")
+def dashboard_group() -> None:
+    """Get, patch, or upload v2 dashboards."""
+
+
+@dashboard_group.command("get")
+@click.argument("uid")
+@click.option("--namespace", default="default", show_default=True)
+@click.pass_obj
+def dashboard_get_command(c: httpx.Client, uid: str, namespace: str) -> None:
+    """Get a dashboard resource as JSON."""
+    run_command(cmd_dashboard_get(c, SimpleNamespace(**locals())))
+
+
+@dashboard_group.command("upload")
+@click.argument("file", type=click.Path(exists=True, dir_okay=False, allow_dash=True))
+@click.option("--uid", help="Dashboard UID, required for an unwrapped spec.")
+@click.option("--namespace", default="default", show_default=True)
+@click.option("--folder-uid", help="Folder UID when creating a dashboard.")
+@click.option(
+    "--dry-run", is_flag=True, help="Validate without sending a write request."
+)
+@click.option("--yes", is_flag=True, help="Skip the confirmation prompt.")
+@click.pass_obj
+def dashboard_upload_command(
+    c: httpx.Client,
+    file: str,
+    uid: str | None,
+    namespace: str,
+    folder_uid: str | None,
+    dry_run: bool,
+    yes: bool,
+) -> None:
+    """Create or update a dashboard from a wrapped resource or editor spec."""
+    run_command(cmd_dashboard_upload(c, SimpleNamespace(**locals())))
+
+
+@dashboard_group.command("patch")
+@click.argument("uid")
+@click.argument("file", type=click.Path(exists=True, dir_okay=False, allow_dash=True))
+@click.option(
+    "--type", "patch_type", type=click.Choice(("merge", "json")), default="merge"
+)
+@click.option("--namespace", default="default", show_default=True)
+@click.option(
+    "--dry-run", is_flag=True, help="Validate without sending a write request."
+)
+@click.option("--yes", is_flag=True, help="Skip the confirmation prompt.")
+@click.pass_obj
+def dashboard_patch_command(
+    c: httpx.Client,
+    uid: str,
+    file: str,
+    patch_type: str,
+    namespace: str,
+    dry_run: bool,
+    yes: bool,
+) -> None:
+    """Patch a dashboard resource using merge or JSON patch."""
+    run_command(cmd_dashboard_patch(c, SimpleNamespace(**locals())))
 
 
 @cli.command("show")
