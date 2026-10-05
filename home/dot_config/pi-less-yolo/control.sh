@@ -1,0 +1,317 @@
+#!/usr/bin/env bash
+#MISE description="Manage egress filtering and open live traffic / browser approvals"
+#MISE raw=true
+set -euo pipefail
+export AGENT="${AGENT:-pi}"
+
+# shellcheck source=tasks/pi/_runtime
+if [[ "${1:-}" != "url" ]]; then
+  source "$(dirname "${BASH_SOURCE[0]}")/runtime.sh"
+fi
+# shellcheck source=tasks/pi/_egress
+source "$(dirname "${BASH_SOURCE[0]}")/egress.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: mise run agent:egress <command> [args]
+
+Commands:
+  watch              Interactively approve/deny connection requests
+                     (PI_EGRESS=interactive mode; run in a second terminal)
+  allow <host>...     Persistently allow hosts (pattern: host, host:port, *.suffix)
+  deny <host>...      Persistently deny hosts (deny rules win over allow rules)
+  remove allow|deny <host>...  Remove rules from the selected scope
+  reload             Snapshot rules from the current host mise environment
+  list               Show generated defaults and persistent rules
+  secrets            List secret scopes (proxy-side placeholder injection)
+  secrets add <NAME> <host,host> [METHOD,METHOD]
+                     Scope secret $NAME to hosts (and optionally methods);
+                     the container only ever sees a placeholder
+  secrets remove <NAME>
+  web                Open live traffic and connection approvals in the browser
+  url                Print the saved localhost URL (no browser or proxy startup)
+  web --file <path>   Inspect a historical recording (separate viewer, port 8082)
+  status             Show proxy container, networks, and recent decisions
+  stop               Stop and remove the proxy sidecar
+
+Options (after command):
+  --scope global|project   Where watch/allow/deny/remove/web save rules
+                          Default: PI_EGRESS_RULE_SCOPE, otherwise global
+Select the agent with AGENT=pi|codex|claude (default pi).
+Project context is the nearest ancestor with mise.toml or .git.
+EOF
+}
+
+rule_add() {
+  egress_init
+  pi-egress-control rule --scope "${rule_scope}" "$1" "$2"
+}
+
+show_context() {
+  echo "Agent: ${AGENT:-pi}"
+  echo "Project: ${PI_EGRESS_PROJECT_ROOT:-global}"
+  if [[ "${rule_scope}" == project ]]; then
+    echo "Save scope: project → ${PI_EGRESS_PROJECT_ROOT}/mise.toml"
+  else
+    echo "Save scope: global → ${PI_EGRESS_GLOBAL_DIR}/rules.allow / rules.deny"
+  fi
+}
+
+print_rules_file() {
+  local label="$1" file="$2"
+  echo "${label}:"
+  if [[ -s "${file}" ]]; then
+    sed 's/^/  /' "${file}"
+  else
+    echo "  (none)"
+  fi
+}
+
+cmd_watch() {
+  egress_init
+  show_context
+  mkdir -p "${PI_EGRESS_DIR}/pending" "${PI_EGRESS_DIR}/decisions"
+  echo "Watching for egress approval requests in ${PI_EGRESS_DIR}/pending"
+  echo "Requests are denied by default after the proxy timeout. Ctrl-C to stop."
+  while true; do
+    local request_file id host_port
+    for request_file in "${PI_EGRESS_DIR}/pending"/*; do
+      [[ -e "${request_file}" ]] || continue
+      id="$(basename "${request_file}")"
+      [[ -e "${PI_EGRESS_DIR}/decisions/${id}" ]] && continue
+      host_port="$(cat "${request_file}" 2>/dev/null || true)"
+      [[ -z "${host_port}" ]] && continue
+
+      printf '\n[pi-egress] agent wants to connect to %s\n' "${host_port}"
+      printf '  a) allow once   s) allow for session   A) save %s allow\n' "${rule_scope}"
+      printf '  d) deny once    x) deny for session    N) save %s deny\n' "${rule_scope}"
+      local answer=""
+      read -rn1 -p '  choice [d]: ' answer < /dev/tty || answer="d"
+      echo
+      if [[ ! -e "${request_file}" || -e "${PI_EGRESS_DIR}/decisions/${id}" ]]; then
+        echo "  request expired (proxy timed out — denied by default)"
+        continue
+      fi
+      case "${answer}" in
+        a)      echo "allow"         > "${PI_EGRESS_DIR}/decisions/${id}" ;;
+        s)      echo "allow-session" > "${PI_EGRESS_DIR}/decisions/${id}" ;;
+        A)      rule_add allow "${host_port}"
+                echo "allow"         > "${PI_EGRESS_DIR}/decisions/${id}" ;;
+        x)      echo "deny-session"  > "${PI_EGRESS_DIR}/decisions/${id}" ;;
+        N)      rule_add deny "${host_port}"
+                echo "deny"          > "${PI_EGRESS_DIR}/decisions/${id}" ;;
+        d|"")   echo "deny"          > "${PI_EGRESS_DIR}/decisions/${id}" ;;
+        *)      echo "  unrecognized choice — denying once"
+                echo "deny"          > "${PI_EGRESS_DIR}/decisions/${id}" ;;
+      esac
+    done
+    sleep 0.5
+  done
+}
+
+cmd_list() {
+  show_context
+  if [[ -f "${PI_EGRESS_DIR}/config" ]]; then
+    echo "generated config (last run):"
+    grep -v '^#' "${PI_EGRESS_DIR}/config" | sed 's/^/  /'
+  else
+    echo "no generated config yet — run a pi task with PI_EGRESS set"
+  fi
+  echo
+  print_rules_file "global allow rules (${PI_EGRESS_GLOBAL_DIR}/rules.allow)" "${PI_EGRESS_GLOBAL_DIR}/rules.allow"
+  echo
+  print_rules_file "global deny rules (${PI_EGRESS_GLOBAL_DIR}/rules.deny)" "${PI_EGRESS_GLOBAL_DIR}/rules.deny"
+  print_rules_file "active project/environment allow snapshot" "${PI_EGRESS_DIR}/project.allow"
+  print_rules_file "active project/environment deny snapshot" "${PI_EGRESS_DIR}/project.deny"
+  echo "Deny rules win. Removing one rule may leave access allowed by another scope/default."
+}
+
+cmd_secrets() {
+  egress_init
+  local rules="${PI_EGRESS_GLOBAL_DIR}/secrets.rules"
+  local sub="${1:-list}"
+  [[ $# -gt 0 ]] && shift
+  case "${sub}" in
+    list)
+      if [[ -s "${rules}" ]]; then
+        echo "secret scopes (values are read from the host environment on each run):"
+        local name rest
+        while read -r name rest; do
+          [[ -z "${name}" || "${name}" == \#* ]] && continue
+          if [[ -n "${!name:-}" ]]; then
+            echo "  ${name} ${rest} (set)"
+          else
+            echo "  ${name} ${rest} (NOT set in current environment)"
+          fi
+        done < "${rules}"
+      else
+        echo "no secret scopes defined — add one with:"
+        echo "  mise run agent:egress secrets add GITHUB_TOKEN api.github.com,github.com"
+      fi
+      ;;
+    add)
+      [[ $# -ge 2 ]] || { echo "usage: mise run agent:egress secrets add <NAME> <host,host> [METHOD,METHOD]" >&2; exit 1; }
+      local name="$1" hosts="$2" methods="${3:-}"
+      mkdir -p "${PI_EGRESS_DIR}"
+      touch "${rules}"
+      if grep -q "^${name} " "${rules}"; then
+        echo "secret '${name}' already has a scope — remove it first" >&2
+        exit 1
+      fi
+      echo "${name} hosts=${hosts}${methods:+ methods=${methods}}" >> "${rules}"
+      echo "added scope for '${name}' — export ${name} on the host before running pi"
+      ;;
+    remove)
+      [[ $# -ge 1 ]] || { echo "usage: mise run agent:egress secrets remove <NAME>" >&2; exit 1; }
+      if [[ -f "${rules}" ]] && grep -q "^$1 " "${rules}"; then
+        grep -v "^$1 " "${rules}" > "${rules}.tmp"
+        mv "${rules}.tmp" "${rules}"
+        echo "removed scope for '$1'"
+      else
+        echo "no scope for '$1'"
+      fi
+      ;;
+    *)
+      echo "unknown secrets subcommand: ${sub} (expected list, add, or remove)" >&2
+      exit 1
+      ;;
+  esac
+}
+
+cmd_web() {
+  if [[ "${1:-}" != "--file" ]]; then
+    local running
+    running=$("${DOCKER_CMD}" inspect -f '{{.State.Running}}' "${PI_EGRESS_PROXY}" 2>/dev/null) || running=""
+    if [[ "${running}" != "true" || ! -s "${PI_EGRESS_DIR}/web-url" ]]; then
+      egress_init
+      if [[ ! -f "${PI_EGRESS_DIR}/config" ]]; then
+        PI_EGRESS_RECORD="${PI_EGRESS_RECORD-1}"
+        PI_EGRESS_INSPECT="${PI_EGRESS_INSPECT-all}"
+        egress_write_config "${PI_EGRESS:-interactive}"
+        egress_prepare_secrets
+      fi
+      egress_ensure_proxy
+    fi
+    local url
+    url=$(egress_web_url)
+    pi-egress-control start-bridge --scope "${rule_scope}" "${DOCKER_CMD}" "${PI_EGRESS_PROXY}"
+    echo "${url}"
+    if command -v open > /dev/null; then
+      open "${url}"
+    elif command -v xdg-open > /dev/null; then
+      xdg-open "${url}" > /dev/null 2>&1 &
+    fi
+    return
+  fi
+  local flows="${2:?usage: agent:egress web --file <path>}"
+  flows="$(cd "$(dirname "${flows}")" && pwd)/$(basename "${flows}")"
+  if [[ ! -s "${flows}" ]]; then
+    echo "no recorded flows at ${flows}" >&2
+    exit 1
+  fi
+  "${DOCKER_CMD}" image inspect "${PI_PROXY_IMAGE}" > /dev/null 2>&1 || mise run pi:build
+  echo "Recordings may contain sensitive request/response bodies."
+  echo "Open the URL printed below at 127.0.0.1:8082. Ctrl-C to stop."
+  # Only the flows file is mounted (read-only) — not the state dir, which
+  # holds the CA key and secret values. The web UI is published on the host
+  # loopback only; the pi container (internal network) cannot reach it.
+  local run_flags=(
+    "--rm"
+    "--user" "$(id -u):$(id -g)"
+    "--cap-drop=ALL"
+    "--security-opt=no-new-privileges"
+    "--publish" "127.0.0.1:8082:8081"
+    "--volume" "${flows}:/flows.mitm:ro"
+    "--entrypoint" "mitmweb"
+  )
+  [[ "${DOCKER_CMD}" == "podman" ]] && run_flags+=("--userns=keep-id")
+  "${DOCKER_CMD}" run "${run_flags[@]}" "${PI_PROXY_IMAGE}" \
+    --no-server --web-host 0.0.0.0 --web-port 8081 \
+    --set web_open_browser=false \
+    --rfile /flows.mitm
+}
+
+cmd_status() {
+  # docker inspect may print a blank line to stdout when the container is missing.
+  local state
+  state=$("${DOCKER_CMD}" inspect -f '{{.State.Status}}' "${PI_EGRESS_PROXY}" 2>/dev/null) || state=""
+  state="${state//$'\n'/}"
+  [[ -z "${state}" ]] && state="not created"
+  echo "proxy container ${PI_EGRESS_PROXY}: ${state}"
+  echo "state directory: ${PI_EGRESS_DIR}"
+  if [[ -f "${PI_EGRESS_DIR}/config" ]]; then
+    grep -E '^(mode|timeout|record|intercept)=' "${PI_EGRESS_DIR}/config" | sed 's/^/  /'
+  fi
+  if [[ -s "${PI_EGRESS_DIR}/flows.mitm" ]]; then
+    echo "recorded flows: $(du -h "${PI_EGRESS_DIR}/flows.mitm" | cut -f1) (view with 'mise run agent:egress web')"
+  fi
+  local pending_count
+  pending_count=$(find "${PI_EGRESS_DIR}/pending" -type f 2>/dev/null | wc -l | tr -d ' ')
+  echo "pending approval requests: ${pending_count}"
+  if [[ -f "${PI_EGRESS_DIR}/egress.log" ]]; then
+    echo "recent decisions:"
+    tail -n 10 "${PI_EGRESS_DIR}/egress.log" | sed 's/^/  /'
+  fi
+}
+
+cmd_stop() {
+  # rm -f is idempotent on newer Docker; check existence first for an honest message.
+  if "${DOCKER_CMD}" inspect "${PI_EGRESS_PROXY}" > /dev/null 2>&1; then
+    "${DOCKER_CMD}" rm -f "${PI_EGRESS_PROXY}" > /dev/null
+    echo "stopped ${PI_EGRESS_PROXY}"
+  else
+    echo "${PI_EGRESS_PROXY} was not running"
+  fi
+  # Networks are only removable once no container is attached; ignore failures.
+  "${DOCKER_CMD}" network rm "${PI_EGRESS_NET_INTERNAL}" "${PI_EGRESS_NET_EXTERNAL}" > /dev/null 2>&1 || true
+}
+
+command="${1:-}"
+[[ $# -gt 0 ]] && shift
+rule_scope="${PI_EGRESS_RULE_SCOPE:-global}"
+if [[ "${1:-}" == --scope ]]; then
+  rule_scope="${2:?--scope requires global or project}"
+  shift 2
+fi
+case "${rule_scope}" in
+  global) ;;
+  project)
+    [[ -n "${PI_EGRESS_PROJECT_ROOT}" ]] || { echo "error: project scope requires a project directory" >&2; exit 1; }
+    ;;
+  *) echo "error: --scope must be global or project" >&2; exit 1 ;;
+esac
+case "${command}" in
+  watch)  cmd_watch ;;
+  allow)
+    [[ $# -gt 0 ]] || { echo "usage: mise run agent:egress allow <host>..." >&2; exit 1; }
+    for pattern in "$@"; do rule_add allow "${pattern}"; done
+    echo "rules take effect immediately, including for pending requests"
+    ;;
+  deny)
+    [[ $# -gt 0 ]] || { echo "usage: mise run agent:egress deny <host>..." >&2; exit 1; }
+    for pattern in "$@"; do rule_add deny "${pattern}"; done
+    ;;
+  remove)
+    kind="${1:-}"
+    [[ $# -ge 2 && ( "${kind}" == allow || "${kind}" == deny ) ]] || { echo "usage: agent:egress remove [--scope global|project] allow|deny <host>..." >&2; exit 1; }
+    shift
+    for pattern in "$@"; do pi-egress-control rule --remove --scope "${rule_scope}" "${kind}" "${pattern}"; done
+    ;;
+  reload)
+    egress_init
+    pi-egress-control snapshot
+    echo "Activated rule snapshots from the current host environment"
+    ;;
+  list)    cmd_list ;;
+  secrets) cmd_secrets "$@" ;;
+  web)     cmd_web "$@" ;;
+  url)     egress_web_url ;;
+  status)  cmd_status ;;
+  stop)    cmd_stop ;;
+  ""|help|-h|--help) usage ;;
+  *)
+    echo "unknown command: ${command}" >&2
+    usage >&2
+    exit 1
+    ;;
+esac

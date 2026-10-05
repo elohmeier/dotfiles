@@ -15,14 +15,14 @@ fi
 # combined bundle of the system CAs plus the proxy CA.
 if [ -n "${PI_EGRESS_CA:-}" ] && [ -f "${PI_EGRESS_CA}" ]; then
     cat /etc/ssl/certs/ca-certificates.crt "${PI_EGRESS_CA}" > /tmp/pi-egress-ca-bundle.pem
+    export CODEX_CA_CERTIFICATE=/tmp/pi-egress-ca-bundle.pem
     export SSL_CERT_FILE=/tmp/pi-egress-ca-bundle.pem
     export CURL_CA_BUNDLE=/tmp/pi-egress-ca-bundle.pem
     export REQUESTS_CA_BUNDLE=/tmp/pi-egress-ca-bundle.pem
     export GIT_SSL_CAINFO=/tmp/pi-egress-ca-bundle.pem
 fi
 
-# Pass through to a shell when invoked via `pi:shell`; otherwise run pi.
-case "${1:-}" in
-    bash|sh) exec "$@" ;;
-    *) exec pi "$@" ;;
-esac
+if [ -n "${PI_CODING_AGENT_DIR:-}" ]; then
+    export PATH="${PI_CODING_AGENT_DIR}/npm-global/bin:${PATH}"
+fi
+exec "$@"

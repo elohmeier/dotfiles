@@ -1,4 +1,4 @@
-"""Host-only policy storage and browser approval bridge for Pi containers."""
+"""Host-only policy storage and browser approval bridge for agent containers."""
 
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -16,6 +16,8 @@ import time
 
 import click
 import tomlkit
+
+AGENTS = ("pi", "codex", "claude")
 
 
 def project_root() -> Path | None:
@@ -38,6 +40,9 @@ class Context:
 
     @classmethod
     def current(cls) -> "Context":
+        agent = os.environ.get("AGENT", "pi")
+        if agent not in AGENTS:
+            raise click.ClickException("AGENT must be pi, codex, or claude")
         root = project_root()
         global_dir = Path(
             os.environ.get("PI_EGRESS_GLOBAL_DIR")
@@ -48,8 +53,23 @@ class Context:
         if root:
             key = hashlib.sha256(str(root).encode()).hexdigest()[:16]
             state = global_dir / "projects" / key
+        if agent != "pi":
+            state = state.with_name(f"{state.name}-{agent}")
         state = Path(os.environ.get("PI_EGRESS_DIR", state)).resolve()
         return cls(root, global_dir, state)
+
+    def project_states(self) -> set[Path]:
+        """Only host-derived project identities may receive approved rule deltas."""
+        states = {self.state}
+        if self.root:
+            key = hashlib.sha256(str(self.root).encode()).hexdigest()[:16]
+            states.update(
+                self.global_dir
+                / "projects"
+                / (key if agent == "pi" else f"{key}-{agent}")
+                for agent in AGENTS
+            )
+        return {state for state in states if state.is_dir()}
 
     def init(self) -> None:
         for path in (self.global_dir, self.state):
@@ -136,8 +156,9 @@ def edit_rule(ctx: Context, scope: str, kind: str, pattern: str, remove=False) -
             else updated
         )
         atomic_write(target, tomlkit.dumps(document))
-        snapshot = ctx.state / f"project.{kind}"
-        atomic_write(snapshot, update_rules(read_rules(snapshot), pattern, remove))
+        for state in ctx.project_states():
+            snapshot = state / f"project.{kind}"
+            atomic_write(snapshot, update_rules(read_rules(snapshot), pattern, remove))
     else:
         content = update_rules(read_rules(target), pattern, remove)
         atomic_write(target, content)
@@ -145,6 +166,8 @@ def edit_rule(ctx: Context, scope: str, kind: str, pattern: str, remove=False) -
         for state in {
             ctx.state,
             ctx.global_dir / "global",
+            ctx.global_dir / "global-codex",
+            ctx.global_dir / "global-claude",
             *(ctx.global_dir / "projects").glob("*"),
         }:
             if state != ctx.global_dir and state.is_dir():
@@ -154,27 +177,28 @@ def edit_rule(ctx: Context, scope: str, kind: str, pattern: str, remove=False) -
 
 @click.group()
 def main() -> None:
-    """Internal host helper; use mise run pi:egress for the public interface."""
+    """Internal host helper; use mise run agent:egress for the public interface."""
 
 
 @main.command("context")
 def context_command() -> None:
     ctx = Context.current()
+    isolated = ctx.root is not None or os.environ.get("AGENT", "pi") != "pi"
     values = {
         "PI_EGRESS_PROJECT_ROOT": str(ctx.root or ""),
         "PI_EGRESS_GLOBAL_DIR": str(ctx.global_dir),
         "PI_EGRESS_DIR": str(ctx.state),
         "PI_EGRESS_NAME": os.environ.get(
-            "PI_EGRESS_NAME", f"pi-egress-{ctx.state.name}" if ctx.root else "pi-egress"
+            "PI_EGRESS_NAME", f"pi-egress-{ctx.state.name}" if isolated else "pi-egress"
         ),
         "PI_EGRESS_WEB_PORT": os.environ.get(
-            "PI_EGRESS_WEB_PORT", "0" if ctx.root else "8081"
+            "PI_EGRESS_WEB_PORT", "0" if isolated else "8081"
         ),
         "PI_EGRESS_SUBNET": os.environ.get(
-            "PI_EGRESS_SUBNET", "" if ctx.root else "10.223.0.0/24"
+            "PI_EGRESS_SUBNET", "" if isolated else "10.223.0.0/24"
         ),
         "PI_EGRESS_PROXY_IP": os.environ.get(
-            "PI_EGRESS_PROXY_IP", "" if ctx.root else "10.223.0.2"
+            "PI_EGRESS_PROXY_IP", "" if isolated else "10.223.0.2"
         ),
     }
     for key, value in values.items():

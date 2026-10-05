@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-#MISE description="Open a shell in the Pi container"
+#MISE description="Run shell in the shared agent container"
 #MISE raw=true
 #MISE dir="{{cwd}}"
 set -euo pipefail
-export AGENT=pi
 source "$(dirname "${BASH_SOURCE[0]}")/../../run.sh" shell "$@"

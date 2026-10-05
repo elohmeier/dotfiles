@@ -1,4 +1,88 @@
-# Pi container egress
+# Shared agent sandbox
+
+Pi, Codex CLI, and Claude Code use one development image and the same container
+isolation, egress filtering, credential injection, and approval UI:
+
+```sh
+mise run agent:build
+mise run agent:pi
+mise run agent:codex
+mise run agent:claude
+AGENT=codex mise run agent:shell
+AGENT=codex mise run agent:egress web
+```
+
+`agent:pi`, `agent:codex`, and `agent:claude` select their own agent regardless of
+`AGENT`. Shell and egress commands use `AGENT=pi|codex|claude`, defaulting to Pi.
+Run egress commands from the same project as the agent. All launchers default to
+interactive egress filtering; shells also default to TLS inspection and recording.
+An explicitly empty `PI_EGRESS` disables filtering. Docker DNS blocking remains
+opt-in with `PI_EGRESS_BLOCK_DNS=1`; Podman does not support that option.
+
+The existing `pi` / `pi:*` commands, `PI_*` settings, image names, and storage
+locations remain available. `agent-config` (also available as `pi-config`) edits
+the shared settings. The installed files remain under `~/.config/pi-less-yolo`.
+`run.sh`, `container.sh`, `runtime.sh`, and `egress.sh` contain the shared runner;
+`profile.sh` defines the agent-specific mounts and environment. CLI versions are
+pinned in `Dockerfile`; update those pins and run `agent:build` to upgrade.
+
+## Configuration and authentication
+
+Pi retains its existing `~/.pi/agent` mount. Codex and Claude each get a dedicated
+container home under `${XDG_DATA_HOME:-~/.local/share}/agent-sandbox/<agent>`,
+mounted at `/home/piuser`. Their settings, logins, plugins, and sessions persist
+there, separately from the host's normal `~/.codex` and `~/.claude` directories.
+Codex settings live in `codex/.codex/config.toml`; Claude settings live in
+`claude/.claude/settings.json` beneath that base. Host credentials, hooks, MCP
+configurations, and skills are not imported automatically. Install the desired
+skills into these homes or explicitly mount their directories read-only with
+`PI_EXTRA_MOUNTS` (including targets of any skill symlinks).
+
+For subscription login:
+
+```sh
+mise run agent:codex login --device-auth
+mise run agent:claude
+```
+
+Follow the displayed browser login instructions. OAuth credentials stored in the
+container home are readable by that agent; proxy injection does not hide them.
+Codex device login requires account support. Additional authentication hosts can
+be approved through the selected agent's egress UI.
+
+For API keys, export `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` on the host. Codex's
+launcher selects an environment-key provider when `OPENAI_API_KEY` is set, avoiding
+writing the key or a project-specific placeholder into `auth.json`. Unset it to
+use the subscription login. Claude also accepts `CLAUDE_CODE_OAUTH_TOKEN`.
+To keep real keys outside the agent container, configure scopes before launching:
+
+```sh
+mise run agent:egress secrets add OPENAI_API_KEY api.openai.com
+mise run agent:egress secrets add ANTHROPIC_API_KEY api.anthropic.com
+```
+
+Codex runs with its internal approvals and sandbox bypassed because the outer
+container supplies isolation. Claude retains its permission prompts. Neither
+launcher publishes ports or mounts the Docker socket. Both inherit proxy settings
+and trust the proxy CA, including Codex HTTPS/WebSocket certificate verification.
+Native desktop/browser integrations and host-only MCP executables need separate
+configuration; these commands launch the Linux CLIs.
+
+## Shared rules, separate runtime state
+
+Saved global and project rules are shared across agents. Approved project rule
+changes propagate only the approved delta to running contexts; they do not load
+unapproved edits from the workspace. Each agent has its own proxy, CA, credentials,
+pending requests, and recordings. Codex and Claude append `-codex` / `-claude` to
+the project context directory (or `global` outside a project), and use automatically
+allocated ports and subnets. Pi retains its previous context identity.
+
+Multiple sessions of the **same agent in the same project** still share a proxy
+and its launch settings. For independent session policies, use a distinct
+`PI_EGRESS_DIR` and `PI_EGRESS_NAME` plus non-conflicting network/port overrides.
+Explicit `PI_EGRESS_DIR` selects exactly that directory regardless of agent.
+
+## Pi egress commands
 
 Open a shell, then open its network controls from a second terminal in the same project:
 
@@ -118,7 +202,7 @@ PI_EGRESS= mise run pi:shell               # disable the proxy entirely
 
 `PI_EGRESS_RECORD=1` enables recording; `0` disables it. Recording and TLS
 inspection are separate: without inspection, HTTPS bodies cannot be recorded.
-Other Pi tasks retain their opt-in behavior. Persist settings with `pi-config`
+All agent tasks default to filtering. Persist settings with `agent-config`
 or the project's mise environment. `PI_EGRESS_WEB_PORT` changes the host web
 port (automatically allocated for projects; 8081 for the global context).
 `url` always prints the allocated localhost URL. `PI_LOCAL_MODELS` requires disabling egress explicitly
@@ -130,8 +214,8 @@ response completes. Compressed event streams are buffered for body redaction.
 ## State, credentials and recordings
 
 Global rules and secret-scope definitions live in `~/.local/state/pi-egress`.
-Project runtime state lives under `projects/<root-hash>/`; the non-project
-context uses `global/`. `status` prints the selected state path. Keys, tokens,
+Project runtime state lives under `projects/<root-hash>[-<agent>]/`; the non-project
+context uses `global[-<agent>]/` (Pi omits the suffix). `status` prints the selected state path. Keys, tokens,
 credentials and recordings stay outside the repository and mounted Pi agent
 directory. Global secret scopes are compiled separately with each launch's host
 credentials; real secret values are never shared between context mounts.
@@ -188,7 +272,7 @@ Run the integration tests when updating that image:
 ```sh
 docker build -t pi-less-yolo-proxy:egress-test home/dot_config/pi-less-yolo/proxy
 PI_EGRESS_TEST_IMAGE=pi-less-yolo-proxy:egress-test \
-  uv run --with mitmproxy==12.2.3 pytest -q tests/test_pi_egress.py tests/test_pi_egress_control.py
+  uv run --with mitmproxy==12.2.3 python -m pytest -q tests/test_pi_egress.py tests/test_pi_egress_control.py tests/test_agent_sandbox.py
 ```
 
 Tests create temporary proxy/upstream containers and networks, exercise browser

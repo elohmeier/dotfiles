@@ -1,4 +1,4 @@
-"""Interactive per-project configuration for the sandboxed pi coding agent.
+"""Interactive per-project configuration for the shared agent sandbox.
 
 Non-secret settings are written to mise.toml (shared) or mise.local.toml
 (personal, gitignored) via `mise set`. Secrets go into a sops-encrypted
@@ -49,6 +49,12 @@ PROVIDERS = {
 }
 
 SETTINGS = [
+    Setting(
+        "AGENT",
+        "Agent for shell and egress controls",
+        "choice",
+        ["pi", "codex", "claude"],
+    ),
     Setting(
         "PI_EGRESS", "Egress filtering mode", "choice", ["allowlist", "interactive"]
     ),
@@ -226,7 +232,7 @@ def edit(setting: Setting, current: str | None, scope: str | None) -> None:
 
 @click.command()
 def main() -> None:
-    """Configure the sandboxed pi coding agent for the current project."""
+    """Configure the shared agent sandbox for the current project."""
     while True:
         shared, local, secrets = env_table(SHARED), env_table(LOCAL), secret_keys()
         choices = []

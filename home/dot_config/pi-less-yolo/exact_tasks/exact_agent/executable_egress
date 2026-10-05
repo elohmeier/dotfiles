@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-#MISE description="Manage egress filtering and open live traffic / browser approvals"
+#MISE description="Manage agent egress (AGENT=pi|codex|claude)"
 #MISE raw=true
+#MISE dir="{{cwd}}"
 set -euo pipefail
-export AGENT=pi
 source "$(dirname "${BASH_SOURCE[0]}")/../../control.sh"

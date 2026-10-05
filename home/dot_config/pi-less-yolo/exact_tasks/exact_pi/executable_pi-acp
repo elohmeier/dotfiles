@@ -3,6 +3,7 @@
 #MISE raw=true
 #MISE dir="{{cwd}}"
 set -euo pipefail
+export AGENT=pi
 
 # shellcheck source=tasks/pi/_docker_flags
 source "$(dirname "$0")/_docker_flags"

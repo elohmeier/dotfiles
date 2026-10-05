@@ -103,13 +103,13 @@ RUN set -e \
 && ln -s "${dir}/bin/python3" /usr/local/bin/python3 \
 && rm "${name}" SHA256SUMS
 
-# Install pi globally
-RUN npm install -g "@earendil-works/pi-coding-agent@0.85.1"
+# Pin the CLIs together so rebuilding gives a reproducible agent toolchain.
+RUN npm install -g "@earendil-works/pi-coding-agent@0.85.1" \
+    "@openai/codex@0.160.0" "@anthropic-ai/claude-code@2.1.282"
 
-# Prepend extension binaries (host-mounted via /pi-agent). Security: binaries
-# here can shadow any command; no privilege escalation (--cap-drop=ALL,
-# --no-new-privileges), but review ~/.pi/agent/npm-global/bin/ after installs.
-ENV PATH="/pi-agent/npm-global/bin:${PATH}"
+# Complete Claude's native binary installation even when npm skips postinstall.
+RUN node /usr/local/lib/node_modules/@anthropic-ai/claude-code/install.cjs \
+    && pi --version && codex --version && claude --version
 
 # /home/piuser: world-writable (1777) so any runtime UID can write here.
 # /home/piuser/.ssh: root-owned 755; SSH accepts it and the runtime user can
@@ -132,3 +132,5 @@ ENV HOME=/home/piuser
 COPY --chmod=755 entrypoint.sh /usr/local/bin/entrypoint.sh
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+
+CMD ["pi"]
