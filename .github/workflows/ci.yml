@@ -1,0 +1,112 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # renovate: datasource=github-releases depName=astral-sh/uv
+  UV_VERSION: 0.12.9
+  # renovate: datasource=npm depName=renovate
+  RENOVATE_VERSION: 44.135.0
+  # renovate: datasource=npm depName=dprint
+  DPRINT_VERSION: 0.60.1
+
+jobs:
+  config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+      - run: npx --yes --allow-scripts=re2,protobufjs,core-js-pure,dtrace-provider --package "renovate@$RENOVATE_VERSION" renovate-config-validator --strict renovate.json
+      - run: npx --yes --package "dprint@$DPRINT_VERSION" dprint check renovate.json .github/workflows/ci.yml README.md
+
+  python:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python: ["3.12", "3.14"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          python-version: ${{ matrix.python }}
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv run --locked ruff format --check scripts tests
+      - run: uv run --locked ruff check scripts tests
+      - run: uv run --locked ty check scripts
+      - run: uv run --locked pytest -q
+      - name: Verify the locked CLI installation
+        env:
+          UV_TOOL_DIR: ${{ runner.temp }}/uv-tools
+          UV_TOOL_BIN_DIR: ${{ runner.temp }}/bin
+        run: |
+          uv export --locked --no-dev --no-emit-project --output-file "$RUNNER_TEMP/requirements.txt" > /dev/null
+          uv tool install --constraints "$RUNNER_TEMP/requirements.txt" .
+
+  grafana:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: tools/grafana-dashboard/go.mod
+          cache-dependency-path: tools/grafana-dashboard/go.sum
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: tools/grafana-inspect/package-lock.json
+      - run: node tools/update-grafana.mjs --offline --check
+      - run: go test ./...
+        working-directory: tools/grafana-dashboard
+      - run: npm ci --no-audit --no-fund
+        working-directory: tools/grafana-inspect
+      - run: npm test && npm run build
+        working-directory: tools/grafana-inspect
+
+  containers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          python-version: "3.14"
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - run: bash home/dot_config/pi-less-yolo/build.sh
+      - run: docker build home/dot_config/ff-egress
+      - run: uv sync --locked
+      - run: echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
+      - name: Test the built agent and proxy images
+        env:
+          PI_EGRESS_TEST_IMAGE: pi-less-yolo-proxy:latest
+        run: |
+          version=$(docker run --rm --entrypoint python "$PI_EGRESS_TEST_IMAGE" -c 'import importlib.metadata; print(importlib.metadata.version("mitmproxy"))')
+          uv run --locked --with "mitmproxy==$version" pytest -q tests/test_pi_egress.py tests/test_pi_egress_control.py tests/test_agent_sandbox.py
+
+  ci:
+    name: CI
+    if: always()
+    needs: [config, python, grafana, containers]
+    runs-on: ubuntu-latest
+    steps:
+      - run: test "$RESULTS" = success
+        env:
+          RESULTS: ${{ contains(needs.*.result, 'failure') && 'failure' || contains(needs.*.result, 'cancelled') && 'cancelled' || contains(needs.*.result, 'skipped') && 'skipped' || 'success' }}
