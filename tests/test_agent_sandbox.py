@@ -3,6 +3,7 @@
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 
@@ -179,7 +180,13 @@ def test_live_agents_have_separate_proxies_and_scoped_credentials(tmp_path):
     contexts = []
     try:
         for agent, version in (
-            ("pi", "0.85.1"),
+            (
+                "pi",
+                re.findall(
+                    r'@earendil-works/pi-coding-agent@([^"]+)',
+                    (ROOT / "Dockerfile").read_text(),
+                )[0],
+            ),
             ("codex", "codex-cli"),
             ("claude", "Claude Code"),
         ):

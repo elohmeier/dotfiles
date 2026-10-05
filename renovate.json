@@ -1,0 +1,102 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":enablePreCommit",
+    "docker:pinDigests",
+    "helpers:pinGitHubActionDigests",
+    "customManagers:githubActionsVersions"
+  ],
+  "timezone": "Europe/Berlin",
+  "automerge": true,
+  "automergeType": "pr",
+  "automergeStrategy": "squash",
+  "platformAutomerge": true,
+  "lockFileMaintenance": {
+    "enabled": true
+  },
+  "packageRules": [
+    {
+      "matchManagers": ["pep621"],
+      "rangeStrategy": "update-lockfile"
+    },
+    {
+      "matchManagers": ["pep621"],
+      "matchDepTypes": ["requires-python"],
+      "enabled": false
+    },
+    {
+      "description": "Grafana and its frontend peers are synchronized by tools/update-grafana.mjs",
+      "matchPackageNames": [
+        "@grafana/data",
+        "react",
+        "react-dom",
+        "github.com/grafana/grafana/apps/dashboard",
+        "github.com/grafana/grafana/pkg/apimachinery"
+      ],
+      "enabled": false
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["home/dot_config/ff-egress/Dockerfile"],
+      "matchStrings": ["git -C /src checkout (?<currentDigest>[a-f0-9]{40})"],
+      "currentValueTemplate": "master",
+      "depNameTemplate": "tunneldigger",
+      "packageNameTemplate": "https://github.com/wlanslovenija/tunneldigger",
+      "datasourceTemplate": "git-refs"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["home/dot_config/pi-less-yolo/Dockerfile"],
+      "matchStrings": [
+        "ARG BASE_IMAGE=\\$\\{BASE_REGISTRY\\}/chainguard/node:(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[a-f0-9]+)"
+      ],
+      "depNameTemplate": "cgr.dev/chainguard/node",
+      "datasourceTemplate": "docker",
+      "versioningTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["home/dot_config/pi-less-yolo/Dockerfile"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?\\s+ARG [A-Z_]+=(?<currentValue>\\S+)"
+      ]
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["home/dot_config/pi-less-yolo/Dockerfile"],
+      "matchStrings": ["\"(?<depName>@[^/\"]+/[^@\"]+)@(?<currentValue>[0-9][^\"\\s]+)\""],
+      "datasourceTemplate": "npm"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["dprint.json", "home/dot_config/dprint.json"],
+      "matchStrings": ["https://plugins\\.dprint\\.dev/(?<depName>json|markdown|toml)-(?<currentValue>[0-9.]+)\\.wasm"],
+      "packageNameTemplate": "dprint/dprint-plugin-{{{depName}}}",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["dprint.json", "home/dot_config/dprint.json"],
+      "matchStrings": ["https://plugins\\.dprint\\.dev/g-plane/pretty_yaml-v(?<currentValue>[0-9.]+)\\.wasm"],
+      "depNameTemplate": "g-plane/pretty_yaml",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["home/dot_config/nvim/lua/plugins.lua"],
+      "matchStrings": ["src = \"https://github\\.com/(?<depName>[^\"]+)\", version = \"(?<currentValue>v[0-9.]+)\""],
+      "datasourceTemplate": "github-tags"
+    }
+  ],
+  "customDatasources": {
+    "python-build-standalone": {
+      "defaultRegistryUrlTemplate": "https://api.github.com/repos/astral-sh/python-build-standalone/releases?per_page=20",
+      "transformTemplates": [
+        "{\"releases\": [$[draft = false and prerelease = false].($release := $; assets[$match(name, /^cpython-\\d+\\.\\d+\\.\\d+\\+\\d+-x86_64-unknown-linux-gnu-install_only_stripped\\.tar\\.gz$/)].($version := $substringBefore($substringAfter(name, 'cpython-'), '-x86_64-'); $exists($release.assets[name = 'cpython-' & $version & '-aarch64-unknown-linux-gnu-install_only_stripped.tar.gz']) ? {\"version\": $version, \"releaseTimestamp\": $release.published_at}))], \"sourceUrl\": \"https://github.com/astral-sh/python-build-standalone\"}"
+      ]
+    }
+  }
+}

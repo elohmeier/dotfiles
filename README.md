@@ -106,3 +106,19 @@ djust install-skills
 ```
 
 Grafana utilities are installed on PATH by chezmoi. See [Grafana tools](docs/grafana-tools.md) for commands, validation, and stable-release updates.
+
+Renovate updates Python, npm, Go, Docker images, pre-commit hooks, dprint plugins,
+the container's agent CLIs, mise, uv, Python standalone builds, and tunneldigger's
+pinned upstream commit. Updates,
+including major versions and weekly lockfile maintenance, automatically
+squash-merge after the required `CI` check passes. CI tests Python on Linux and
+macOS, validates Grafana pins and tools, and builds and tests the agent/proxy
+images. Python CLI installation in
+`home/.chezmoiscripts/run_onchange_after_install-uv-tools.sh.tmpl` uses constraints
+exported from `uv.lock`.
+
+Grafana and its React peers remain on the coordinated `tools/update-grafana.mjs`
+updater. Renovate leaves the project's supported Python floor unchanged.
+Floating Homebrew/APK packages and global tools installed with `@latest` are
+updated by their existing installation commands. Apply merged dotfiles with
+`chezmoi update`; rebuild the agent images with `mise run agent:build`.

@@ -49,13 +49,15 @@ RUN apk add --no-cache \
         tmux
 
 # Install mise (GPG-verified via mise-release.asc; secret mount avoids a rootless-Podman/SELinux AVC denial, #99).
+# renovate: datasource=github-releases depName=jdx/mise
+ARG MISE_VERSION=2026.9.1
 RUN --mount=type=secret,id=mise_asc,target=/tmp/mise-release.asc,required=true \
 set -e \
 && apk add --no-cache gpg gpg-agent \
 && gpg --import /tmp/mise-release.asc \
 && curl -fsSL https://mise.jdx.dev/install.sh.sig -o /tmp/mise-install.sh.sig \
 && gpg --decrypt /tmp/mise-install.sh.sig > /tmp/mise-install.sh \
-&& MISE_VERSION=2026.9.1 MISE_INSTALL_PATH=/usr/local/bin/mise sh /tmp/mise-install.sh \
+&& MISE_VERSION=${MISE_VERSION} MISE_INSTALL_PATH=/usr/local/bin/mise sh /tmp/mise-install.sh \
 && rm /tmp/mise-install.sh.sig /tmp/mise-install.sh \
 && apk del gpg gpg-agent
 
@@ -67,6 +69,7 @@ set -e \
 # are built with rustls, which rejects TLS-intercepting proxy certificates that
 # carry a critical extension it does not recognise, and that rejection cannot be
 # configured away. curl (OpenSSL) accepts them.
+# renovate: datasource=github-releases depName=astral-sh/uv
 ARG UV_VERSION=0.12.9
 ARG GITHUB_BASE_URL=https://github.com
 RUN set -e \
@@ -87,9 +90,11 @@ ENV UV_PYTHON_INSTALL_DIR=/usr/local/share/uv/python \
 # would fetch it over rustls, which no uv option talks into accepting an
 # intercepting proxy's certificate. This is the identical artifact, unpacked
 # into the directory name uv derives, so uv still sees it as a managed install.
-ARG PYTHON_VERSION=3.14.7
-ARG PYTHON_RELEASE=20260901
+# renovate: datasource=custom.python-build-standalone depName=python-build-standalone versioning=regex:^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)\+(?<build>\d+)$
+ARG PYTHON_BUILD=3.14.7+20260901
 RUN set -e \
+&& PYTHON_VERSION="${PYTHON_BUILD%%+*}" \
+&& PYTHON_RELEASE="${PYTHON_BUILD#*+}" \
 && arch="$(uname -m)" \
 && name="cpython-${PYTHON_VERSION}+${PYTHON_RELEASE}-${arch}-unknown-linux-gnu-install_only_stripped.tar.gz" \
 && base="${UV_PYTHON_INSTALL_MIRROR}/${PYTHON_RELEASE}" \
