@@ -40,6 +40,25 @@
   "customManagers": [
     {
       "customType": "regex",
+      "managerFilePatterns": ["home/dot_config/ff-egress/Dockerfile"],
+      "matchStrings": ["git -C /src checkout (?<currentDigest>[a-f0-9]{40})"],
+      "currentValueTemplate": "master",
+      "depNameTemplate": "tunneldigger",
+      "packageNameTemplate": "https://github.com/wlanslovenija/tunneldigger",
+      "datasourceTemplate": "git-refs"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["home/dot_config/pi-less-yolo/Dockerfile"],
+      "matchStrings": [
+        "ARG BASE_IMAGE=\\$\\{BASE_REGISTRY\\}/chainguard/node:(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[a-f0-9]+)"
+      ],
+      "depNameTemplate": "cgr.dev/chainguard/node",
+      "datasourceTemplate": "docker",
+      "versioningTemplate": "docker"
+    },
+    {
+      "customType": "regex",
       "managerFilePatterns": ["home/dot_config/pi-less-yolo/Dockerfile"],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?\\s+ARG [A-Z_]+=(?<currentValue>\\S+)"

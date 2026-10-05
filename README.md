@@ -108,7 +108,8 @@ djust install-skills
 Grafana utilities are installed on PATH by chezmoi. See [Grafana tools](docs/grafana-tools.md) for commands, validation, and stable-release updates.
 
 Renovate updates Python, npm, Go, Docker images, pre-commit hooks, dprint plugins,
-the container's agent CLIs, mise, uv, and Python standalone builds. Updates,
+the container's agent CLIs, mise, uv, Python standalone builds, and tunneldigger's
+pinned upstream commit. Updates,
 including major versions and weekly lockfile maintenance, automatically
 squash-merge after the required `CI` check passes. CI tests Python on Linux and
 macOS, validates Grafana pins and tools, and builds and tests the agent/proxy

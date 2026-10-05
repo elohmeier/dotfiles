@@ -91,7 +91,17 @@ jobs:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
       - run: bash home/dot_config/pi-less-yolo/build.sh
-      - run: docker build home/dot_config/ff-egress
+      - name: Build the Freifunk image from its chezmoi filenames
+        run: |
+          context="$RUNNER_TEMP/ff-egress"
+          mkdir -p "$context"
+          cp home/dot_config/ff-egress/Dockerfile "$context/"
+          cp -R home/dot_config/ff-egress/profiles "$context/"
+          for file in home/dot_config/ff-egress/executable_*; do
+            name="${file##*/}"
+            install -m 755 "$file" "$context/${name#executable_}"
+          done
+          docker build "$context"
       - run: uv sync --locked
       - run: echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
       - name: Test the built agent and proxy images
