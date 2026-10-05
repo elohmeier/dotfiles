@@ -259,50 +259,31 @@ def test_project_save_rejects_symlink(project, tmp_path):
     assert target.is_symlink()
 
 
-def test_agent_contexts_share_only_approved_policy(project, monkeypatch):
-    contexts = [project]
-    for agent in ("codex", "claude"):
+def test_agents_share_project_context_and_approved_policy(project, monkeypatch):
+    expected = invoke("context")
+    for agent in ("pi", "codex", "claude"):
         monkeypatch.setenv("AGENT", agent)
-        invoke("snapshot")
-        ctx = control.Context.current()
-        contexts.append(ctx)
-        (ctx.state / "secrets.env").write_text(f"{agent}-private\n")
-        (ctx.state / "config").write_text(f"{agent}-config\n")
-    assert len({ctx.state for ctx in contexts}) == 3
-    assert len({ctx.global_dir for ctx in contexts}) == 1
+        assert control.Context.current() == project
+        assert invoke("context") == expected
     assert project.root
     target = project.root / "mise.toml"
     target.write_text(target.read_text().replace("existing.test", "unapproved.test"))
+    monkeypatch.delenv("AGENT")
     invoke("rule", "--scope", "project", "allow", "shared.test:443")
-    invoke("rule", "--scope", "global", "deny", "blocked.test:443")
-    for ctx in contexts:
-        assert control.read_rules(ctx.state / "project.allow") == [
+    for agent in ("pi", "codex", "claude"):
+        monkeypatch.setenv("AGENT", agent)
+        assert control.read_rules(
+            control.Context.current().state / "project.allow"
+        ) == [
             "existing.test:443",
             "shared.test:443",
         ]
-        assert control.read_rules(ctx.state / "rules.deny") == ["blocked.test:443"]
-    for agent, ctx in zip(("codex", "claude"), contexts[1:]):
-        assert (ctx.state / "secrets.env").read_text() == f"{agent}-private\n"
-        assert (ctx.state / "config").read_text() == f"{agent}-config\n"
-    invoke("rule", "--scope", "project", "--remove", "allow", "shared.test:443")
-    for ctx in contexts:
-        assert control.read_rules(ctx.state / "project.allow") == ["existing.test:443"]
 
 
-def test_nonproject_agents_have_distinct_names_and_dynamic_ports(project, monkeypatch):
+def test_agents_share_nonproject_context(project, monkeypatch):
     monkeypatch.setenv("PI_EGRESS_PROJECT_ROOT", "")
-    outputs = []
+    expected = invoke("context")
     for agent in ("pi", "codex", "claude"):
         monkeypatch.setenv("AGENT", agent)
-        outputs.append(invoke("context"))
-    assert len(set(outputs)) == 3
-    for output in outputs[1:]:
-        assert "PI_EGRESS_WEB_PORT=0" in output
-        assert "PI_EGRESS_SUBNET=''" in output
-
-
-def test_invalid_agent_rejected(project, monkeypatch):
-    monkeypatch.setenv("AGENT", "../../other")
-    result = CliRunner().invoke(control.main, ["context"])
-    assert result.exit_code != 0
-    assert "AGENT must be" in result.output
+        assert invoke("context") == expected
+        assert control.Context.current().state == project.global_dir / "global"

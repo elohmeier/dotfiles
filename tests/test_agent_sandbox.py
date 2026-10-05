@@ -1,5 +1,6 @@
 """Shared runner command and credential boundaries, without model API calls."""
 
+import concurrent.futures
 import json
 import os
 from pathlib import Path
@@ -82,6 +83,8 @@ def test_agent_launch_mounts_and_arguments(runner, agent):
         assert "--dangerously-skip-permissions" not in args
         assert "ANTHROPIC_API_KEY=test-anthropic" in args
         assert not any("test-openai" in arg for arg in args)
+    # Direct-network mode must retain the original SSH transport.
+    assert not any(arg.startswith("GIT_CONFIG_") for arg in args)
 
 
 def test_shell_uses_selected_agent_home(runner):
@@ -112,22 +115,8 @@ def test_egress_default_rejects_host_network_bypass(runner):
     assert "mutually exclusive" in result.stderr
 
 
-@pytest.mark.parametrize(
-    ("agent", "hosts"),
-    [
-        ("codex", {"api.openai.com", "auth.openai.com", "chatgpt.com"}),
-        (
-            "claude",
-            {
-                "api.anthropic.com",
-                "console.anthropic.com",
-                "platform.claude.com",
-                "claude.ai",
-            },
-        ),
-    ],
-)
-def test_provider_allowlist_uses_individual_hosts(tmp_path, agent, hosts):
+@pytest.mark.parametrize("agent", ["pi", "codex", "claude"])
+def test_provider_allowlist_is_shared(tmp_path, agent):
     env = dict(os.environ, AGENT=agent, PI_EGRESS_DIR=str(tmp_path))
     result = subprocess.run(
         [
@@ -147,17 +136,39 @@ def test_provider_allowlist_uses_individual_hosts(tmp_path, agent, hosts):
         for line in (tmp_path / "config").read_text().splitlines()
         if line.startswith("allow=")
     }
-    assert allowed == hosts
+    assert allowed >= {
+        "registry.npmjs.org",
+        "api.openai.com",
+        "auth.openai.com",
+        "chatgpt.com",
+        "api.anthropic.com",
+        "console.anthropic.com",
+        "platform.claude.com",
+        "claude.ai",
+    }
 
 
 @pytest.mark.skipif(
     not os.environ.get("PI_EGRESS_TEST_IMAGE"),
     reason="Set PI_EGRESS_TEST_IMAGE for Docker",
 )
-def test_live_agents_have_separate_proxies_and_scoped_credentials(tmp_path):
+def test_live_agents_share_proxy_without_overwriting_policy_or_credentials(tmp_path):
     workspace = tmp_path / "project"
     workspace.mkdir()
     (workspace / "mise.toml").write_text("[env]\n")
+    subprocess.run(["git", "init", "-q", str(workspace)], check=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(workspace),
+            "remote",
+            "add",
+            "origin",
+            "git@github.com:owner/repo.git",
+        ],
+        check=True,
+    )
     state = tmp_path / "state"
     state.mkdir()
     (state / "secrets.rules").write_text("OPENAI_API_KEY hosts=api.openai.com\n")
@@ -177,8 +188,24 @@ def test_live_agents_have_separate_proxies_and_scoped_credentials(tmp_path):
         PI_EGRESS_BLOCK_DNS="1",
     )
     tasks = ROOT / "exact_tasks/exact_agent"
-    contexts = []
+    initial = {}
     try:
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            starts = [
+                pool.submit(
+                    subprocess.run,
+                    ["bash", str(tasks / f"executable_{agent}"), "--version"],
+                    cwd=workspace,
+                    env=env,
+                    text=True,
+                    capture_output=True,
+                    timeout=90,
+                )
+                for agent in ("pi", "codex")
+            ]
+            for start in starts:
+                result = start.result()
+                assert result.returncode == 0, result.stderr
         for agent, version in (
             (
                 "pi",
@@ -201,6 +228,28 @@ def test_live_agents_have_separate_proxies_and_scoped_credentials(tmp_path):
             )
             assert result.returncode == 0, result.stderr
             assert version in result.stdout
+            contexts = list((state / "projects").iterdir())
+            assert len(contexts) == 1
+            ctx = contexts[0]
+            if not initial:
+                initial = {
+                    name: (ctx / name).read_bytes()
+                    for name in (
+                        "config",
+                        "secrets.env",
+                        "web-port",
+                        "mitmproxy/mitmproxy-ca-cert.pem",
+                    )
+                }
+                # A subsequent agent's environment must not replace shared settings.
+                env["OPENAI_API_KEY"] = "different-host-key"
+                env["PI_EGRESS"] = "allowlist"
+                env["PI_EGRESS_ALLOW"] = "unapproved.test"
+                (ctx / "project.allow").write_text("approved.test:443\n")
+            else:
+                for name, content in initial.items():
+                    assert (ctx / name).read_bytes() == content
+                assert (ctx / "project.allow").read_text() == "approved.test:443\n"
             # Shells use exactly the same mount, environment, and network setup.
             result = subprocess.run(
                 [
@@ -220,28 +269,44 @@ def test_live_agents_have_separate_proxies_and_scoped_credentials(tmp_path):
                 timeout=30,
             )
             assert result.returncode == 0, result.stderr
-        contexts = list((state / "projects").iterdir())
-        assert len(contexts) == 3
-        assert len({(ctx / "web-port").read_text() for ctx in contexts}) == 3
-        assert (
-            len(
-                {
-                    (ctx / "mitmproxy/mitmproxy-ca-cert.pem").read_bytes()
-                    for ctx in contexts
-                }
-            )
-            == 3
-        )
-        assert (
-            len({(ctx / "secrets.env").read_text().split("\t")[1] for ctx in contexts})
-            == 3
-        )
-    finally:
-        for agent in ("pi", "codex", "claude"):
-            subprocess.run(
-                ["bash", str(tasks / "executable_egress"), "stop"],
+            result = subprocess.run(
+                [
+                    "bash",
+                    str(tasks / "executable_shell"),
+                    "-c",
+                    'test "$(git remote get-url origin)" = https://github.com/owner/repo.git && '
+                    'test "$(git config --local remote.origin.url)" = git@github.com:owner/repo.git && '
+                    'test "$(git ls-remote --get-url ssh://git@github.com/owner/repo.git)" = https://github.com/owner/repo.git && '
+                    'test "$(git ls-remote --get-url ssh://git@github.com:22/owner/repo.git)" = https://github.com/owner/repo.git && '
+                    'test "$(git ls-remote --get-url git@other.test:owner/repo.git)" = git@other.test:owner/repo.git',
+                ],
                 cwd=workspace,
-                env=dict(env, AGENT=agent),
+                env=env,
+                text=True,
                 capture_output=True,
                 timeout=30,
             )
+            assert result.returncode == 0, result.stderr
+        with (state / "secrets.rules").open("a") as scopes:
+            scopes.write("ANTHROPIC_API_KEY hosts=api.anthropic.com\n")
+        env["ANTHROPIC_API_KEY"] = "new-scoped-key"
+        result = subprocess.run(
+            ["bash", str(tasks / "executable_claude"), "--version"],
+            cwd=workspace,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        assert result.returncode != 0
+        assert "not loaded in the shared proxy" in result.stderr
+        assert "new-scoped-key" not in result.stderr + result.stdout
+        assert (ctx / "secrets.env").read_bytes() == initial["secrets.env"]
+    finally:
+        subprocess.run(
+            ["bash", str(tasks / "executable_egress"), "stop"],
+            cwd=workspace,
+            env=env,
+            capture_output=True,
+            timeout=30,
+        )

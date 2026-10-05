@@ -2,5 +2,4 @@
 #MISE description="Manage egress filtering and open live traffic / browser approvals"
 #MISE raw=true
 set -euo pipefail
-export AGENT=pi
 source "$(dirname "${BASH_SOURCE[0]}")/../../control.sh"

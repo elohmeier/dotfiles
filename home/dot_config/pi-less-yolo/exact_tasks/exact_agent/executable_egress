@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#MISE description="Manage agent egress (AGENT=pi|codex|claude)"
+#MISE description="Manage shared project egress for all agents"
 #MISE raw=true
 #MISE dir="{{cwd}}"
 set -euo pipefail

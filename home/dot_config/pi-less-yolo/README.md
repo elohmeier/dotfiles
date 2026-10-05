@@ -9,12 +9,13 @@ mise run agent:pi
 mise run agent:codex
 mise run agent:claude
 AGENT=codex mise run agent:shell
-AGENT=codex mise run agent:egress web
+mise run agent:egress web
 ```
 
 `agent:pi`, `agent:codex`, and `agent:claude` select their own agent regardless of
-`AGENT`. Shell and egress commands use `AGENT=pi|codex|claude`, defaulting to Pi.
-Run egress commands from the same project as the agent. All launchers default to
+`AGENT`. Shell commands use `AGENT=pi|codex|claude` to select the agent home,
+defaulting to Pi. Egress commands are shared: run them from the same project as
+any of its agents. All launchers default to
 interactive egress filtering; shells also default to TLS inspection and recording.
 An explicitly empty `PI_EGRESS` disables filtering. Docker DNS blocking remains
 opt-in with `PI_EGRESS_BLOCK_DNS=1`; Podman does not support that option.
@@ -68,19 +69,49 @@ and trust the proxy CA, including Codex HTTPS/WebSocket certificate verification
 Native desktop/browser integrations and host-only MCP executables need separate
 configuration; these commands launch the Linux CLIs.
 
-## Shared rules, separate runtime state
+## GitHub remotes
 
-Saved global and project rules are shared across agents. Approved project rule
-changes propagate only the approved delta to running contexts; they do not load
-unapproved edits from the workspace. Each agent has its own proxy, CA, credentials,
-pending requests, and recordings. Codex and Claude append `-codex` / `-claude` to
-the project context directory (or `global` outside a project), and use automatically
-allocated ports and subnets. Pi retains its previous context identity.
+With egress filtering enabled, Git rewrites `git@github.com:…`,
+`ssh://git@github.com/…`, and `ssh://git@github.com:22/…` to HTTPS inside the
+container. The repository's saved remotes and the host's Git configuration are
+unchanged. HTTPS uses the proxy's DNS and network path; SSH cannot use the HTTP
+proxy by itself. This applies to Pi, Codex, Claude, and their shells.
 
-Multiple sessions of the **same agent in the same project** still share a proxy
-and its launch settings. For independent session policies, use a distinct
-`PI_EGRESS_DIR` and `PI_EGRESS_NAME` plus non-conflicting network/port overrides.
-Explicit `PI_EGRESS_DIR` selects exactly that directory regardless of agent.
+Approve `github.com:443` through the project's egress UI, or save an allow
+rule from another host terminal in the same project:
+
+```sh
+mise run agent:egress allow --scope project github.com:443
+```
+
+Public fetches need no credentials. Private repositories and pushes require
+HTTPS credentials inside the sandbox; host SSH-agent forwarding does not
+authenticate HTTPS. Other SSH hosts are not rewritten. Restart an existing
+container to pick up the runtime Git configuration; no image rebuild is needed.
+
+## One proxy per project
+
+Pi, Codex, and Claude in the same project share one proxy, approval UI, network
+policy, CA, and recording stream. Both temporary session decisions and saved
+allow/deny rules apply to every agent in that project. Different projects keep
+separate proxies and credentials. Global saved rules apply across projects.
+Agent login and session directories remain separate.
+
+The first launch starts the project's proxy and captures its settings and scoped
+credentials. Subsequent launches reuse that state without replacing it, even
+when launched from shells with different environment variables. Concurrent
+launches serialize proxy startup. Use `agent:egress allow`, `deny`, or `reload`
+to change rules live. To change proxy mode, recording, inspection, or credentials,
+run `mise run agent:egress stop`, then relaunch the agents with the desired
+project environment. A scoped key that was not loaded at startup requires this
+restart; it is never passed through as a real credential instead.
+
+The shared context uses `projects/<root-hash>/` (or `global/` outside a project),
+with no agent suffix. Existing sessions using the previous `-codex` or `-claude`
+proxies must be relaunched to join the shared proxy. Their old state is retained
+on disk; saved project/global rules already live in the shared policy locations.
+For intentionally independent contexts, use `PI_EGRESS_DIR` and `PI_EGRESS_NAME`
+with distinct network/port overrides.
 
 ## Pi egress commands
 
@@ -107,8 +138,8 @@ invalid when the proxy stops; start it with `web` to obtain a current URL.
 
 `pi:shell` defaults to interactive egress filtering, HTTPS inspection for all
 hosts, and HTTP flow recording. Unknown hosts wait for approval and are denied
-after 60 seconds. Provider endpoints detected from credentials and the npm
-registry are allowed automatically. Explicit deny rules take precedence.
+after 60 seconds. OpenAI and Anthropic login/API endpoints, the npm
+registry, and additional Pi providers detected from credentials are allowed automatically. Explicit deny rules take precedence.
 
 The web command opens an authenticated approval page. Choose Allow/Deny once,
 for the session, or save to the displayed scope. Persistent browser decisions apply to the exact
@@ -124,7 +155,7 @@ The nearest ancestor containing `mise.toml` or `.git` defines the project root;
 commands in its subdirectories use that context. `PI_EGRESS_PROJECT_ROOT` can
 select an explicit root (empty selects the global context).
 Session decisions last until that project's `pi:egress stop` or a proxy restart;
-each new Pi task updates only that context's configuration and active secrets.
+later agent tasks reuse that context's configuration and active secrets.
 Placeholder identities survive subsequent launches. Opening
 the web UI preserves an existing configuration. Closing the browser does not
 stop filtering or recording.
@@ -214,11 +245,11 @@ response completes. Compressed event streams are buffered for body redaction.
 ## State, credentials and recordings
 
 Global rules and secret-scope definitions live in `~/.local/state/pi-egress`.
-Project runtime state lives under `projects/<root-hash>[-<agent>]/`; the non-project
-context uses `global[-<agent>]/` (Pi omits the suffix). `status` prints the selected state path. Keys, tokens,
+Project runtime state lives under `projects/<root-hash>/`; the non-project
+context uses `global/`. `status` prints the selected state path. Keys, tokens,
 credentials and recordings stay outside the repository and mounted Pi agent
-directory. Global secret scopes are compiled separately with each launch's host
-credentials; real secret values are never shared between context mounts.
+directory. Global secret scopes are compiled at each project's proxy startup
+from the host credentials; real secret values are never shared between project mounts.
 Workspace and extra mounts exposing the global state tree are rejected.
 
 `PI_EGRESS_GLOBAL_DIR` overrides the base directory. `PI_EGRESS_DIR` selects an

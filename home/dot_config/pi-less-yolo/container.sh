@@ -104,9 +104,10 @@ if [[ -n "${PI_EGRESS:-}" ]]; then
   egress_init
   egress_check_mount "$(pwd)"
   egress_check_mount "${AGENT_HOME}"
-  egress_write_config "${PI_EGRESS}"
-  egress_prepare_secrets
-  egress_ensure_proxy
+  export DOCKER_CMD PI_PROXY_IMAGE PI_EGRESS PI_EGRESS_RECORD PI_EGRESS_INSPECT
+  _pi_prepared=$(pi-egress-control prepare "$(dirname "${BASH_SOURCE[0]}")/egress.sh")
+  eval "${_pi_prepared}"
+  unset _pi_prepared
 
   # NODE_USE_ENV_PROXY makes Node's fetch/http (pi and its provider SDKs)
   # honor the proxy env vars (Node >= 24; ignored by older runtimes).
@@ -125,6 +126,15 @@ if [[ -n "${PI_EGRESS:-}" ]]; then
     "--volume" "${PI_EGRESS_CA_CERT}:/etc/pi-egress/ca.pem:ro"
     "--env" "PI_EGRESS_CA=/etc/pi-egress/ca.pem"
     "--env" "NODE_EXTRA_CA_CERTS=/etc/pi-egress/ca.pem"
+    # SSH ignores HTTP_PROXY and cannot leave the internal network. Rewrite
+    # GitHub remotes in Git's runtime config without modifying the repository.
+    "--env" "GIT_CONFIG_COUNT=3"
+    "--env" "GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf"
+    "--env" "GIT_CONFIG_VALUE_0=git@github.com:"
+    "--env" "GIT_CONFIG_KEY_1=url.https://github.com/.insteadOf"
+    "--env" "GIT_CONFIG_VALUE_1=ssh://git@github.com/"
+    "--env" "GIT_CONFIG_KEY_2=url.https://github.com/.insteadOf"
+    "--env" "GIT_CONFIG_VALUE_2=ssh://git@github.com:22/"
   )
   # Secret placeholders (real values never enter this container; the proxy
   # swaps them in for approved hosts — see proxy/pi_egress.py).

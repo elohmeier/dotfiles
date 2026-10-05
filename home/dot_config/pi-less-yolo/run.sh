@@ -22,7 +22,7 @@ DOCKER_FLAGS+=("--interactive")
 
 prompt="You are running inside a container as a non-root user. No Docker socket, sudo, or system package installation is available."
 if [[ -n "${PI_EGRESS:-}" ]]; then
-  prompt+=" Outbound network access is filtered. If a host is blocked, tell the user; they can permit it with 'AGENT=${AGENT} mise run agent:egress allow <host>'. Scoped credential variables contain placeholders which the proxy replaces only for approved destinations."
+  prompt+=" Outbound network access is filtered. If a host is blocked, tell the user; they can permit it with 'mise run agent:egress allow <host>'. Scoped credential variables contain placeholders which the proxy replaces only for approved destinations."
 fi
 args=()
 case "${mode}" in

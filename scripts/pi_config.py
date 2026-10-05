@@ -51,7 +51,7 @@ PROVIDERS = {
 SETTINGS = [
     Setting(
         "AGENT",
-        "Agent for shell and egress controls",
+        "Agent home for shell sessions",
         "choice",
         ["pi", "codex", "claude"],
     ),

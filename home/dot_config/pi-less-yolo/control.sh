@@ -2,7 +2,6 @@
 #MISE description="Manage egress filtering and open live traffic / browser approvals"
 #MISE raw=true
 set -euo pipefail
-export AGENT="${AGENT:-pi}"
 
 # shellcheck source=tasks/pi/_runtime
 if [[ "${1:-}" != "url" ]]; then
@@ -37,7 +36,7 @@ Commands:
 Options (after command):
   --scope global|project   Where watch/allow/deny/remove/web save rules
                           Default: PI_EGRESS_RULE_SCOPE, otherwise global
-Select the agent with AGENT=pi|codex|claude (default pi).
+All agents in a project share these controls.
 Project context is the nearest ancestor with mise.toml or .git.
 EOF
 }
@@ -48,7 +47,6 @@ rule_add() {
 }
 
 show_context() {
-  echo "Agent: ${AGENT:-pi}"
   echo "Project: ${PI_EGRESS_PROJECT_ROOT:-global}"
   if [[ "${rule_scope}" == project ]]; then
     echo "Save scope: project → ${PI_EGRESS_PROJECT_ROOT}/mise.toml"
@@ -180,18 +178,12 @@ cmd_secrets() {
 
 cmd_web() {
   if [[ "${1:-}" != "--file" ]]; then
-    local running
-    running=$("${DOCKER_CMD}" inspect -f '{{.State.Running}}' "${PI_EGRESS_PROXY}" 2>/dev/null) || running=""
-    if [[ "${running}" != "true" || ! -s "${PI_EGRESS_DIR}/web-url" ]]; then
-      egress_init
-      if [[ ! -f "${PI_EGRESS_DIR}/config" ]]; then
-        PI_EGRESS_RECORD="${PI_EGRESS_RECORD-1}"
-        PI_EGRESS_INSPECT="${PI_EGRESS_INSPECT-all}"
-        egress_write_config "${PI_EGRESS:-interactive}"
-        egress_prepare_secrets
-      fi
-      egress_ensure_proxy
-    fi
+    PI_EGRESS_RECORD="${PI_EGRESS_RECORD-1}"
+    PI_EGRESS_INSPECT="${PI_EGRESS_INSPECT-all}"
+    export DOCKER_CMD PI_PROXY_IMAGE PI_EGRESS PI_EGRESS_RECORD PI_EGRESS_INSPECT
+    local prepared
+    prepared=$(pi-egress-control prepare "$(dirname "${BASH_SOURCE[0]}")/egress.sh")
+    eval "${prepared}"
     local url
     url=$(egress_web_url)
     pi-egress-control start-bridge --scope "${rule_scope}" "${DOCKER_CMD}" "${PI_EGRESS_PROXY}"
