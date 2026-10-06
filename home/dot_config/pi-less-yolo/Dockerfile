@@ -91,7 +91,7 @@ ENV UV_PYTHON_INSTALL_DIR=/usr/local/share/uv/python \
 # intercepting proxy's certificate. This is the identical artifact, unpacked
 # into the directory name uv derives, so uv still sees it as a managed install.
 # renovate: datasource=custom.python-build-standalone depName=python-build-standalone versioning=regex:^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)\+(?<build>\d+)$
-ARG PYTHON_BUILD=3.14.7+20260901
+ARG PYTHON_BUILD=3.14.8+20261003
 RUN set -e \
 && PYTHON_VERSION="${PYTHON_BUILD%%+*}" \
 && PYTHON_RELEASE="${PYTHON_BUILD#*+}" \
