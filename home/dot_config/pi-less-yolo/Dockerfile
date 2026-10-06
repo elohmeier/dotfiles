@@ -70,7 +70,7 @@ set -e \
 # carry a critical extension it does not recognise, and that rejection cannot be
 # configured away. curl (OpenSSL) accepts them.
 # renovate: datasource=github-releases depName=astral-sh/uv
-ARG UV_VERSION=0.12.9
+ARG UV_VERSION=0.12.23
 ARG GITHUB_BASE_URL=https://github.com
 RUN set -e \
 && triple="$(uname -m)-unknown-linux-gnu" \
