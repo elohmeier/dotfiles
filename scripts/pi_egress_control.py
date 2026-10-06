@@ -1,18 +1,18 @@
 """Host-only policy storage and browser approval bridge for agent containers."""
 
-from contextlib import contextmanager
-from dataclasses import dataclass
 import fcntl
 import hashlib
 import json
 import os
-from pathlib import Path
 import re
 import shlex
 import subprocess
 import sys
 import tempfile
 import time
+from contextlib import contextmanager
+from dataclasses import dataclass
+from pathlib import Path
 
 import click
 import tomlkit
@@ -196,7 +196,8 @@ def prepare(script: str) -> None:
                 'set -euo pipefail; source "$1"; egress_prepare',
                 "prepare",
                 script,
-            ]
+            ],
+            check=False,
         )
         if result.returncode:
             raise click.exceptions.Exit(result.returncode)
@@ -267,6 +268,7 @@ def bridge(runtime: str, proxy: str) -> None:
                 [runtime, "inspect", "-f", "{{.State.Running}}", proxy],
                 capture_output=True,
                 text=True,
+                check=False,
             )
             if running.returncode or running.stdout.strip() != "true":
                 return

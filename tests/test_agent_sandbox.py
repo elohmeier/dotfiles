@@ -3,10 +3,10 @@
 import concurrent.futures
 import json
 import os
-from pathlib import Path
 import re
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -53,6 +53,7 @@ def runner(tmp_path):
             cwd=workspace,
             capture_output=True,
             text=True,
+            check=False,
         )
         assert result.returncode == 0, result.stderr
         return json.loads(result.stdout)
@@ -110,6 +111,7 @@ def test_egress_default_rejects_host_network_bypass(runner):
         env=env,
         capture_output=True,
         text=True,
+        check=False,
     )
     assert result.returncode != 0
     assert "mutually exclusive" in result.stderr
@@ -129,6 +131,7 @@ def test_provider_allowlist_is_shared(tmp_path, agent):
         env=env,
         capture_output=True,
         text=True,
+        check=False,
     )
     assert result.returncode == 0, result.stderr
     allowed = {
@@ -225,6 +228,7 @@ def test_live_agents_share_proxy_without_overwriting_policy_or_credentials(tmp_p
                 text=True,
                 capture_output=True,
                 timeout=90,
+                check=False,
             )
             assert result.returncode == 0, result.stderr
             assert version in result.stdout
@@ -256,17 +260,20 @@ def test_live_agents_share_proxy_without_overwriting_policy_or_credentials(tmp_p
                     "bash",
                     str(tasks / "executable_shell"),
                     "-c",
-                    'test -f "$CODEX_CA_CERTIFICATE" && '
-                    'test "$OPENAI_API_KEY" != test-real-provider-key && '
-                    "test ! -e /egress/secrets.env && "
-                    "test ! -S /var/run/docker.sock && "
-                    '! curl --noproxy "*" -fsS --max-time 2 http://1.1.1.1',
+                    (
+                        'test -f "$CODEX_CA_CERTIFICATE" && '
+                        'test "$OPENAI_API_KEY" != test-real-provider-key && '
+                        "test ! -e /egress/secrets.env && "
+                        "test ! -S /var/run/docker.sock && "
+                        '! curl --noproxy "*" -fsS --max-time 2 http://1.1.1.1'
+                    ),
                 ],
                 cwd=workspace,
                 env=env,
                 text=True,
                 capture_output=True,
                 timeout=30,
+                check=False,
             )
             assert result.returncode == 0, result.stderr
             result = subprocess.run(
@@ -274,17 +281,20 @@ def test_live_agents_share_proxy_without_overwriting_policy_or_credentials(tmp_p
                     "bash",
                     str(tasks / "executable_shell"),
                     "-c",
-                    'test "$(git remote get-url origin)" = https://github.com/owner/repo.git && '
-                    'test "$(git config --local remote.origin.url)" = git@github.com:owner/repo.git && '
-                    'test "$(git ls-remote --get-url ssh://git@github.com/owner/repo.git)" = https://github.com/owner/repo.git && '
-                    'test "$(git ls-remote --get-url ssh://git@github.com:22/owner/repo.git)" = https://github.com/owner/repo.git && '
-                    'test "$(git ls-remote --get-url git@other.test:owner/repo.git)" = git@other.test:owner/repo.git',
+                    (
+                        'test "$(git remote get-url origin)" = https://github.com/owner/repo.git && '
+                        'test "$(git config --local remote.origin.url)" = git@github.com:owner/repo.git && '
+                        'test "$(git ls-remote --get-url ssh://git@github.com/owner/repo.git)" = https://github.com/owner/repo.git && '
+                        'test "$(git ls-remote --get-url ssh://git@github.com:22/owner/repo.git)" = https://github.com/owner/repo.git && '
+                        'test "$(git ls-remote --get-url git@other.test:owner/repo.git)" = git@other.test:owner/repo.git'
+                    ),
                 ],
                 cwd=workspace,
                 env=env,
                 text=True,
                 capture_output=True,
                 timeout=30,
+                check=False,
             )
             assert result.returncode == 0, result.stderr
         with (state / "secrets.rules").open("a") as scopes:
@@ -297,6 +307,7 @@ def test_live_agents_share_proxy_without_overwriting_policy_or_credentials(tmp_p
             capture_output=True,
             text=True,
             timeout=30,
+            check=False,
         )
         assert result.returncode != 0
         assert "not loaded in the shared proxy" in result.stderr
@@ -309,4 +320,5 @@ def test_live_agents_share_proxy_without_overwriting_policy_or_credentials(tmp_p
             env=env,
             capture_output=True,
             timeout=30,
+            check=False,
         )

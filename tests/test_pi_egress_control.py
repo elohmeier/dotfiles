@@ -2,16 +2,16 @@
 
 import json
 import os
-from pathlib import Path
 import pty
 import select
 import signal
 import subprocess
 import time
 import tomllib
+from pathlib import Path
 
-from click.testing import CliRunner
 import pytest
+from click.testing import CliRunner
 
 from scripts import pi_egress_control as control
 
@@ -138,12 +138,12 @@ def test_broker_saves_only_live_request_to_bound_project(project, tmp_path):
     (project.state / "project").write_text(str(tmp_path / "wrong-project"))
     (project.state / "save" / request_id).write_text(
         json.dumps(
-            dict(
-                scope="project",
-                kind="allow",
-                path=str(tmp_path / "wrong.toml"),
-                pattern="not-requested.test",
-            )
+            {
+                "scope": "project",
+                "kind": "allow",
+                "path": str(tmp_path / "wrong.toml"),
+                "pattern": "not-requested.test",
+            }
         )
     )
     control.process_saves(project)
@@ -185,6 +185,7 @@ def test_cli_scope_and_reload(project, monkeypatch):
         ],
         text=True,
         capture_output=True,
+        check=False,
     )
     assert result.returncode == 0, result.stderr
     assert "project →" in result.stdout
