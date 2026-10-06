@@ -16,7 +16,7 @@
     "corepack": "0.36.0"
   },
   "devDependencies": {
-    "@types/node": "25.9.3",
+    "@types/node": "25.9.9",
     "tsx": "4.23.15",
     "typescript": "6.0.3"
   },
