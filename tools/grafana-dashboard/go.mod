@@ -7,7 +7,7 @@ require (
 	github.com/grafana/grafana/pkg/apimachinery v0.0.0-20260915110713-3db12332b664
 	github.com/prometheus/prometheus v0.315.0
 	k8s.io/apimachinery v0.37.1
-	k8s.io/kube-openapi v0.0.0-20261005140446-337977e07504
+	k8s.io/kube-openapi v0.0.0-20261006145848-eb06d4f03a2d
 )
 
 require (
