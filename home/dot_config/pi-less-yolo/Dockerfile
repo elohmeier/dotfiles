@@ -50,7 +50,7 @@ RUN apk add --no-cache \
 
 # Install mise (GPG-verified via mise-release.asc; secret mount avoids a rootless-Podman/SELinux AVC denial, #99).
 # renovate: datasource=github-releases depName=jdx/mise
-ARG MISE_VERSION=2026.10.3
+ARG MISE_VERSION=2026.10.4
 RUN --mount=type=secret,id=mise_asc,target=/tmp/mise-release.asc,required=true \
 set -e \
 && apk add --no-cache gpg gpg-agent \
