@@ -24,7 +24,13 @@ from scripts.grafana.alerts import (
     load_document,
     reconcile_elasticsearch_explore_description,
 )
-from scripts.grafana.api import cmd_alert_rules, cmd_folders, cmd_show
+from scripts.grafana.api import (
+    LOGS_HISTOGRAM_INTERVAL_MS,
+    cmd_alert_rules,
+    cmd_folders,
+    cmd_query,
+    cmd_show,
+)
 from scripts.grafana.common import ELASTICSEARCH_EXPLORE_LINK_START
 from scripts.grafana.dashboards import cmd_dashboard_patch, cmd_dashboard_upload
 from scripts.grafana.http import client
@@ -696,6 +702,63 @@ class ProxyStatsTest(unittest.TestCase):
 
         self.assertIn(uid, output.getvalue())
         self.assertIn("Waiting for requests", output.getvalue())
+
+
+class QueryTest(unittest.TestCase):
+    def run_query(self, **kwargs: object) -> dict:
+        sent: list[dict] = []
+
+        def respond(request: httpx.Request) -> httpx.Response:
+            if request.url.path.startswith("/api/datasources/uid/"):
+                return httpx.Response(200, json={"type": "elasticsearch"})
+            sent.append(json.loads(request.content)["queries"][0])
+            return httpx.Response(200, json={"results": {}})
+
+        args = {
+            "uid": "es",
+            "expr": None,
+            "sql": None,
+            "lucene": "*",
+            "agg": "logs",
+            "limit": 1,
+            "time_field": "@timestamp",
+            "target": None,
+            "start": "now-30d",
+            "end": "now",
+            "instant": False,
+            "step": None,
+        } | kwargs
+        with (
+            httpx.Client(
+                base_url="https://grafana.invalid",
+                transport=httpx.MockTransport(respond),
+            ) as c,
+            redirect_stdout(StringIO()),
+        ):
+            self.assertEqual(cmd_query(c, SimpleNamespace(**args)), 0)
+        return sent[0]
+
+    def test_logs_histogram_uses_one_bucket_per_year(self) -> None:
+        query = self.run_query()
+        self.assertEqual(query["intervalMs"], LOGS_HISTOGRAM_INTERVAL_MS)
+
+    def test_count_interval_scales_with_range_or_step(self) -> None:
+        self.assertEqual(self.run_query(agg="count")["intervalMs"], 2_592_000)
+        self.assertEqual(
+            self.run_query(agg="count", start="now-5m")["intervalMs"], 1000
+        )
+        self.assertEqual(
+            self.run_query(agg="count", step="1h")["intervalMs"], 3_600_000
+        )
+
+    def test_target_keeps_explicit_interval(self) -> None:
+        with patch(
+            "scripts.grafana.api.load_target",
+            return_value={"datasource": {"uid": "es"}, "intervalMs": 5000},
+        ):
+            self.assertEqual(
+                self.run_query(target="t.json", lucene=None)["intervalMs"], 5000
+            )
 
 
 class AlertRulesTest(unittest.TestCase):

@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 import re
 import sys
+import time
 import uuid
+from pathlib import Path
 from typing import Any, cast
 from urllib.parse import quote
 
@@ -31,6 +33,42 @@ def parse_step_ms(s: str) -> int:
     return n * _STEP_UNIT_MS[unit]
 
 
+_RELATIVE_TIME_RE = re.compile(r"^now(?:-(\d+)([smhdwMy]))?$")
+_RELATIVE_UNIT_MS = {
+    "s": 1000,
+    "m": 60_000,
+    "h": 3_600_000,
+    "d": 86_400_000,
+    "w": 604_800_000,
+    "M": 2_592_000_000,
+    "y": 31_536_000_000,
+}
+# Grafana's ES backend adds a gap-filled date histogram to every logs query and
+# defaults its interval to 1s, exceeding search.max_buckets after ~18h. The
+# histogram is discarded by the CLI, so one bucket per year keeps it trivial.
+LOGS_HISTOGRAM_INTERVAL_MS = _RELATIVE_UNIT_MS["y"]
+
+
+def time_ms(s: str, now: int) -> int | None:
+    if s.isdigit():
+        return int(s)
+    m = _RELATIVE_TIME_RE.match(s)
+    if not m:
+        return None
+    n, unit = m.groups()
+    return now - (int(n) * _RELATIVE_UNIT_MS[unit] if n else 0)
+
+
+def default_interval_ms(query: dict, start: str, end: str) -> int:
+    if any(m.get("type") == "logs" for m in query.get("metrics") or []):
+        return LOGS_HISTOGRAM_INTERVAL_MS
+    now = int(time.time() * 1000)
+    a, b = time_ms(start, now), time_ms(end, now)
+    if a is None or b is None:
+        return 3_600_000
+    return max(1000, -(-(b - a) // 1000))
+
+
 def cmd_list(c: httpx.Client, args: Any) -> int:
     r = c.get("/api/datasources", extensions=REQUEST_EXTENSIONS)
     r.raise_for_status()
@@ -51,7 +89,7 @@ def cmd_list(c: httpx.Client, args: Any) -> int:
 
 
 def load_target(path: str) -> dict:
-    raw = sys.stdin.read() if path == "-" else open(path, encoding="utf-8").read()
+    raw = sys.stdin.read() if path == "-" else Path(path).read_text(encoding="utf-8")
     obj = json.loads(raw)
     if not isinstance(obj, dict):
         raise click.UsageError("--target JSON must be a single target object")
@@ -443,15 +481,20 @@ def cmd_query(c: httpx.Client, args: Any) -> int:
             if ds_type in ("prometheus", "loki"):
                 query["range"] = not args.instant
                 query["instant"] = args.instant
-                if args.step:
-                    query["intervalMs"] = parse_step_ms(args.step)
-                    query["maxDataPoints"] = 1_000_000
         elif args.sql:
             query = build_sql_target(args.uid, ds_type, args.sql)
         else:
             query = build_lucene_target(
                 args.uid, ds_type, args.lucene, args.agg, args.limit, args.time_field
             )
+
+    # Grafana defaults intervalMs to 1s when unset; Elasticsearch histograms
+    # then exceed search.max_buckets on long ranges.
+    if args.step:
+        query["intervalMs"] = parse_step_ms(args.step)
+        query["maxDataPoints"] = 1_000_000
+    else:
+        query.setdefault("intervalMs", default_interval_ms(query, args.start, args.end))
 
     body = {"queries": [query], "from": args.start, "to": args.end}
 

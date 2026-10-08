@@ -567,7 +567,9 @@ def folders_command(
 @click.option("--from", "start", default="now-5m", show_default=True)
 @click.option("--to", "end", default="now", show_default=True)
 @click.option("--instant", is_flag=True, help="Run an instant query.")
-@click.option("--step", help="Range step, such as 30s, 1m, or 500ms.")
+@click.option(
+    "--step", help="Range step or histogram interval, such as 30s, 1m, or 500ms."
+)
 @click.pass_obj
 def query_command(
     c: httpx.Client,
