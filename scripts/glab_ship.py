@@ -68,9 +68,9 @@ def wait_pipeline(sha: str, ref: str):
 
 @click.command()
 def main():
-    """Push the current branch, open an MR titled after the last commit and
-    auto-merge it with approvals temporarily disabled, then wait for the
-    pipeline on the merged target branch.
+    """Push the current branch, reuse its open MR or open one titled after the
+    last commit, auto-merge it with approvals temporarily disabled, then wait
+    for the pipeline on the merged target branch.
     """
     branch = git("branch", "--show-current")
     target = api("projects/:id")["default_branch"]
@@ -79,7 +79,12 @@ def main():
     rules = approval_rules(target)
     set_rules(dict.fromkeys(rules, 0))
     try:
-        mr = api(
+        mr = next(
+            iter(
+                api(f"projects/:id/merge_requests?source_branch={branch}&state=opened")
+            ),
+            None,
+        ) or api(
             "projects/:id/merge_requests",
             "-X",
             "POST",
@@ -105,6 +110,9 @@ def main():
                 raise click.ClickException("MR closed")
             if (s := mr["head_pipeline"]["status"]) in ("failed", "canceled"):
                 raise click.ClickException(f"MR pipeline {s}")
+            if mr["detailed_merge_status"] == "mergeable" and s == "success":
+                # auto-merge does not re-evaluate after approval rules change
+                subprocess.check_call(["glab", "mr", "merge", str(mr["iid"]), "--yes"])
             return mr if mr["state"] == "merged" else None
 
         mr = poll(merged)
@@ -118,9 +126,9 @@ def main():
         if release["commit"]["id"] == sha:
             click.echo(f"release {release['tag_name']}: {release['_links']['self']}")
 
-    if not git("status", "--porcelain"):
-        subprocess.check_call(["git", "checkout", target])
-        subprocess.check_call(["git", "pull"])
+    # git refuses checkout/pull if local changes would be overwritten
+    if subprocess.call(["git", "checkout", target]) == 0:
+        subprocess.call(["git", "pull", "--ff-only"])
 
 
 if __name__ == "__main__":
