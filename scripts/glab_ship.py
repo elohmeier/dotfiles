@@ -99,21 +99,28 @@ def main():
         )
         click.echo(mr["web_url"])
         mr_path = f"projects/:id/merge_requests/{mr['iid']}"
-        poll(lambda: api(mr_path)["head_pipeline"], 5)
-        subprocess.check_call(
-            ["glab", "mr", "merge", str(mr["iid"]), "--auto-merge", "--yes"]
-        )
 
         def merged():
             mr = api(mr_path)
+            if mr["state"] == "merged":
+                return mr
             if mr["state"] == "closed":
                 raise click.ClickException("MR closed")
+            if not mr["head_pipeline"]:
+                return None
             if (s := mr["head_pipeline"]["status"]) in ("failed", "canceled"):
                 raise click.ClickException(f"MR pipeline {s}")
-            if mr["detailed_merge_status"] == "mergeable" and s == "success":
-                # auto-merge does not re-evaluate after approval rules change
-                subprocess.check_call(["glab", "mr", "merge", str(mr["iid"]), "--yes"])
-            return mr if mr["state"] == "merged" else None
+            status = mr["detailed_merge_status"]
+            # merging while GitLab rechecks mergeability/approvals returns 405;
+            # an existing auto-merge is not re-evaluated after approval changes
+            if status not in (
+                "unchecked",
+                "checking",
+                "preparing",
+                "approvals_syncing",
+            ) and (not mr["merge_when_pipeline_succeeds"] or status == "mergeable"):
+                subprocess.call(["glab", "mr", "merge", str(mr["iid"]), "--yes"])
+            return None
 
         mr = poll(merged)
         click.echo(f"MR !{mr['iid']} merged")
