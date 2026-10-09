@@ -23,6 +23,13 @@ term = ARGV.shift
 path = nil
 url  = nil
 
+# git config: h.rewrite = "<regex> <replacement>", h.svn = <svn URL prefix>
+IO.popen(%w[git config --get-all h.rewrite], &:readlines).each do |l|
+  re, sub = l.chomp.split(' ', 2)
+  term = term.sub(Regexp.new(re), sub)
+end if term
+svn = IO.popen(%w[git config --get-all h.svn], &:read).split.find { |p| term&.start_with?(p) }
+
 case term
 when nil, "-h", "--help"
   abort "Usage: h (<name> | <repo>/<name> | <url>) [git opts]"
@@ -38,6 +45,12 @@ when %r[\A([\w\.\-]+)/([\w\.\-]+)\z] # github user/repo
 
   url  = "git@github.com:#{owner}/#{repo}.git"
   path = CODE_ROOT.join('github.com', owner, repo)
+when ->(_) { svn } # svn URL, fetched via git url.<base>.insteadOf
+  fetch = IO.popen(['git', 'ls-remote', '--get-url', term], &:read).chomp
+  url   = IO.popen(['svn', 'info', '--non-interactive', '--show-item', 'repos-root-url', fetch], &:read).chomp
+  abort "#{term} not found" if url.empty?
+  svn  = URI.parse(term[0, term.size - fetch.size + url.size])
+  path = CODE_ROOT.join(svn.host, svn.path[1..])
 when %r[://] # URL
   url  = URI.parse(term)
   path = CODE_ROOT.join(url.host.downcase, url.path[1..-1])
@@ -79,10 +92,10 @@ unless path.directory?
   dir = parent
   dir = dir.parent until dir.directory? || dir.root?
   parent.mkpath
+  clone = svn ? ['svn', 'clone', "--rewrite-root=#{svn}", *(ARGV.any? ? ARGV : ['-r', 'HEAD'])] : ['clone', *(ARGV.any? ? ARGV : ['--recursive'])]
   unless system(
       'git',
-      'clone',
-      *(ARGV.any? ? ARGV : ['--recursive']),
+      *clone,
       '--',
       url.to_s,
       path.to_s,
