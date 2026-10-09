@@ -354,6 +354,29 @@ def _build_autopost_html(psmgw_url: str, psmgw_request_b64: str) -> str:
     )
 
 
+def _win(*args: str) -> str:
+    return subprocess.run(
+        args, capture_output=True, text=True, cwd="/mnt/c", check=True
+    ).stdout.strip()
+
+
+def _open_page(page: str) -> None:
+    if os.environ.get("WSL_DISTRO_NAME"):
+        # Bypass webbrowser/wslview: Windows can't open \\wsl$ paths reliably
+        win_tmp = Path(_win("wslpath", "-u", _win("cmd.exe", "/c", "echo %TEMP%")))
+        path = win_tmp / f"psm-{os.getpid()}.html"
+        path.write_text(page)
+        subprocess.run(
+            ["explorer.exe", _win("wslpath", "-w", str(path))],
+            cwd="/mnt/c",
+            check=False,
+        )
+        return
+    with tempfile.NamedTemporaryFile(suffix=".html", delete=False) as f:
+        f.write(page.encode())
+    webbrowser.open(f"file://{f.name}")
+
+
 @cli.command()
 @click.argument("id_or_query")
 @click.option(
@@ -411,10 +434,7 @@ def connect(
     data = resp.json()
 
     log(f"PSMGWURL: {data['PSMGWURL']}")
-    page = _build_autopost_html(data["PSMGWURL"], data["PSMGWRequest"])
-    with tempfile.NamedTemporaryFile(suffix=".html", delete=False) as f:
-        f.write(page.encode())
-        webbrowser.open(f"file://{f.name}")
+    _open_page(_build_autopost_html(data["PSMGWURL"], data["PSMGWRequest"]))
     console.print(f"Opening PSM session for account {account_id}...")
 
 
