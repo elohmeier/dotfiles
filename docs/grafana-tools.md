@@ -9,7 +9,7 @@ This repository owns the tools, tests, dependencies, and stable Grafana pin. The
 | `grafana-dashboard` | Upstream Go conversion, CUE validation, context export, Jsonnet rendering, and strict live dry runs                |
 | `grafana-inspect`   | Offline structure, live frame processing, upstream editor-schema validation, and transformation-editor diagnostics |
 
-Python commands are installed through `pyproject.toml` and `home/.chezmoiscripts/run_onchange_after_install-uv-tools.sh.tmpl`. The Go/Node commands use `home/.chezmoiscripts/run_onchange_after_install-grafana-tools.sh.tmpl`; the Node runtime lives in `~/.local/share/ennos-dotfiles/grafana-inspect`. Go and Node are included in the base package hook. The launcher preserves the current working directory.
+Python commands are installed through `pyproject.toml` and `home/.chezmoiscripts/run_onchange_after_install-uv-tools.sh.tmpl`. The Go/Node commands are built manually with `djust install-grafana-tools` (requires Go, e.g. via `djust install-extras`); the Node runtime lives in `~/.local/share/ennos-dotfiles/grafana-inspect`. The launcher preserves the current working directory.
 
 ```sh
 grafana-inspect structure dashboard.json

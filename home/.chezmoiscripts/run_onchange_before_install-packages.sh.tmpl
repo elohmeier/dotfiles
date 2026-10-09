@@ -6,13 +6,13 @@ set -u
 
 echo "Installing packages..."
 
-"{{ $brew }}" install bat btop eza fd fzf just go node ncdu sops uv vivid zoxide{{ if not (lookPath "fish") }} fish{{ end }}
+"{{ $brew }}" install bat btop eza fd fzf just node ncdu sops uv vivid zoxide{{ if not (lookPath "fish") }} fish{{ end }}
 {{ else if $apk -}}
 set -u
 
 echo "Installing packages..."
 
-"{{ $apk }}" add bat btop curl eza fd fish fzf git go just ncdu ncurses nodejs npm python3 ripgrep sops uv vivid zoxide
+"{{ $apk }}" add bat btop curl eza fd fish fzf git just ncdu ncurses nodejs npm python3 ripgrep sops uv vivid zoxide
 {{ else -}}
 exit 0
 {{ end -}}

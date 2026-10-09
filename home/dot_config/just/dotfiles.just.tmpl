@@ -37,6 +37,23 @@ disable-agent-publish:
     "{{ lookPath "systemctl" }}" --user disable --now agent-publish.service
 {{- end }}
 
+# Build and install the Grafana Go/Node tools (grafana-dashboard, grafana-inspect)
+install-grafana-tools:
+    #!/bin/sh
+    set -eu
+    source_dir="{{ .chezmoi.sourceDir }}/../tools"
+    runtime_dir="$HOME/.local/share/ennos-dotfiles/grafana-inspect"
+    mkdir -p "$HOME/.local/bin" "$runtime_dir"
+    cd "$source_dir/grafana-dashboard"
+    go build -trimpath -o "$HOME/.local/bin/grafana-dashboard" .
+    cd "$source_dir/grafana-inspect"
+    npm ci --no-audit --no-fund
+    npm run build
+    cp package.json package-lock.json grafana-version.json "$runtime_dir/"
+    rm -rf "$runtime_dir/dist"
+    cp -R dist "$runtime_dir/"
+    npm ci --prefix "$runtime_dir" --omit=dev --no-audit --no-fund
+
 # Install or update global npm tools
 install-npm-tools:
     "{{ lookPath "mkdir" }}" -p "$HOME/.local/lib"

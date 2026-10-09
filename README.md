@@ -105,7 +105,7 @@ Install or update the skills from [elohmeier/skills](https://github.com/elohmeie
 djust install-skills
 ```
 
-Grafana utilities are installed on PATH by chezmoi. See [Grafana tools](docs/grafana-tools.md) for commands, validation, and stable-release updates.
+The Python Grafana utilities are installed by chezmoi; build the Go/Node ones with `djust install-grafana-tools`. See [Grafana tools](docs/grafana-tools.md) for commands, validation, and stable-release updates.
 
 Renovate updates Python, npm, Go, Docker images, pre-commit hooks, dprint plugins,
 the container's agent CLIs, mise, uv, Python standalone builds, and tunneldigger's
