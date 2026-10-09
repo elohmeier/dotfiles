@@ -82,14 +82,14 @@ if status is-interactive
   set -gx REQUESTS_CA_BUNDLE "{{ .customCABundle }}"
   set -gx SSL_CERT_FILE "{{ .customCABundle }}"
   set -gx CURL_CA_BUNDLE "{{ .customCABundle }}"
-  set -gx UV_NATIVE_TLS "1"
+  set -gx UV_SYSTEM_CERTS "1"
   # dprint TLS configuration
   set -gx DPRINT_CERT "{{ .customCABundle }}"
   set -gx DPRINT_TLS_CA_STORE "system,mozilla"
 {{- end }}
 
 {{- if .customPyPIIndex }}
-  set -gx UV_INDEX_URL "{{ .customPyPIIndex }}"
+  set -gx UV_DEFAULT_INDEX "{{ .customPyPIIndex }}"
   set -gx PIP_INDEX_URL "{{ .customPyPIIndex }}"
 {{- end }}
 end

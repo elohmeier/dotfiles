@@ -8,7 +8,7 @@
 set -e
 uv="{{ lookPath "uv" }}"
 requirements="$("{{ lookPath "mktemp" }}")"
-"$uv" export --project "{{ .chezmoi.sourceDir }}/.." --locked --no-dev --no-emit-project --output-file "$requirements" >/dev/null
+"$uv" export --project "{{ .chezmoi.sourceDir }}/.." --frozen --no-dev --no-emit-project --output-file "$requirements" >/dev/null
 "$uv" tool install --force --constraints "$requirements" "{{ .chezmoi.sourceDir }}/.."
 "{{ lookPath "rm" }}" "$requirements"
 # required by jupytext.nvim plugin to convert .ipynb files
