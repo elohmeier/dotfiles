@@ -19,7 +19,7 @@ env:
   # renovate: datasource=npm depName=renovate
   RENOVATE_VERSION: 44.149.2
   # renovate: datasource=npm depName=dprint
-  DPRINT_VERSION: 0.61.1
+  DPRINT_VERSION: 0.62.0
 
 jobs:
   config:
