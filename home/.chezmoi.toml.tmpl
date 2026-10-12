@@ -27,6 +27,8 @@ customCABundle = "{{ .chezmoi.homeDir }}/.config/ssl/ca-certificates.crt"
 customCABundle = ""
 {{- end }}
 customPyPIIndex = {{ promptStringOnce . "customPyPIIndex" "Custom PyPI index (blank to disable)" | quote }}
+forgejoURL = {{ promptStringOnce . "forgejoURL" "Forgejo URL for tea (blank to disable)" | quote }}
+woodpeckerURL = {{ promptStringOnce . "woodpeckerURL" "Woodpecker URL for woodpecker-cli (blank to disable)" | quote }}
 
 {{- $pushoverUserKey := promptStringOnce . "pushoverUserKey" "Pushover user key (blank to disable agent notifications)" }}
 pushoverUserKey = {{ $pushoverUserKey | quote }}

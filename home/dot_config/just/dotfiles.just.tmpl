@@ -205,8 +205,14 @@ install-extras: install-nvim
     brew "syncthing"
     brew "tabiew"
     brew "talosctl"
+{{- if .forgejoURL }}
+    brew "tea"
+{{- end }}
     brew "timg"
     brew "vivid"
+{{- if .woodpeckerURL }}
+    brew "woodpecker-cli"
+{{- end }}
 {{- if not (lookPath "watch") }}
     brew "watch"
 {{- end }}
@@ -232,6 +238,30 @@ install-extras: install-nvim
 
     echo "Extra packages installed successfully!"
 
+{{ if or .forgejoURL .woodpeckerURL -}}
+# Log in to Forgejo (tea, browser OAuth) and store a Woodpecker token (works headless)
+forge-login:
+    #!/usr/bin/env bash
+    set -euo pipefail
+{{- if .forgejoURL }}
+    tea login list -o simple | grep -qw forgejo || tea login add --oauth --name forgejo --url {{ .forgejoURL | trimSuffix "/" | quote }}
+    tea login default forgejo
+{{- end }}
+{{- if .woodpeckerURL }}
+{{- $woodpecker := .woodpeckerURL | trimSuffix "/" }}
+    # woodpecker-cli setup can only store tokens in a desktop keyring; keep a
+    # 0600 file instead, read by the woodpecker-cli fish wrapper.
+    token_file="${XDG_CONFIG_HOME:-$HOME/.config}/woodpecker/token"
+    if ! WOODPECKER_TOKEN="$(cat "$token_file" 2>/dev/null)" woodpecker-cli --server {{ $woodpecker | quote }} info >/dev/null 2>&1; then
+        echo "Copy your personal token from {{ $woodpecker }}/user/cli-and-api"
+        read -rsp "Woodpecker token: " token && echo
+        mkdir -p "$(dirname "$token_file")"
+        (umask 077 && printf '%s' "$token" >"$token_file")
+        WOODPECKER_TOKEN="$token" woodpecker-cli --server {{ $woodpecker | quote }} info
+    fi
+{{- end }}
+
+{{ end -}}
 # Generate age key from SSH key for sops/mise
 setup-age-key ssh_key="~/.ssh/id_ed25519":
     #!/bin/bash

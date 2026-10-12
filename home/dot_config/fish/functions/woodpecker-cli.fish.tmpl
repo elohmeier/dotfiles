@@ -1,0 +1,7 @@
+{{- if .woodpeckerURL -}}
+# Use the token file written by `djust forge-login` instead of the keyring.
+function woodpecker-cli --wraps woodpecker-cli
+    set -l config_home (set -q XDG_CONFIG_HOME; and echo $XDG_CONFIG_HOME; or echo ~/.config)
+    WOODPECKER_SERVER={{ .woodpeckerURL | trimSuffix "/" | quote }} WOODPECKER_TOKEN=(cat $config_home/woodpecker/token 2>/dev/null) command woodpecker-cli $argv
+end
+{{- end -}}
