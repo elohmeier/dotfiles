@@ -12,7 +12,7 @@ from rich.console import Group
 from rich.live import Live
 from rich.table import Table
 
-from scripts.glab_ship import FINISHED, api, osc, show
+from scripts.glab_ship import FINISHED, api, git, osc, show
 
 ICONS = {
     "success": "[green]✔[/]",
@@ -38,7 +38,8 @@ def gql(query: str, **variables):
 
 def inputs() -> dict:
     """spec:inputs from the header document of .gitlab-ci.yml."""
-    head = Path(".gitlab-ci.yml").read_text().split("\n---\n", 1)
+    ci = Path(".gitlab-ci.yml")
+    head = ci.read_text().split("\n---\n", 1) if ci.exists() else []
     return len(head) > 1 and yaml.safe_load(head[0])["spec"]["inputs"] or {}
 
 
@@ -84,6 +85,25 @@ def choose(
     if not picked:
         raise click.Abort()
     return picked
+
+
+def complete_env(ctx: click.Context, _param, incomplete: str) -> list[str]:
+    spec = next((s for s in inputs().values() if s.get("options")), None)
+    if spec:
+        options = spec["options"]
+    else:
+        ref = ctx.params.get("ref") or api("projects/:id")["default_branch"]
+        pipeline = api(f"projects/:id/pipelines?ref={ref}&per_page=1")[0]
+        options = [
+            j["name"] for j in jobs(":id", pipeline["id"]) if j["status"] == "manual"
+        ]
+    return [o for o in options if o.startswith(incomplete)]
+
+
+def complete_ref(_ctx, _param, incomplete: str) -> list[str]:
+    refs = git("for-each-ref", "--format=%(refname:lstrip=3)", "refs/remotes/origin")
+    refs += "\n" + git("tag")
+    return [r for r in refs.split() if r != "HEAD" and r.startswith(incomplete)]
 
 
 class Run:
@@ -174,9 +194,15 @@ def watch(runs: list[Run]):
     "--env",
     "envs",
     multiple=True,
+    shell_complete=complete_env,
     help="Environment (repeatable); prompts if omitted.",
 )
-@click.option("-r", "--ref", help="Ref to deploy, defaults to the default branch.")
+@click.option(
+    "-r",
+    "--ref",
+    shell_complete=complete_ref,
+    help="Ref to deploy, defaults to the default branch.",
+)
 @click.option("-y", "--yes", is_flag=True, help="Skip the confirmation.")
 def main(envs: tuple[str, ...], ref: str | None, yes: bool):
     """Deploy the current GitLab project and watch the pipelines.
