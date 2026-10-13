@@ -107,6 +107,29 @@ def main():
     osc("9;4;0")
 
 
+def create_mr(branch: str, target: str) -> dict:
+    """Open the MR, retrying while GitLab still processes the push of a new branch."""
+    args = (
+        "projects/:id/merge_requests",
+        "-X",
+        "POST",
+        "-f",
+        f"source_branch={branch}",
+        "-f",
+        f"target_branch={target}",
+        "-f",
+        f"title={git('log', '-1', '--format=%s')}",
+        "-F",
+        "remove_source_branch=true",
+    )
+    for _ in range(4):
+        try:
+            return api(*args)
+        except subprocess.CalledProcessError:
+            time.sleep(2)
+    return api(*args)
+
+
 def merge(branch: str, target: str, mr: dict | None) -> dict:
     """Push, reuse or open the MR and merge it with approvals temporarily disabled."""
     show("pushing")
@@ -114,19 +137,7 @@ def merge(branch: str, target: str, mr: dict | None) -> dict:
     rules = approval_rules(target)
     set_rules(dict.fromkeys(rules, 0))
     try:
-        mr = mr or api(
-            "projects/:id/merge_requests",
-            "-X",
-            "POST",
-            "-f",
-            f"source_branch={branch}",
-            "-f",
-            f"target_branch={target}",
-            "-f",
-            f"title={git('log', '-1', '--format=%s')}",
-            "-F",
-            "remove_source_branch=true",
-        )
+        mr = mr or create_mr(branch, target)
         click.echo(mr["web_url"])
         mr_path = f"projects/:id/merge_requests/{mr['iid']}"
 
