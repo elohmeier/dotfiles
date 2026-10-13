@@ -91,7 +91,12 @@ def wait_pipeline(sha: str, ref: str):
 
 
 @click.command()
-def main():
+@click.option(
+    "--squash/--no-squash",
+    default=None,
+    help="Squash commits on merge (default: project setting).",
+)
+def main(squash: bool | None):
     """Push the current branch, reuse its open MR or open one titled after the
     last commit, auto-merge it with approvals temporarily disabled, then wait
     for the pipeline on the merged target branch.
@@ -100,7 +105,7 @@ def main():
     for sig in (signal.SIGTERM, signal.SIGHUP):
         signal.signal(sig, lambda *_: sys.exit(1))
     try:
-        ship()
+        ship(squash)
     except BaseException:
         osc("9;4;2")
         raise
@@ -130,7 +135,7 @@ def create_mr(branch: str, target: str) -> dict:
     return api(*args)
 
 
-def merge(branch: str, target: str, mr: dict | None) -> dict:
+def merge(branch: str, target: str, mr: dict | None, squash: bool | None) -> dict:
     """Push, reuse or open the MR and merge it with approvals temporarily disabled."""
     show("pushing")
     subprocess.check_call(["git", "push", "-u", "origin", branch])
@@ -140,6 +145,8 @@ def merge(branch: str, target: str, mr: dict | None) -> dict:
         mr = mr or create_mr(branch, target)
         click.echo(mr["web_url"])
         mr_path = f"projects/:id/merge_requests/{mr['iid']}"
+        if squash is not None:
+            api(mr_path, "-X", "PUT", "-F", f"squash={str(squash).lower()}")
 
         def merged():
             mr = api(mr_path)
@@ -172,7 +179,7 @@ def merge(branch: str, target: str, mr: dict | None) -> dict:
         set_rules(rules)
 
 
-def ship():
+def ship(squash: bool | None):
     branch = git("branch", "--show-current")
     head = git("rev-parse", "HEAD")
     target = api("projects/:id")["default_branch"]
@@ -188,7 +195,7 @@ def ship():
         None,
     )
     if not mr or mr["state"] == "opened":
-        mr = merge(branch, target, mr)
+        mr = merge(branch, target, mr, squash)
     else:
         click.echo(f"MR !{mr['iid']} already merged: {mr['web_url']}")
 
