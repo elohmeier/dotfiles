@@ -10,8 +10,13 @@ Include ~/.ssh/config.local
 Host *
     ForwardAgent no
     AddKeysToAgent yes
-{{- if .secretiveAvailable }}
-    IdentityAgent {{ .secretiveSocketPath }}
+    ControlMaster auto
+    ControlPath ~/.ssh/cm-%C
+    ControlPersist 10m
+{{- if stat "/usr/lib/ssh-keychain.dylib" }}
+    # Secure Enclave keys (djust setup-se-ssh): id_ecdsa_sk (Touch ID) is a default identity;
+    # skip Touch ID per host with "IdentityFile ~/.ssh/id_ecdsa_sk_none" + "IdentitiesOnly yes"
+    SecurityKeyProvider /usr/lib/ssh-keychain.dylib
 {{- end }}
 
 {{ if stat "/usr/lib64/pkcs11/libtpm2_pkcs11.so" -}}

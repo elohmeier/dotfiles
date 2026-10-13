@@ -262,6 +262,25 @@ forge-login:
 {{- end }}
 
 {{ end -}}
+{{ if eq .chezmoi.os "darwin" -}}
+# Create Secure Enclave SSH keys (Touch ID: ~/.ssh/id_ecdsa_sk, none: ~/.ssh/id_ecdsa_sk_none) and register them on GitHub
+setup-se-ssh:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "$(mktemp -d)"
+    for prot in bio none; do
+        sc_auth list-ctk-identities | grep -qw "ssh-$prot" || sc_auth create-ctk-identity -l "ssh-$prot" -k p-256-ne -t "$prot"
+    done
+    echo "Press Enter at the PIN prompt"
+    ssh-keygen -w /usr/lib/ssh-keychain.dylib -K -N ""
+    for prot in bio none; do
+        dst=~/.ssh/id_ecdsa_sk$([ "$prot" = bio ] || echo "_$prot")
+        mv "id_ecdsa_sk_rk_ssh-$prot" "$dst" && mv "id_ecdsa_sk_rk_ssh-$prot.pub" "$dst.pub"
+        gh api user/keys --jq '.[].key' | grep -qF "$(cut -d' ' -f2 "$dst.pub")" ||
+            gh ssh-key add "$dst.pub" -t "$(scutil --get ComputerName) Secure Enclave ($prot)"
+    done
+
+{{ end -}}
 # Generate age key from SSH key for sops/mise
 setup-age-key ssh_key="~/.ssh/id_ed25519":
     #!/bin/bash

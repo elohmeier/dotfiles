@@ -45,17 +45,6 @@ pushoverAgentSound = ""
 
 isWSL = {{ and (eq .chezmoi.os "linux") (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
 
-{{- if eq .chezmoi.os "darwin" }}
-# Secretive SSH Agent detection (macOS only)
-{{-   $secretiveSocket := joinPath .chezmoi.homeDir "Library/Containers/com.maxgoedjen.Secretive.SecretAgent/Data/socket.ssh" }}
-{{-   $socketExists := stat $secretiveSocket }}
-secretiveAvailable = {{ if $socketExists }}true{{ else }}false{{ end }}
-secretiveSocketPath = {{ $secretiveSocket | quote }}
-{{- else }}
-secretiveAvailable = false
-secretiveSocketPath = ""
-{{- end }}
-
 theme = {{ promptChoiceOnce . "theme" "Theme" (list "tokyonight_day" "tokyonight_night" "cyberdream_light" "cyberdream") "tokyonight_day" | quote }}
 machineAccent = {{ promptChoiceOnce . "machineAccent" "Machine accent" (list "default" "red" "yellow" "green" "purple") "default" | quote }}
 

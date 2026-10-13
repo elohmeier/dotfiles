@@ -1,6 +1,8 @@
 export PATH="$HOME/.cargo/bin:$HOME/go/bin:$PATH"
 
 {{- if eq .chezmoi.os "darwin" }}
+export SSH_SK_PROVIDER=/usr/lib/ssh-keychain.dylib
+
 t() {
     local session="${1:-{{ .chezmoi.hostname }}}"
     [ -n "$TMUX" ] && return 0

@@ -1,8 +1,8 @@
 status is-interactive; or exit
 
-{{- if and .secretiveAvailable .secretiveSocketPath }}
-# Use Secretive as SSH agent (macOS)
-set -gx SSH_AUTH_SOCK {{ .secretiveSocketPath }}
+{{- if eq .chezmoi.os "darwin" }}
+# Use the launchd ssh-agent; Secure Enclave keys via ssh-keychain.dylib (djust setup-se-ssh)
+set -gx SSH_SK_PROVIDER /usr/lib/ssh-keychain.dylib
 {{- else }}
 # Use traditional SSH agent
 if test -z "$SSH_ENV"
