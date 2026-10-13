@@ -142,10 +142,7 @@ install-extras: install-nvim
     fi
 
     brew bundle --file=/dev/stdin <<'EOF'
-    tap "derailed/k9s"
     tap "elohmeier/tap"
-    tap "f1bonacc1/tap"
-    tap "oven-sh/bun"
     brew "atuin"
 {{- if not (lookPath "bat") }}
     brew "bat"
@@ -157,7 +154,7 @@ install-extras: install-nvim
 {{- if not (lookPath "curl") }}
     brew "curl"
 {{- end }}
-    brew "derailed/k9s/k9s"
+    brew "k9s"
     brew "elohmeier/tap/ssh-to-age"
     brew "entr"
 {{- if not (lookPath "eza") }}
@@ -187,7 +184,6 @@ install-extras: install-nvim
 {{- end }}
     brew "minio-mc"
     brew "nnn"
-    brew "oven-sh/bun/bun"
     brew "parqeye"
     brew "pnpm"
 {{- if not (lookPath "podman") }}
@@ -226,6 +222,12 @@ install-extras: install-nvim
 {{- end }}
 {{- if eq .chezmoi.os "darwin" }}
     brew "pinentry-mac"
+{{- end }}
+    EOF
+{{- if eq .chezmoi.os "darwin" }}
+
+    # Apps update themselves; brew upgrades can need sudo (e.g. Stats' SMC helper)
+    brew bundle --no-upgrade --file=/dev/stdin <<'EOF'
     cask "db-browser-for-sqlite"
     cask "firefox"
     cask "ghostty"
@@ -233,8 +235,8 @@ install-extras: install-nvim
     cask "orbstack"
     cask "rectangle"
     cask "stats"
-{{- end }}
     EOF
+{{- end }}
 
     echo "Extra packages installed successfully!"
 

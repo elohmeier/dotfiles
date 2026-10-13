@@ -8,7 +8,7 @@ These tools are installed and available for use:
 
 **Git:** `git`, `hunk`, `git-lfs`, `gh`
 
-**Languages/Runtimes:** `go`, `bun`, `pnpm`
+**Languages/Runtimes:** `go`, `pnpm`
 
 **Formatters/Linters:** `dprint`, `shellcheck`, `shfmt`, `stylua`, `taplo`, `typstyle`
 
