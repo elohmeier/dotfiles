@@ -85,3 +85,55 @@ def test_local_branch_cleanup(tmp_path, monkeypatch, state):
         assert git("rev-parse", "HEAD") == merged
     if state == "checkout-fails":
         assert file.read_text() == "uncommitted work\n"
+
+
+@pytest.mark.parametrize(
+    "mr, title, squash, parents",
+    [
+        (None, None, None, "a b"),
+        (None, None, False, "a"),
+        (None, "chore: merge upstream/main", False, "a b"),
+        ({"iid": 7, "web_url": "u"}, None, None, "a b"),
+        ({"iid": 7, "web_url": "u"}, "feat: x", False, "a b"),
+    ],
+)
+def test_merge_title_and_squash(monkeypatch, mr, title, squash, parents):
+    events = []
+
+    def api(*args):
+        events.append(("api", *args))
+        return {"iid": 7, "web_url": "https://example.com/mr/7"}
+
+    monkeypatch.setattr(glab_ship, "api", api)
+    monkeypatch.setattr(
+        glab_ship, "git", lambda *a: {"%P": parents, "%s": "subject"}[a[-1][9:]]
+    )
+    monkeypatch.setattr(
+        glab_ship.subprocess, "check_call", lambda a: events.append(("push",))
+    )
+    monkeypatch.setattr(glab_ship, "approval_rules", lambda target: {})
+    monkeypatch.setattr(glab_ship, "set_rules", lambda rules: None)
+    monkeypatch.setattr(glab_ship, "show", lambda *a: None)
+    monkeypatch.setattr(glab_ship, "poll", lambda fn: {"iid": 7})
+
+    if not mr and not title and parents == "a b":
+        with pytest.raises(glab_ship.click.ClickException):
+            glab_ship.merge("update", "main", mr, squash, title)
+        assert events == []
+        return
+    glab_ship.merge("update", "main", mr, squash, title)
+
+    squash_args = [] if squash is None else ["-F", f"squash={str(squash).lower()}"]
+    if mr:
+        put = [("api", "projects/:id/merge_requests/7", "-X", "PUT", *squash_args)]
+        put[0] += ("-f", f"title={title}") if title else ()
+        assert events == [*(put if title or squash_args else []), ("push",)]
+    else:
+        create = events[1]
+        assert events[0] == ("push",) and create[1:4] == (
+            "projects/:id/merge_requests",
+            "-X",
+            "POST",
+        )
+        assert f"title={title or 'subject'}" in create
+        assert all(a in create for a in squash_args)

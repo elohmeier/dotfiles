@@ -96,10 +96,18 @@ def wait_pipeline(sha: str, ref: str):
     default=None,
     help="Squash commits on merge (default: project setting).",
 )
-def main(squash: bool | None):
+@click.option(
+    "-t",
+    "--title",
+    help="MR title, also applied to a reused MR (default: last commit subject).",
+)
+def main(squash: bool | None, title: str | None):
     """Push the current branch, reuse its open MR or open one titled after the
     last commit, auto-merge it with approvals temporarily disabled, then wait
     for the pipeline on the merged target branch.
+
+    A merge commit as HEAD needs --title, e.g. a Conventional Commits title
+    for MR title linting.
 
     Switch back to the target branch and delete the local branch if fully merged.
     """
@@ -107,14 +115,14 @@ def main(squash: bool | None):
     for sig in (signal.SIGTERM, signal.SIGHUP):
         signal.signal(sig, lambda *_: sys.exit(1))
     try:
-        ship(squash)
+        ship(squash, title)
     except BaseException as e:
         osc("9;4;0" if isinstance(e, (KeyboardInterrupt, click.Abort)) else "9;4;2")
         raise
     osc("9;4;0")
 
 
-def create_mr(branch: str, target: str) -> dict:
+def create_mr(branch: str, target: str, title: str, fields: list[str]) -> dict:
     """Open the MR, retrying while GitLab still processes the push of a new branch."""
     args = (
         "projects/:id/merge_requests",
@@ -125,9 +133,10 @@ def create_mr(branch: str, target: str) -> dict:
         "-f",
         f"target_branch={target}",
         "-f",
-        f"title={git('log', '-1', '--format=%s')}",
+        f"title={title}",
         "-F",
         "remove_source_branch=true",
+        *fields,
     )
     for _ in range(4):
         try:
@@ -137,18 +146,27 @@ def create_mr(branch: str, target: str) -> dict:
     return api(*args)
 
 
-def merge(branch: str, target: str, mr: dict | None, squash: bool | None) -> dict:
+def merge(
+    branch: str, target: str, mr: dict | None, squash: bool | None, title: str | None
+) -> dict:
     """Push, reuse or open the MR and merge it with approvals temporarily disabled."""
+    if not mr and not title and len(git("log", "-1", "--format=%P").split()) > 1:
+        raise click.ClickException("HEAD is a merge commit, pass --title")
+    # set before the push or at creation, so the MR pipeline sees title and squash
+    fields = [] if squash is None else ["-F", f"squash={str(squash).lower()}"]
+    if mr and (title or fields):
+        fields += ["-f", f"title={title}"] if title else []
+        mr = api(f"projects/:id/merge_requests/{mr['iid']}", "-X", "PUT", *fields)
     show("pushing")
     subprocess.check_call(["git", "push", "-u", "origin", branch])
     rules = approval_rules(target)
     set_rules(dict.fromkeys(rules, 0))
     try:
-        mr = mr or create_mr(branch, target)
+        mr = mr or create_mr(
+            branch, target, title or git("log", "-1", "--format=%s"), fields
+        )
         click.echo(mr["web_url"])
         mr_path = f"projects/:id/merge_requests/{mr['iid']}"
-        if squash is not None:
-            api(mr_path, "-X", "PUT", "-F", f"squash={str(squash).lower()}")
 
         def merged():
             mr = api(mr_path)
@@ -181,7 +199,7 @@ def merge(branch: str, target: str, mr: dict | None, squash: bool | None) -> dic
         set_rules(rules)
 
 
-def ship(squash: bool | None):
+def ship(squash: bool | None, title: str | None = None):
     branch = git("branch", "--show-current")
     head = git("rev-parse", "HEAD")
     target = api("projects/:id")["default_branch"]
@@ -197,7 +215,7 @@ def ship(squash: bool | None):
         None,
     )
     if not mr or mr["state"] == "opened":
-        mr = merge(branch, target, mr, squash)
+        mr = merge(branch, target, mr, squash, title)
     else:
         click.echo(f"MR !{mr['iid']} already merged: {mr['web_url']}")
 
