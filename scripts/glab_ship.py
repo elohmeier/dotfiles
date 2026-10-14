@@ -100,14 +100,16 @@ def main(squash: bool | None):
     """Push the current branch, reuse its open MR or open one titled after the
     last commit, auto-merge it with approvals temporarily disabled, then wait
     for the pipeline on the merged target branch.
+
+    Switch back to the target branch and delete the local branch if fully merged.
     """
     # turn kill/closed tab into SystemExit so approval rules get restored
     for sig in (signal.SIGTERM, signal.SIGHUP):
         signal.signal(sig, lambda *_: sys.exit(1))
     try:
         ship(squash)
-    except BaseException:
-        osc("9;4;2")
+    except BaseException as e:
+        osc("9;4;0" if isinstance(e, (KeyboardInterrupt, click.Abort)) else "9;4;2")
         raise
     osc("9;4;0")
 
@@ -209,8 +211,15 @@ def ship(squash: bool | None):
     show(done, 1, 1)
 
     # git refuses checkout/pull if local changes would be overwritten
-    if subprocess.call(["git", "checkout", target]) == 0:
-        subprocess.call(["git", "pull", "--ff-only"])
+    if (
+        subprocess.call(["git", "checkout", target]) == 0
+        and subprocess.call(["git", "pull", "--ff-only"]) == 0
+        and subprocess.call(
+            ["git", "merge-base", "--is-ancestor", f"refs/heads/{branch}", "HEAD"]
+        )
+        == 0
+    ):
+        subprocess.call(["git", "branch", "-d", branch])
 
 
 if __name__ == "__main__":

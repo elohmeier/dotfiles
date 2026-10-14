@@ -219,7 +219,7 @@ def main(envs: tuple[str, ...], ref: str | None, yes: bool):
     try:
         deploy(envs, ref, yes)
     except BaseException as e:
-        osc("9;4;0" if isinstance(e, click.Abort) else "9;4;2")
+        osc("9;4;0" if isinstance(e, (KeyboardInterrupt, click.Abort)) else "9;4;2")
         raise
     osc("9;4;0")
 
