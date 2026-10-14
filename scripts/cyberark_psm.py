@@ -355,9 +355,16 @@ def _build_autopost_html(psmgw_url: str, psmgw_request_b64: str) -> str:
 
 
 def _win(*args: str) -> str:
-    return subprocess.run(
-        args, capture_output=True, text=True, cwd="/mnt/c", check=True
-    ).stdout.strip()
+    try:
+        return subprocess.run(
+            args, capture_output=True, text=True, cwd="/mnt/c", check=True
+        ).stdout.strip()
+    except OSError as e:
+        raise click.ClickException(
+            f"Cannot run {args[0]} ({e.strerror}): WSL interop is unavailable. Fix:\n"
+            "echo ':WSLInterop:M::MZ::/init:PF' | sudo tee /etc/binfmt.d/WSLInterop.conf"
+            " && sudo systemctl restart systemd-binfmt"
+        ) from e
 
 
 def _open_page(page: str) -> None:
