@@ -75,8 +75,10 @@ def jobs(project, pipeline_id: int) -> list[dict]:
 
 
 def choose(
-    label: str, options: list[str], given: tuple[str, ...], default
+    label: str, options: list[str], given: tuple[str, ...], default, all_: bool
 ) -> list[str]:
+    if all_:
+        return options
     if given:
         return list(given)
     picked = questionary.checkbox(
@@ -203,8 +205,11 @@ def watch(runs: list[Run]):
     shell_complete=complete_ref,
     help="Ref to deploy, defaults to the default branch.",
 )
+@click.option(
+    "-a", "--all", "all_", is_flag=True, help="Deploy all environments/manual jobs."
+)
 @click.option("-y", "--yes", is_flag=True, help="Skip the confirmation.")
-def main(envs: tuple[str, ...], ref: str | None, yes: bool):
+def main(envs: tuple[str, ...], ref: str | None, all_: bool, yes: bool):
     """Deploy the current GitLab project and watch the pipelines.
 
     Reads the spec:inputs header of .gitlab-ci.yml: a single-choice input
@@ -217,14 +222,14 @@ def main(envs: tuple[str, ...], ref: str | None, yes: bool):
     for sig in (signal.SIGTERM, signal.SIGHUP):
         signal.signal(sig, lambda *_: sys.exit(1))
     try:
-        deploy(envs, ref, yes)
+        deploy(envs, ref, all_, yes)
     except BaseException as e:
         osc("9;4;0" if isinstance(e, (KeyboardInterrupt, click.Abort)) else "9;4;2")
         raise
     osc("9;4;0")
 
 
-def deploy(envs: tuple[str, ...], ref: str | None, yes: bool):
+def deploy(envs: tuple[str, ...], ref: str | None, all_: bool, yes: bool):
     project = api("projects/:id")
     ref = ref or project["default_branch"]
     commit = api(f"projects/:id/repository/commits/{ref}")
@@ -239,7 +244,7 @@ def deploy(envs: tuple[str, ...], ref: str | None, yes: bool):
         array = spec.get("type") == "array"
         default = spec.get("default", [])
         picked = choose(
-            f"{name}:", spec["options"], envs, default if array else [default]
+            f"{name}:", spec["options"], envs, default if array else [default], all_
         )
         plan = [(",".join(picked), picked)] if array else [(e, e) for e in picked]
         if (
@@ -261,7 +266,7 @@ def deploy(envs: tuple[str, ...], ref: str | None, yes: bool):
         }
         if not manual:
             raise click.ClickException(f"no manual jobs in {pipeline['web_url']}")
-        picked = choose("jobs:", sorted(manual), envs, [])
+        picked = choose("jobs:", sorted(manual), envs, [], all_)
         if (
             not yes
             and not questionary.confirm(
