@@ -103,13 +103,12 @@ def wait_pipeline(sha: str, ref: str):
 )
 def main(squash: bool | None, title: str | None):
     """Push the current branch, reuse its open MR or open one titled after the
-    last commit, auto-merge it with approvals temporarily disabled, then wait
+    last commit, auto-merge it with approvals temporarily disabled, switch back
+    to the target branch, deleting the local branch if fully merged, then wait
     for the pipeline on the merged target branch.
 
     A merge commit as HEAD needs --title, e.g. a Conventional Commits title
     for MR title linting.
-
-    Switch back to the target branch and delete the local branch if fully merged.
     """
     # turn kill/closed tab into SystemExit so approval rules get restored
     for sig in (signal.SIGTERM, signal.SIGHUP):
@@ -220,14 +219,6 @@ def ship(squash: bool | None, title: str | None = None):
         click.echo(f"MR !{mr['iid']} already merged: {mr['web_url']}")
 
     sha = mr["merge_commit_sha"] or mr["sha"]
-    wait_pipeline(sha, target)
-    done = f"✓ !{mr['iid']} merged"
-    for release in api("projects/:id/releases"):
-        if release["commit"]["id"] == sha:
-            click.echo(f"release {release['tag_name']}: {release['_links']['self']}")
-            done = f"✓ released {release['tag_name']}"
-    show(done, 1, 1)
-
     # git refuses checkout/pull if local changes would be overwritten
     if (
         subprocess.call(["git", "checkout", target]) == 0
@@ -238,6 +229,14 @@ def ship(squash: bool | None, title: str | None = None):
         == 0
     ):
         subprocess.call(["git", "branch", "-d", branch])
+
+    wait_pipeline(sha, target)
+    done = f"✓ !{mr['iid']} merged"
+    for release in api("projects/:id/releases"):
+        if release["commit"]["id"] == sha:
+            click.echo(f"release {release['tag_name']}: {release['_links']['self']}")
+            done = f"✓ released {release['tag_name']}"
+    show(done, 1, 1)
 
 
 if __name__ == "__main__":
