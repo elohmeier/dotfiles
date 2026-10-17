@@ -241,12 +241,20 @@ install-extras: install-nvim
     echo "Extra packages installed successfully!"
 
 {{ if or .forgejoURL .woodpeckerURL -}}
-# Log in to Forgejo (tea, browser OAuth) and store a Woodpecker token (works headless)
+# Store Forgejo (tea) and Woodpecker access tokens (works headless)
 forge-login:
     #!/usr/bin/env bash
     set -euo pipefail
 {{- if .forgejoURL }}
-    tea login list -o simple | grep -qw forgejo || tea login add --oauth --name forgejo --url {{ .forgejoURL | trimSuffix "/" | quote }}
+{{- $forgejo := .forgejoURL | trimSuffix "/" }}
+    # Forgejo rotates OAuth refresh tokens on use and tea loses them without a
+    # desktop keyring; use a non-expiring access token instead.
+    if ! { tea login default forgejo && tea whoami; } >/dev/null 2>&1; then
+        tea login delete forgejo >/dev/null 2>&1 || true
+        echo "Create an access token at {{ $forgejo }}/user/settings/applications"
+        read -rsp "Forgejo token: " token && echo
+        tea login add --name forgejo --url {{ $forgejo | quote }} --token "$token"
+    fi
     tea login default forgejo
 {{- end }}
 {{- if .woodpeckerURL }}
