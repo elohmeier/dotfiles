@@ -328,7 +328,7 @@ push-remote target:
     set -euo pipefail
     bin="${XDG_CACHE_HOME:-$HOME/.cache}/remote-bundle/.local/bin"
     mkdir -p "$bin" && cd "$bin"
-    rel() { curl -fsSL "{{ index . "githubMirror" | default "https://github.com" | trimSuffix "/" }}/$1/releases/download/$2"; }
+    rel() { echo "==> $1 $2" >&2; curl -fL --connect-timeout 10 --progress-bar "{{ index . "githubMirror" | default "https://github.com" | trimSuffix "/" }}/$1/releases/download/$2"; }
     [ -x chezmoi ] || rel twpayne/chezmoi v2.73.2/chezmoi-linux-amd64-musl >chezmoi
     [ -x fish ] || rel fish-shell/fish-shell 4.9.3/fish-4.9.3-linux-x86_64.tar.xz | tar -xJ
     [ -x fzf ] || rel junegunn/fzf v0.74.5/fzf-0.74.5-linux_amd64.tar.gz | tar -xz
@@ -337,8 +337,9 @@ push-remote target:
     chmod +x chezmoi fish fzf k9s tmux
     src="{{ .chezmoi.workingTree }}"
     rev="$(git -C "$src" stash create)"
+    echo "==> uploading to {{"{{"}} target {{"}}"}}" >&2
     { tar -c -C ../.. .local/bin; git -C "$src" archive --prefix=.local/share/chezmoi/ "${rev:-HEAD}"; } | gzip |
-        ${SSHPASS:+sshpass -e} ssh "{{"{{"}} target {{"}}"}}" 'set -e
+        ${SSHPASS:+sshpass -e} ssh "{{"{{"}} target {{"}}"}}" 'set -ex
         rm -rf ~/.local/share/chezmoi && tar -xzi -C ~
         export PATH="$HOME/.local/bin:$PATH"
         chezmoi init --promptDefaults
