@@ -13,7 +13,7 @@ command = "fish"
 
 [data]
 email = {{ promptStringOnce . "email" "Email" "enno@nerdworks.de" | quote }}
-githubEmail = {{ promptStringOnce . "githubEmail" "GitHub email (blank to disable)" "2536303+elohmeier@users.noreply.github.com" | quote }}
+githubEmail = {{ promptStringOnce . "githubEmail" "GitHub email (blank to disable)" "" "2536303+elohmeier@users.noreply.github.com" | quote }}
 name = {{ promptStringOnce . "name" "Name" "Enno Richter" | quote }}
 ghosttyFontFamily = {{ promptChoiceOnce . "ghosttyFontFamily" "Ghostty font family" (list "Spleen 6x12" "Spleen 8x16") "Spleen 6x12" | quote }}
 ghosttyFontSize = {{ promptIntOnce . "ghosttyFontSize" "Ghostty font size" 12 }}
@@ -26,16 +26,16 @@ customCABundle = "{{ .chezmoi.homeDir }}/.config/ssl/ca-certificates.crt"
 {{- else }}
 customCABundle = ""
 {{- end }}
-customPyPIIndex = {{ promptStringOnce . "customPyPIIndex" "Custom PyPI index (blank to disable)" | quote }}
-githubMirror = {{ promptStringOnce . "githubMirror" "GitHub releases mirror, e.g. Artifactory generic remote (blank for github.com)" | quote }}
-forgejoURL = {{ promptStringOnce . "forgejoURL" "Forgejo URL for tea (blank to disable)" | quote }}
-woodpeckerURL = {{ promptStringOnce . "woodpeckerURL" "Woodpecker URL for woodpecker-cli (blank to disable)" | quote }}
+customPyPIIndex = {{ promptStringOnce . "customPyPIIndex" "Custom PyPI index (blank to disable)" "" | quote }}
+githubMirror = {{ promptStringOnce . "githubMirror" "GitHub releases mirror, e.g. Artifactory generic remote (blank for github.com)" "" | quote }}
+forgejoURL = {{ promptStringOnce . "forgejoURL" "Forgejo URL for tea (blank to disable)" "" | quote }}
+woodpeckerURL = {{ promptStringOnce . "woodpeckerURL" "Woodpecker URL for woodpecker-cli (blank to disable)" "" | quote }}
 
-{{- $pushoverUserKey := promptStringOnce . "pushoverUserKey" "Pushover user key (blank to disable agent notifications)" }}
+{{- $pushoverUserKey := promptStringOnce . "pushoverUserKey" "Pushover user key (blank to disable agent notifications)" "" }}
 pushoverUserKey = {{ $pushoverUserKey | quote }}
 {{- if $pushoverUserKey }}
 pushoverApiToken = {{ promptStringOnce . "pushoverApiToken" "Pushover application API token" | quote }}
-pushoverEncryptionKey = {{ promptStringOnce . "pushoverEncryptionKey" "Pushover E2EE key (64 hex characters, blank to disable)" | quote }}
+pushoverEncryptionKey = {{ promptStringOnce . "pushoverEncryptionKey" "Pushover E2EE key (64 hex characters, blank to disable)" "" | quote }}
 # https://pushover.net/api#sounds
 pushoverAgentSound = {{ promptStringOnce . "pushoverAgentSound" "Pushover coding agent sound" "classical" | quote }}
 {{- else }}
