@@ -13,7 +13,7 @@ command = "fish"
 
 [data]
 email = {{ promptStringOnce . "email" "Email" "enno@nerdworks.de" | quote }}
-githubEmail = {{ promptStringOnce . "githubEmail" "GitHub email (blank to disable)" "" "2536303+elohmeier@users.noreply.github.com" | quote }}
+githubEmail = {{ promptStringOnce . "githubEmail" "GitHub email (blank to disable)" "2536303+elohmeier@users.noreply.github.com" | quote }}
 name = {{ promptStringOnce . "name" "Name" "Enno Richter" | quote }}
 ghosttyFontFamily = {{ promptChoiceOnce . "ghosttyFontFamily" "Ghostty font family" (list "Spleen 6x12" "Spleen 8x16") "Spleen 6x12" | quote }}
 ghosttyFontSize = {{ promptIntOnce . "ghosttyFontSize" "Ghostty font size" 12 }}
