@@ -337,13 +337,11 @@ push-remote target:
     chmod +x chezmoi fish fzf k9s tmux
     src="{{ .chezmoi.workingTree }}"
     rev="$(git -C "$src" stash create)"
-    echo "==> uploading to {{"{{"}} target {{"}}"}}" >&2
-    { tar -c -C ../.. .local/bin; git -C "$src" archive --prefix=.local/share/chezmoi/ "${rev:-HEAD}"; } | gzip |
-        ${SSHPASS:+sshpass -e} ssh "{{"{{"}} target {{"}}"}}" 'set -ex
-        rm -rf ~/.local/share/chezmoi && tar -xzi -C ~
-        export PATH="$HOME/.local/bin:$PATH"
-        chezmoi init --promptDefaults
-        chezmoi apply --exclude=scripts ~/.config/fish ~/.config/k9s ~/.local/share/terminfo ~/.tmux.conf
-        tic -x -o ~/.terminfo ~/.local/share/terminfo/xterm-ghostty.terminfo
-        chezmoi execute-template <~/.local/share/chezmoi/home/.chezmoiscripts/run_after_configure-fish.sh.tmpl | sh
-        grep -qs local/bin/fish ~/.bash_profile || echo "[ -t 0 ] && exec ~/.local/bin/fish -l" >>~/.bash_profile'
+    rsh() { ${SSHPASS:+sshpass -e} ssh "{{"{{"}} target {{"}}"}}" "$@"; }
+    echo "==> checking remote binaries" >&2
+    sums="$(rsh 'cd ~/.local/bin && cksum chezmoi fish fzf k9s tmux 2>/dev/null' || true)"
+    send="$(cksum chezmoi fish fzf k9s tmux | grep -vxF "${sums:-x}" | awk '{print ".local/bin/" $3}' || true)"
+    echo "==> uploading" $send dotfiles >&2
+    { [ -z "$send" ] || tar -c -C ../.. $send; git -C "$src" archive --prefix=.local/share/chezmoi/ "${rev:-HEAD}"; } |
+        xz -T0 | "$(command -v pv || echo cat)" |
+        rsh 'rm -rf ~/.local/share/chezmoi && tar -xJi -C ~ && sh ~/.local/share/chezmoi/scripts/remote-setup.sh'
