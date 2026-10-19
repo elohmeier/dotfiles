@@ -26,6 +26,12 @@
       "enabled": false
     },
     {
+      "description": "New Python minors often lack wheels for native deps; review .python-version bumps manually",
+      "matchManagers": ["pyenv"],
+      "matchUpdateTypes": ["major", "minor"],
+      "automerge": false
+    },
+    {
       "description": "Grafana and its frontend peers are synchronized by tools/update-grafana.mjs",
       "matchPackageNames": [
         "@grafana/data",

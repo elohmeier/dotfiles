@@ -57,7 +57,7 @@ jobs:
           UV_TOOL_BIN_DIR: ${{ runner.temp }}/bin
         run: |
           uv export --locked --no-dev --no-emit-project --output-file "$RUNNER_TEMP/requirements.txt" > /dev/null
-          uv tool install --constraints "$RUNNER_TEMP/requirements.txt" .
+          uv tool install --python "$(cat .python-version)" --constraints "$RUNNER_TEMP/requirements.txt" .
 
   grafana:
     runs-on: ubuntu-latest
