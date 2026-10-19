@@ -27,6 +27,7 @@ customCABundle = "{{ .chezmoi.homeDir }}/.config/ssl/ca-certificates.crt"
 customCABundle = ""
 {{- end }}
 customPyPIIndex = {{ promptStringOnce . "customPyPIIndex" "Custom PyPI index (blank to disable)" | quote }}
+githubMirror = {{ promptStringOnce . "githubMirror" "GitHub releases mirror, e.g. Artifactory generic remote (blank for github.com)" | quote }}
 forgejoURL = {{ promptStringOnce . "forgejoURL" "Forgejo URL for tea (blank to disable)" | quote }}
 woodpeckerURL = {{ promptStringOnce . "woodpeckerURL" "Woodpecker URL for woodpecker-cli (blank to disable)" | quote }}
 

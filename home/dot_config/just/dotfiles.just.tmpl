@@ -323,17 +323,17 @@ setup-age-key ssh_key="~/.ssh/id_ed25519":
     ssh-to-age -i "${SSH_KEY}.pub"
 
 # Push static fish/tmux/k9s/fzf/chezmoi and dotfiles to an offline ssh host (uses sshpass if SSHPASS is set)
-push-remote target accent="red":
+push-remote target:
     #!/usr/bin/env bash
     set -euo pipefail
     bin="${XDG_CACHE_HOME:-$HOME/.cache}/remote-bundle/.local/bin"
     mkdir -p "$bin" && cd "$bin"
-    rel() { gh release download -R "$1" -p "$2" -O -; }
-    [ -x chezmoi ] || rel twpayne/chezmoi chezmoi-linux-amd64-musl >chezmoi
-    [ -x fish ] || rel fish-shell/fish-shell 'fish-*-linux-x86_64.tar.xz' | tar -xJ
-    [ -x fzf ] || rel junegunn/fzf 'fzf-*-linux_amd64.tar.gz' | tar -xz
-    [ -x k9s ] || rel derailed/k9s k9s_Linux_amd64.tar.gz | tar -xz k9s
-    [ -x tmux ] || rel mjakob-gh/build-static-tmux tmux.linux-amd64.stripped.gz | gunzip >tmux
+    rel() { curl -fsSL "{{ index . "githubMirror" | default "https://github.com" | trimSuffix "/" }}/$1/releases/download/$2"; }
+    [ -x chezmoi ] || rel twpayne/chezmoi v2.73.2/chezmoi-linux-amd64-musl >chezmoi
+    [ -x fish ] || rel fish-shell/fish-shell 4.9.3/fish-4.9.3-linux-x86_64.tar.xz | tar -xJ
+    [ -x fzf ] || rel junegunn/fzf v0.74.5/fzf-0.74.5-linux_amd64.tar.gz | tar -xz
+    [ -x k9s ] || rel derailed/k9s v0.51.0/k9s_Linux_amd64.tar.gz | tar -xz k9s
+    [ -x tmux ] || rel mjakob-gh/build-static-tmux v3.7b/tmux.linux-amd64.stripped.gz | gunzip >tmux
     chmod +x chezmoi fish fzf k9s tmux
     src="{{ .chezmoi.workingTree }}"
     rev="$(git -C "$src" stash create)"
@@ -341,7 +341,7 @@ push-remote target accent="red":
         ${SSHPASS:+sshpass -e} ssh "{{"{{"}} target {{"}}"}}" 'set -e
         rm -rf ~/.local/share/chezmoi && tar -xzi -C ~
         export PATH="$HOME/.local/bin:$PATH"
-        chezmoi init --promptDefaults --promptChoice machineAccent={{"{{"}} accent {{"}}"}}
+        chezmoi init --promptDefaults
         chezmoi apply --exclude=scripts ~/.config/fish ~/.config/k9s ~/.local/share/terminfo ~/.tmux.conf
         tic -x -o ~/.terminfo ~/.local/share/terminfo/xterm-ghostty.terminfo
         chezmoi execute-template <~/.local/share/chezmoi/home/.chezmoiscripts/run_after_configure-fish.sh.tmpl | sh
