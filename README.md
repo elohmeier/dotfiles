@@ -97,6 +97,19 @@ Set `SNAPSHOT_CALENDAR` and `SNAPSHOT_KEEP` to change the schedule and retention
 Snapshots live in the root-only `/home/.snapshots` subvolume and do not replace
 an off-device backup.
 
+### OOM protection for remote access (Linux)
+
+Keep tailscaled and sshd responsive under memory pressure (MGLRU thrash
+protection, memory.min reservations, user session caps, systemd-oomd swap kill):
+
+```bash
+./scripts/setup-oom-protection.sh
+```
+
+Large models run via the optional `systemctl --user start llama-server` unit,
+which caps memory and is the preferred OOM victim. Override its arguments with
+`LLAMA_ARGS=...` in `~/.config/llama-server.env`.
+
 ## Agent Skills
 
 Install or update the skills from [elohmeier/skills](https://github.com/elohmeier/skills) for Claude Code and Codex:

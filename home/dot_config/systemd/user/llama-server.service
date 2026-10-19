@@ -1,0 +1,17 @@
+# Optional: systemctl --user start llama-server
+# Override LLAMA_ARGS in ~/.config/llama-server.env
+[Unit]
+Description=llama.cpp server
+
+[Service]
+Environment=LLAMA_ARGS="-hf unsloth/Qwen3.6-35B-A3B-MTP-GGUF:UD-Q4_K_XL --temp 1.0 --top-p 0.95 --top-k 20 --presence-penalty 1.5 --min-p 0.00 --spec-type draft-mtp --spec-draft-n-max 2 --host 0.0.0.0 --port 8080"
+EnvironmentFile=-%h/.config/llama-server.env
+ExecStart=%h/repos/github.com/ggml-org/llama.cpp/build/bin/llama-server $LLAMA_ARGS
+Restart=on-failure
+MemoryHigh=64G
+MemoryMax=80G
+MemorySwapMax=0
+OOMScoreAdjust=500
+
+[Install]
+WantedBy=default.target
