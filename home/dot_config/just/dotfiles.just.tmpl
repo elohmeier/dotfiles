@@ -322,26 +322,10 @@ setup-age-key ssh_key="~/.ssh/id_ed25519":
     echo "Public key (for .sops.yaml):"
     ssh-to-age -i "${SSH_KEY}.pub"
 
-# Push static fish/tmux/k9s/fzf/chezmoi and dotfiles to an offline ssh host (uses sshpass if SSHPASS is set)
+# Install static fish/tmux/k9s/fzf/chezmoi and apply pushed dotfiles on an ssh host via githubMirror (uses sshpass if SSHPASS is set)
 push-remote target:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    bin="${XDG_CACHE_HOME:-$HOME/.cache}/remote-bundle/.local/bin"
-    mkdir -p "$bin" && cd "$bin"
-    rel() { echo "==> $1 $2" >&2; curl -fL --connect-timeout 10 --progress-bar "{{ index . "githubMirror" | default "https://github.com" | trimSuffix "/" }}/$1/releases/download/$2"; }
-    [ -x chezmoi ] || rel twpayne/chezmoi v2.73.2/chezmoi-linux-amd64-musl >chezmoi
-    [ -x fish ] || rel fish-shell/fish-shell 4.9.3/fish-4.9.3-linux-x86_64.tar.xz | tar -xJ
-    [ -x fzf ] || rel junegunn/fzf v0.74.5/fzf-0.74.5-linux_amd64.tar.gz | tar -xz
-    [ -x k9s ] || rel derailed/k9s v0.51.0/k9s_Linux_amd64.tar.gz | tar -xz k9s
-    [ -x tmux ] || rel mjakob-gh/build-static-tmux v3.7b/tmux.linux-amd64.stripped.gz | gunzip >tmux
-    chmod +x chezmoi fish fzf k9s tmux
-    src="{{ .chezmoi.workingTree }}"
-    rev="$(git -C "$src" stash create)"
-    rsh() { ${SSHPASS:+sshpass -e} ssh "{{"{{"}} target {{"}}"}}" "$@"; }
-    echo "==> checking remote binaries" >&2
-    sums="$(rsh 'cd ~/.local/bin && cksum chezmoi fish fzf k9s tmux 2>/dev/null' || true)"
-    send="$(cksum chezmoi fish fzf k9s tmux | grep -vxF "${sums:-x}" | awk '{print ".local/bin/" $3}' || true)"
-    echo "==> uploading" $send dotfiles >&2
-    { [ -z "$send" ] || tar -c -C ../.. $send; git -C "$src" archive --prefix=.local/share/chezmoi/ "${rev:-HEAD}"; } |
-        xz -T0 | "$(command -v pv || echo cat)" |
-        rsh 'rm -rf ~/.local/share/chezmoi && tar -xJi -C ~ && sh ~/.local/share/chezmoi/scripts/remote-setup.sh'
+    #!/bin/sh
+    set -eu
+    m="{{ index . "githubMirror" | default "https://github.com" | trimSuffix "/" }}"
+    rev="$(git -C "{{ .chezmoi.workingTree }}" rev-parse @{u})"
+    ${SSHPASS:+sshpass -e} ssh "{{"{{"}} target {{"}}"}}" "d=~/.local/share/chezmoi && rm -rf \$d && mkdir -p \$d && curl -fsSL $m/elohmeier/dotfiles/archive/$rev.tar.gz | tar -xz --strip-components=1 -C \$d && bash \$d/scripts/remote-setup.sh $m"
