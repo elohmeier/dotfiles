@@ -40,6 +40,10 @@ class PassGroup(click.RichGroup):
 
 
 def _api(ctx, path: str, **kw):
+    if "session" not in ctx.obj:
+        ctx.obj["password"] = _resolve_password(
+            ctx.obj["password"], ctx.obj["settings"]
+        )
     resp = _get_session(ctx).request(
         kw.pop("method", "GET"), api_url(ctx.obj["url"], path), **kw
     )
@@ -137,7 +141,7 @@ def cli(ctx) -> None:
     ctx.ensure_object(dict).update(
         url=os.environ.get("CYBERARK_URL") or settings.url,
         user=os.environ.get("CYBERARK_USER") or settings.user or os.environ.get("USER"),
-        password=_resolve_password(os.environ.get("CYBERARK_PASSWORD"), settings),
+        password=os.environ.get("CYBERARK_PASSWORD"),
         insecure=bool(os.environ.get("CYBERARK_INSECURE")),
         settings=settings,
     )
