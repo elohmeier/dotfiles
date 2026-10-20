@@ -14,5 +14,7 @@ if [ "$(cat ~/.local/bin/.bundle 2>/dev/null)" != "$v" ]; then
     mkdir -p ~/.local/bin && mv -f chezmoi fish fzf k9s tmux ~/.local/bin/
     echo "$v" >~/.local/bin/.bundle
 fi
-mkdir src && curl -fsSL "$1/elohmeier/dotfiles/archive/${2:-main}.tar.gz" | tar -xz --strip-components=1 -C src
+# branch archives are cached upstream; resolve main to an immutable commit
+rev="${2:-$(curl -fsSL "$1/elohmeier/dotfiles/commits/main.atom" | grep -om1 'Commit/[0-9a-f]\{40\}' | cut -d/ -f2)}"
+mkdir src && curl -fsSL "$1/elohmeier/dotfiles/archive/$rev.tar.gz" | tar -xz --strip-components=1 -C src
 mkdir -p ~/.local/share && rm -rf ~/.local/share/chezmoi && mv src ~/.local/share/chezmoi
