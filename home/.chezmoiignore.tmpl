@@ -23,6 +23,10 @@ Applications/Firefox.app
 .local/share/applications/windows-explorer-wsl.desktop
 {{- end }}
 
+{{ if not (index . "authorizeGitHubKeys") }}
+.ssh/authorized_keys
+{{ end -}}
+
 {{ if not .enableEmail }}
 .config/aerc/**
 .config/pizauth.conf

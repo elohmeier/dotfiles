@@ -21,6 +21,7 @@ ghosttyFontSize = {{ promptIntOnce . "ghosttyFontSize" "Ghostty font size" 12 }}
 
 enableEmail = {{ promptBoolOnce . "enableEmail" "Enable email configuration" false }}
 enableSecrets = {{ promptBoolOnce . "enableSecrets" "Enable secrets" false }}
+authorizeGitHubKeys = {{ promptBoolOnce . "authorizeGitHubKeys" "Authorize GitHub SSH keys in ~/.ssh/authorized_keys" false }}
 
 {{- if and (eq .chezmoi.os "linux") (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
 customCABundle = "{{ .chezmoi.homeDir }}/.config/ssl/ca-certificates.crt"
