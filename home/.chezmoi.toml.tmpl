@@ -1,4 +1,5 @@
 encryption = "age"
+scriptTempDir = "{{ .chezmoi.homeDir }}/.cache/chezmoi" # /tmp may be mounted noexec
 
 [age]
 {{- if eq .chezmoi.os "darwin" }}
