@@ -15,6 +15,6 @@ if [ "$(cat ~/.local/bin/.bundle 2>/dev/null)" != "$v" ]; then
     echo "$v" >~/.local/bin/.bundle
 fi
 # branch archives are cached upstream; resolve main to an immutable commit
-rev="${2:-$(curl -fsSL "$1/elohmeier/dotfiles/commits/main.atom" | grep -om1 'Commit/[0-9a-f]\{40\}' | cut -d/ -f2)}"
+rev="${2:-$(curl -fsSL "$1/elohmeier/dotfiles/commits/main.atom" | awk 'match($0, /Commit\/[0-9a-f]+/) && !r { r = substr($0, RSTART + 7, 40) } END { print r }')}"
 mkdir src && curl -fsSL "$1/elohmeier/dotfiles/archive/$rev.tar.gz" | tar -xz --strip-components=1 -C src
 mkdir -p ~/.local/share && rm -rf ~/.local/share/chezmoi && mv src ~/.local/share/chezmoi
