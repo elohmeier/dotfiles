@@ -328,4 +328,4 @@ push-remote target:
     set -eu
     m="{{ index . "githubMirror" | default "https://github.com" | trimSuffix "/" }}"
     rev="$(git -C "{{ .chezmoi.workingTree }}" rev-parse @{u})"
-    ${SSHPASS:+sshpass -e} ssh "{{"{{"}} target {{"}}"}}" "curl -fsSL $m/elohmeier/dotfiles/raw/$rev/scripts/mirror-update.sh | bash -s $m $rev && ~/.local/bin/chezmoi init --apply --promptDefaults --promptString 'GitHub mirror URL (blank for github.com)=$m' && { grep -qs local/bin/fish ~/.bash_profile || echo '[ -t 0 ] && exec ~/.local/bin/fish -l' >>~/.bash_profile; }"
+    ${SSHPASS:+sshpass -e} ssh "{{"{{"}} target {{"}}"}}" "curl -fsSL $m/elohmeier/dotfiles/raw/$rev/scripts/mirror-update.sh | bash -s $m $rev && ~/.local/bin/chezmoi init --promptDefaults --promptString 'GitHub mirror URL (blank for github.com)=$m' && ~/.local/bin/chezmoi apply && { grep -qs local/bin/fish ~/.bash_profile || echo '[ -t 0 ] && exec ~/.local/bin/fish -l' >>~/.bash_profile; }"
