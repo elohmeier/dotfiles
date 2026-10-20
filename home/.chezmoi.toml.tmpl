@@ -27,7 +27,8 @@ customCABundle = "{{ .chezmoi.homeDir }}/.config/ssl/ca-certificates.crt"
 customCABundle = ""
 {{- end }}
 customPyPIIndex = {{ promptStringOnce . "customPyPIIndex" "Custom PyPI index (blank to disable)" "" | quote }}
-githubMirror = {{ promptStringOnce . "githubMirror" "GitHub releases mirror, e.g. Artifactory generic remote (blank for github.com)" "" | quote }}
+{{- $githubMirror := promptStringOnce . "githubMirror" "GitHub mirror URL (blank for github.com)" "" }}
+githubMirror = {{ $githubMirror | quote }}
 forgejoURL = {{ promptStringOnce . "forgejoURL" "Forgejo URL for tea (blank to disable)" "" | quote }}
 woodpeckerURL = {{ promptStringOnce . "woodpeckerURL" "Woodpecker URL for woodpecker-cli (blank to disable)" "" | quote }}
 
@@ -48,6 +49,14 @@ isWSL = {{ and (eq .chezmoi.os "linux") (.chezmoi.kernel.osrelease | lower | con
 
 theme = {{ promptChoiceOnce . "theme" "Theme" (list "tokyonight_day" "tokyonight_night" "cyberdream_light" "cyberdream") "tokyonight_day" | quote }}
 machineAccent = {{ promptChoiceOnce . "machineAccent" "Machine accent" (list "default" "red" "yellow" "green" "purple") "default" | quote }}
+
+{{- if and $githubMirror (not (stat (joinPath .chezmoi.workingTree ".git" "refs" "remotes"))) }}
+
+# Source is a mirror archive, not a git clone (see scripts/mirror-update.sh)
+[update]
+command = "bash"
+args = [{{ joinPath .chezmoi.workingTree "scripts" "mirror-update.sh" | quote }}, {{ $githubMirror | trimSuffix "/" | quote }}]
+{{- end }}
 
 [secret]
 command = "{{ joinPath .chezmoi.sourceDir ".." "scripts" "chesops.sh" }}"

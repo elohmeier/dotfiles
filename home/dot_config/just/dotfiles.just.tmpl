@@ -322,10 +322,10 @@ setup-age-key ssh_key="~/.ssh/id_ed25519":
     echo "Public key (for .sops.yaml):"
     ssh-to-age -i "${SSH_KEY}.pub"
 
-# Install static fish/tmux/k9s/fzf/chezmoi and apply pushed dotfiles on an ssh host via githubMirror (uses sshpass if SSHPASS is set)
+# Bootstrap an ssh host that reaches GitHub only via githubMirror; afterwards `chezmoi update` works there (uses sshpass if SSHPASS is set)
 push-remote target:
     #!/bin/sh
     set -eu
     m="{{ index . "githubMirror" | default "https://github.com" | trimSuffix "/" }}"
     rev="$(git -C "{{ .chezmoi.workingTree }}" rev-parse @{u})"
-    ${SSHPASS:+sshpass -e} ssh "{{"{{"}} target {{"}}"}}" "d=~/.local/share/chezmoi && rm -rf \$d && mkdir -p \$d && curl -fsSL $m/elohmeier/dotfiles/archive/$rev.tar.gz | tar -xz --strip-components=1 -C \$d && bash \$d/scripts/remote-setup.sh $m"
+    ${SSHPASS:+sshpass -e} ssh "{{"{{"}} target {{"}}"}}" "curl -fsSL $m/elohmeier/dotfiles/raw/$rev/scripts/mirror-update.sh | bash -s $m $rev && ~/.local/bin/chezmoi init --apply --promptDefaults --promptString 'GitHub mirror URL (blank for github.com)=$m' && { grep -qs local/bin/fish ~/.bash_profile || echo '[ -t 0 ] && exec ~/.local/bin/fish -l' >>~/.bash_profile; }"

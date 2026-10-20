@@ -1,7 +1,8 @@
+[ -f /etc/bashrc ] && . /etc/bashrc
 {{ with (lookPath "/opt/workbrew/bin/brew" | default (lookPath "brew")) -}}
 export PATH="{{ dir . }}:$PATH"
 {{ end -}}
-export PATH="$HOME/.cargo/bin:$HOME/go/bin:$PATH"
+export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$HOME/go/bin:$PATH"
 
 {{- if eq .chezmoi.os "darwin" }}
 export SSH_SK_PROVIDER=/usr/lib/ssh-keychain.dylib

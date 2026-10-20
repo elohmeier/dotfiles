@@ -1,3 +1,4 @@
+{{ if lookPath "uv" -}}
 #!/bin/sh
 # package sources:
 {{ range glob (joinPath .chezmoi.sourceDir "../scripts/**/*.py") -}}
@@ -13,3 +14,4 @@ requirements="$("{{ lookPath "mktemp" }}")"
 "{{ lookPath "rm" }}" "$requirements"
 # required by jupytext.nvim plugin to convert .ipynb files
 "$uv" tool install --upgrade jupytext
+{{ end -}}
