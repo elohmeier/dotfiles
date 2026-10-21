@@ -7,6 +7,11 @@ Include ~/.orbstack/ssh/config
 
 Include ~/.ssh/config.local
 
+# CyberArk PSMP runs one audited session per connection; a shared master breaks follow-up sessions
+Host *psmp*
+    ControlMaster no
+    ControlPath none
+
 Host *
     ForwardAgent no
     AddKeysToAgent yes
