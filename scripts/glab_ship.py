@@ -101,11 +101,18 @@ def wait_pipeline(sha: str, ref: str):
     "--title",
     help="MR title, also applied to a reused MR (default: last commit subject).",
 )
-def main(squash: bool | None, title: str | None):
+@click.option(
+    "--wait/--no-wait",
+    default=True,
+    help="Wait for the pipeline on the merged target branch.",
+)
+def main(squash: bool | None, title: str | None, wait: bool):
     """Push the current branch, reuse its open MR or open one titled after the
     last commit, auto-merge it with approvals temporarily disabled, switch back
     to the target branch, deleting the local branch if fully merged, then wait
     for the pipeline on the merged target branch.
+
+    In a linked worktree the branch stays checked out.
 
     A merge commit as HEAD needs --title, e.g. a Conventional Commits title
     for MR title linting.
@@ -114,7 +121,7 @@ def main(squash: bool | None, title: str | None):
     for sig in (signal.SIGTERM, signal.SIGHUP):
         signal.signal(sig, lambda *_: sys.exit(1))
     try:
-        ship(squash, title)
+        ship(squash, title, wait)
     except BaseException as e:
         osc("9;4;0" if isinstance(e, (KeyboardInterrupt, click.Abort)) else "9;4;2")
         raise
@@ -198,7 +205,7 @@ def merge(
         set_rules(rules)
 
 
-def ship(squash: bool | None, title: str | None = None):
+def ship(squash: bool | None, title: str | None = None, wait: bool = True):
     branch = git("branch", "--show-current")
     head = git("rev-parse", "HEAD")
     target = api("projects/:id")["default_branch"]
@@ -220,8 +227,10 @@ def ship(squash: bool | None, title: str | None = None):
 
     sha = mr["merge_commit_sha"] or mr["sha"]
     # git refuses checkout/pull if local changes would be overwritten
+    worktree = git("rev-parse", "--git-dir") != git("rev-parse", "--git-common-dir")
     if (
-        subprocess.call(["git", "checkout", target]) == 0
+        not worktree
+        and subprocess.call(["git", "checkout", target]) == 0
         and subprocess.call(["git", "pull", "--ff-only"]) == 0
         and subprocess.call(
             ["git", "merge-base", "--is-ancestor", f"refs/heads/{branch}", "HEAD"]
@@ -230,6 +239,9 @@ def ship(squash: bool | None, title: str | None = None):
     ):
         subprocess.call(["git", "branch", "-d", branch])
 
+    if not wait:
+        show(f"✓ !{mr['iid']} merged", 1, 1)
+        return
     wait_pipeline(sha, target)
     done = f"✓ !{mr['iid']} merged"
     for release in api("projects/:id/releases"):
