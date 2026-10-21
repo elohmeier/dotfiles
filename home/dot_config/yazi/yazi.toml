@@ -27,5 +27,5 @@ rules = [
   { mime = "image/*", use = "open" },
   { mime = "video/*", use = "play" },
   { mime = "application/pdf", use = "open" },
-  { name = "*", use = "open" },
+  { url = "*", use = "open" },
 ]

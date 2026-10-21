@@ -1,40 +1,48 @@
 {{- $t := index .yazi .theme -}}
-[manager]
+[mgr]
 cwd = { fg = "{{ $t.cwd }}", italic = true }
-hovered         = { bg = "{{ $t.hovered_bg }}" }
-preview_hovered = { bg = "{{ $t.hovered_bg }}" }
 find_keyword  = { fg = "{{ $t.find_keyword_fg }}", bg = "{{ $t.find_keyword_bg }}", bold = true }
 find_position = { fg = "{{ $t.find_position_fg }}", bg = "{{ $t.find_position_bg }}", bold = true }
 marker_copied   = { fg = "{{ $t.marker_copied }}", bg = "{{ $t.marker_copied }}" }
 marker_cut      = { fg = "{{ $t.marker_cut }}", bg = "{{ $t.marker_cut }}" }
 marker_marked   = { fg = "{{ $t.marker_marked }}", bg = "{{ $t.marker_marked }}" }
 marker_selected = { fg = "{{ $t.marker_selected }}", bg = "{{ $t.marker_selected }}" }
-tab_active   = { fg = "{{ $t.tab_active_fg }}", bg = "{{ $t.tab_active_bg }}" }
-tab_inactive = { fg = "{{ $t.tab_inactive_fg }}", bg = "{{ $t.tab_inactive_bg }}" }
-tab_width    = 1
 count_copied   = { fg = "{{ $t.count_copied_fg }}", bg = "{{ $t.count_copied_bg }}" }
 count_cut      = { fg = "{{ $t.count_cut_fg }}", bg = "{{ $t.count_cut_bg }}" }
 count_selected = { fg = "{{ $t.count_selected_fg }}", bg = "{{ $t.count_selected_bg }}" }
 border_symbol = "│"
 border_style  = { fg = "{{ $t.border }}" }
 
+[indicator]
+parent  = { bg = "{{ $t.hovered_bg }}" }
+current = { bg = "{{ $t.hovered_bg }}" }
+preview = { bg = "{{ $t.hovered_bg }}" }
+
+[tabs]
+active   = { fg = "{{ $t.tab_active_fg }}", bg = "{{ $t.tab_active_bg }}" }
+inactive = { fg = "{{ $t.tab_inactive_fg }}", bg = "{{ $t.tab_inactive_bg }}" }
+
+[mode]
+normal_main = { fg = "{{ $t.mode_normal_fg }}", bg = "{{ $t.mode_normal_bg }}", bold = true }
+normal_alt  = { fg = "{{ $t.mode_normal_bg }}", bg = "{{ $t.separator_fg }}" }
+select_main = { fg = "{{ $t.mode_select_fg }}", bg = "{{ $t.mode_select_bg }}", bold = true }
+select_alt  = { fg = "{{ $t.mode_select_bg }}", bg = "{{ $t.separator_fg }}" }
+unset_main  = { fg = "{{ $t.mode_unset_fg }}", bg = "{{ $t.mode_unset_bg }}", bold = true }
+unset_alt   = { fg = "{{ $t.mode_unset_bg }}", bg = "{{ $t.separator_fg }}" }
+
 [status]
-separator_open  = ""
-separator_close = ""
-separator_style = { fg = "{{ $t.separator_fg }}", bg = "{{ $t.separator_fg }}" }
-mode_normal = { fg = "{{ $t.mode_normal_fg }}", bg = "{{ $t.mode_normal_bg }}", bold = true }
-mode_select = { fg = "{{ $t.mode_select_fg }}", bg = "{{ $t.mode_select_bg }}", bold = true }
-mode_unset  = { fg = "{{ $t.mode_unset_fg }}", bg = "{{ $t.mode_unset_bg }}", bold = true }
+sep_left  = { open = "", close = "" }
+sep_right = { open = "", close = "" }
 progress_label  = { fg = "{{ $t.progress_label }}", bold = true }
 progress_normal = { fg = "{{ $t.progress_normal }}" }
 progress_error  = { fg = "{{ $t.progress_error }}" }
-permissions_t = { fg = "{{ $t.perm_type }}" }
-permissions_r = { fg = "{{ $t.perm_read }}" }
-permissions_w = { fg = "{{ $t.perm_write }}" }
-permissions_x = { fg = "{{ $t.perm_exec }}" }
-permissions_s = { fg = "{{ $t.perm_sep }}" }
+perm_type  = { fg = "{{ $t.perm_type }}" }
+perm_read  = { fg = "{{ $t.perm_read }}" }
+perm_write = { fg = "{{ $t.perm_write }}" }
+perm_exec  = { fg = "{{ $t.perm_exec }}" }
+perm_sep   = { fg = "{{ $t.perm_sep }}" }
 
-[select]
+[pick]
 border   = { fg = "{{ $t.select_border }}" }
 active   = { fg = "{{ $t.select_active_fg }}",  bg = "{{ $t.select_active_bg }}" }
 inactive = { fg = "{{ $t.select_inactive }}" }
@@ -45,7 +53,7 @@ title    = {}
 value    = { fg = "{{ $t.input_value }}" }
 selected = { bg = "{{ $t.input_selected }}" }
 
-[completion]
+[cmp]
 border   = { fg = "{{ $t.input_border }}" }
 active   = { fg = "{{ $t.select_active_fg }}", bg = "{{ $t.select_active_bg }}" }
 inactive = { fg = "{{ $t.select_active_fg }}" }
@@ -70,10 +78,9 @@ title_warn  = { fg = "{{ $t.notify_warn }}" }
 title_error = { fg = "{{ $t.notify_error }}" }
 
 [help]
-on      = { fg = "{{ $t.help_on }}" }
-run     = { fg = "{{ $t.help_run }}" }
+chord   = { fg = "{{ $t.help_on }}" }
+action  = { fg = "{{ $t.help_run }}" }
 hovered = { bg = "{{ $t.help_hovered }}" }
-footer  = { fg = "{{ $t.help_footer_fg }}", bg = "{{ $t.help_footer_bg }}" }
 
 [filetype]
 rules = [
@@ -82,7 +89,7 @@ rules = [
 	{ mime = "application/*zip", fg = "{{ $t.file_archive }}" },
 	{ mime = "application/x-{tar,bzip*,7z-compressed,xz,rar}", fg = "{{ $t.file_archive }}" },
 	{ mime = "application/{pdf,doc,rtf,vnd.*}", fg = "{{ $t.file_doc }}" },
-	{ name = "*", is = "orphan", bg = "{{ $t.file_archive }}" },
-	{ name = "*", is = "exec"  , fg = "{{ $t.file_exec }}" },
-	{ name = "*/", fg = "{{ $t.file_dir }}" }
+	{ url = "*", is = "orphan", bg = "{{ $t.file_archive }}" },
+	{ url = "*", is = "exec"  , fg = "{{ $t.file_exec }}" },
+	{ url = "*/", fg = "{{ $t.file_dir }}" }
 ]
