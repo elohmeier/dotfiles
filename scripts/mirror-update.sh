@@ -21,7 +21,7 @@ fi
 b=/usr/local/bin
 rel() { curl -fsSL "$1/$2/releases/download/$3"; }
 # renovate: datasource=github-releases depName=twpayne/chezmoi
-CHEZMOI_V=v2.73.2
+CHEZMOI_V=v2.73.3
 # renovate: datasource=github-releases depName=fish-shell/fish-shell
 FISH_V=4.9.3
 # renovate: datasource=github-releases depName=junegunn/fzf
