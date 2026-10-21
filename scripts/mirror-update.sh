@@ -4,7 +4,7 @@
 set -euo pipefail
 b=/usr/local/bin
 rel() { curl -fsSL "$1/$2/releases/download/$3"; }
-v="chezmoi-2.73.2 fish-4.9.3 fzf-0.74.5 k9s-0.51.0 tmux-3.7b"
+v="chezmoi-2.73.2 fish-4.9.3 fzf-0.74.5 k9s-0.51.0 tmux-3.7b yazi-26.9.1"
 cd "$(mktemp -d)"
 if [ "$(cat $b/.dotfiles-bundle 2>/dev/null)" != "$v" ]; then
     rel "$1" twpayne/chezmoi v2.73.2/chezmoi-linux-amd64-musl >chezmoi
@@ -12,8 +12,9 @@ if [ "$(cat $b/.dotfiles-bundle 2>/dev/null)" != "$v" ]; then
     rel "$1" junegunn/fzf v0.74.5/fzf-0.74.5-linux_amd64.tar.gz | tar -xz
     rel "$1" derailed/k9s v0.51.0/k9s_Linux_amd64.tar.gz | tar -xz k9s
     rel "$1" mjakob-gh/build-static-tmux v3.7b/tmux.linux-amd64.stripped.gz | gunzip >tmux
+    rel "$1" sxyazi/yazi v26.9.1/yazi-x86_64-unknown-linux-musl.zip >yazi.zip && unzip -jq yazi.zip '*/yazi'
     echo "$v" >.dotfiles-bundle
-    su -c "install -m 755 chezmoi fish fzf k9s tmux .dotfiles-bundle $b/"
+    su -c "install -m 755 chezmoi fish fzf k9s tmux yazi .dotfiles-bundle $b/"
     rm -f ~/.local/bin/{chezmoi,fish,fzf,k9s,tmux,.bundle}
 fi
 # Mirrors cache mutable URLs (branch archives, feeds) by path. GitHub ignores the case of owner/repo,
