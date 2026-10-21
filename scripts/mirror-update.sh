@@ -1,6 +1,6 @@
 #!/bin/bash
 # Refreshes static tools and the chezmoi source from GitHub mirror $1 at ref $2 (chezmoi update.command on hosts without GitHub access)
-# Tools go to /usr/local/bin (via sudo) since /home is tiny on those hosts
+# Tools go to /usr/local/bin (via su, passwordless there) since /home is tiny on those hosts
 set -euo pipefail
 b=/usr/local/bin
 rel() { curl -fsSL "$1/$2/releases/download/$3"; }
@@ -13,7 +13,7 @@ if [ "$(cat $b/.dotfiles-bundle 2>/dev/null)" != "$v" ]; then
     rel "$1" derailed/k9s v0.51.0/k9s_Linux_amd64.tar.gz | tar -xz k9s
     rel "$1" mjakob-gh/build-static-tmux v3.7b/tmux.linux-amd64.stripped.gz | gunzip >tmux
     echo "$v" >.dotfiles-bundle
-    sudo install -m 755 chezmoi fish fzf k9s tmux .dotfiles-bundle $b/
+    su -c "install -m 755 chezmoi fish fzf k9s tmux .dotfiles-bundle $b/"
     rm -f ~/.local/bin/{chezmoi,fish,fzf,k9s,tmux,.bundle}
 fi
 # Mirrors cache mutable URLs (branch archives, feeds) by path. GitHub ignores the case of owner/repo,
