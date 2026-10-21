@@ -13,7 +13,7 @@ SKIP = {"node_modules", ".venv", "venv", ".terraform", ".direnv", "__pycache__"}
 
 def git(path: Path, *args: str) -> str:
     return subprocess.run(
-        ["git", "-C", str(path), *args], capture_output=True, text=True
+        ["git", "-C", str(path), *args], check=False, capture_output=True, text=True
     ).stdout
 
 
@@ -83,6 +83,10 @@ def is_dirty(s: dict) -> bool:
     return any(s[k] for k in ("staged", "modified", "untracked", "conflicts", "ahead"))
 
 
+def num(s: dict, k: str, style: str) -> str:
+    return f"[{style}]{s[k]}[/]" if s[k] else ""
+
+
 def ago(t: float) -> str:
     if not t:
         return ""
@@ -122,16 +126,15 @@ def main(root: Path, show_all: bool) -> None:
         table.add_column(col, justify="right", no_wrap=True)
     for s in results:
         p = s["path"]
-        num = lambda k, style: f"[{style}]{s[k]}[/]" if s[k] else ""  # noqa: E731
         table.add_row(
             str(p.relative_to(root)) if p.is_relative_to(root) else str(p),
             f"[cyan]{s['branch']}[/]" + ("" if s["upstream"] else " [dim](local)[/]"),
-            num("ahead", "green"),
-            num("behind", "red"),
-            num("staged", "green"),
-            num("modified", "yellow"),
-            num("untracked", "magenta"),
-            num("conflicts", "bold red"),
+            num(s, "ahead", "green"),
+            num(s, "behind", "red"),
+            num(s, "staged", "green"),
+            num(s, "modified", "yellow"),
+            num(s, "untracked", "magenta"),
+            num(s, "conflicts", "bold red"),
             f"[dim]{ago(s['mtime'])}[/]",
         )
     Console().print(table)
