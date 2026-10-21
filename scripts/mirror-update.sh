@@ -4,15 +4,29 @@
 set -euo pipefail
 b=/usr/local/bin
 rel() { curl -fsSL "$1/$2/releases/download/$3"; }
-v="chezmoi-2.73.2 fish-4.9.3 fzf-0.74.5 k9s-0.51.0 tmux-3.7b yazi-26.9.1"
+# renovate: datasource=github-releases depName=twpayne/chezmoi
+CHEZMOI_V=v2.73.2
+# renovate: datasource=github-releases depName=fish-shell/fish-shell
+FISH_V=4.9.3
+# renovate: datasource=github-releases depName=junegunn/fzf
+FZF_V=v0.74.5
+# renovate: datasource=github-releases depName=derailed/k9s
+K9S_V=v0.51.0
+# renovate: datasource=github-releases depName=mjakob-gh/build-static-tmux versioning=loose
+TMUX_V=v3.7b
+# renovate: datasource=github-releases depName=sxyazi/yazi
+YAZI_V=v26.9.1
+v="chezmoi-$CHEZMOI_V fish-$FISH_V fzf-$FZF_V k9s-$K9S_V tmux-$TMUX_V yazi-$YAZI_V"
 cd "$(mktemp -d)"
 if [ "$(cat $b/.dotfiles-bundle 2>/dev/null)" != "$v" ]; then
-    rel "$1" twpayne/chezmoi v2.73.2/chezmoi-linux-amd64-musl >chezmoi
-    rel "$1" fish-shell/fish-shell 4.9.3/fish-4.9.3-linux-x86_64.tar.xz | tar -xJ
-    rel "$1" junegunn/fzf v0.74.5/fzf-0.74.5-linux_amd64.tar.gz | tar -xz
-    rel "$1" derailed/k9s v0.51.0/k9s_Linux_amd64.tar.gz | tar -xz k9s
-    rel "$1" mjakob-gh/build-static-tmux v3.7b/tmux.linux-amd64.stripped.gz | gunzip >tmux
-    rel "$1" sxyazi/yazi v26.9.1/yazi-x86_64-unknown-linux-musl.zip >yazi.zip && unzip -jq yazi.zip '*/yazi'
+    rel "$1" twpayne/chezmoi "$CHEZMOI_V/chezmoi-linux-amd64-musl" >chezmoi
+    rel "$1" fish-shell/fish-shell "$FISH_V/fish-$FISH_V-linux-x86_64.tar.xz" | tar -xJ
+    rel "$1" junegunn/fzf "$FZF_V/fzf-${FZF_V#v}-linux_amd64.tar.gz" | tar -xz
+    rel "$1" derailed/k9s "$K9S_V/k9s_Linux_amd64.tar.gz" | tar -xz k9s
+    rel "$1" mjakob-gh/build-static-tmux "$TMUX_V/tmux.linux-amd64.stripped.gz" | gunzip >tmux
+    rel "$1" sxyazi/yazi "$YAZI_V/yazi-x86_64-unknown-linux-musl.zip" >yazi.zip
+    # no unzip on RHEL minimal; platform-python is always there
+    "$(command -v python3 || echo /usr/libexec/platform-python)" -m zipfile -e yazi.zip . && mv yazi-*/yazi .
     echo "$v" >.dotfiles-bundle
     su -c "install -m 755 chezmoi fish fzf k9s tmux yazi .dotfiles-bundle $b/"
     rm -f ~/.local/bin/{chezmoi,fish,fzf,k9s,tmux,.bundle}

@@ -72,6 +72,13 @@
     },
     {
       "customType": "regex",
+      "managerFilePatterns": ["scripts/mirror-update.sh"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?\\s+[A-Z0-9_]+=(?<currentValue>\\S+)"
+      ]
+    },
+    {
+      "customType": "regex",
       "managerFilePatterns": ["home/dot_config/pi-less-yolo/Dockerfile"],
       "matchStrings": ["\"(?<depName>@[^/\"]+/[^@\"]+)@(?<currentValue>[0-9][^\"\\s]+)\""],
       "datasourceTemplate": "npm"
