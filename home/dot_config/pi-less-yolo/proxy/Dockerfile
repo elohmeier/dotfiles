@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e
 
-FROM docker.io/mitmproxy/mitmproxy:latest@sha256:00b77b5d8804c8ad18cb6caefbf9d5849e895e8986c5ce011f4ae30f4385962f
+FROM docker.io/mitmproxy/mitmproxy:latest@sha256:c8a3753de11fd8266afeb103e163f7b7ac6a4a568a707fa2e15b23d20acf4eba
 
 # mitmproxy uses certifi, independently of the Pi image's system trust store.
 # Preserve its public roots and append PI_CA_CERT for corporate upstreams.
