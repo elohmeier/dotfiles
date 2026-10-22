@@ -14,6 +14,13 @@ if [ ! -x "$POWERSHELL" ]; then
     exit 1
 fi
 
+# systemd-binfmt may drop the WSLInterop handler, making .exe files fail with "Exec format error"
+if ! compgen -G '/proc/sys/fs/binfmt_misc/WSLInterop*' >/dev/null; then
+    echo "Error: WSL interop is unavailable. Fix:" >&2
+    echo "echo ':WSLInterop:M::MZ::/init:PF' | sudo tee /etc/binfmt.d/WSLInterop.conf && sudo systemctl restart systemd-binfmt" >&2
+    exit 1
+fi
+
 # Create temporary file for large inputs
 TEMP_FILE=$(mktemp /tmp/wl-copy.XXXXXX)
 trap 'rm -f "$TEMP_FILE"' EXIT
