@@ -110,7 +110,7 @@ RUN set -e \
 
 # Pin the CLIs together so rebuilding gives a reproducible agent toolchain.
 RUN npm install -g "@earendil-works/pi-coding-agent@1.3.0" \
-    "@openai/codex@0.163.0" "@anthropic-ai/claude-code@2.1.308"
+    "@openai/codex@0.163.0" "@anthropic-ai/claude-code@2.1.309"
 
 # Complete Claude's native binary installation even when npm skips postinstall.
 RUN node /usr/local/lib/node_modules/@anthropic-ai/claude-code/install.cjs \
