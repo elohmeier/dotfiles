@@ -32,7 +32,9 @@ K9S_V=v0.51.0
 TMUX_V=v3.7b
 # renovate: datasource=github-releases depName=sxyazi/yazi
 YAZI_V=v26.9.1
-v="chezmoi-$CHEZMOI_V fish-$FISH_V fzf-$FZF_V k9s-$K9S_V tmux-$TMUX_V yazi-$YAZI_V"
+# renovate: datasource=github-releases depName=mikefarah/yq
+YQ_V=v4.54.1
+v="chezmoi-$CHEZMOI_V fish-$FISH_V fzf-$FZF_V k9s-$K9S_V tmux-$TMUX_V yazi-$YAZI_V yq-$YQ_V"
 if [ "$(cat $b/.dotfiles-bundle 2>/dev/null)" != "$v" ]; then
     rel "$1" twpayne/chezmoi "$CHEZMOI_V/chezmoi-linux-amd64-musl" >chezmoi
     rel "$1" fish-shell/fish-shell "$FISH_V/fish-$FISH_V-linux-x86_64.tar.xz" | tar -xJ
@@ -42,7 +44,8 @@ if [ "$(cat $b/.dotfiles-bundle 2>/dev/null)" != "$v" ]; then
     rel "$1" sxyazi/yazi "$YAZI_V/yazi-x86_64-unknown-linux-musl.zip" >yazi.zip
     # no unzip on RHEL minimal; platform-python is always there
     "$(command -v python3 || echo /usr/libexec/platform-python)" -m zipfile -e yazi.zip . && mv yazi-*/yazi .
+    rel "$1" mikefarah/yq "$YQ_V/yq_linux_amd64" >yq
     echo "$v" >.dotfiles-bundle
-    su -c "install -m 755 chezmoi fish fzf k9s tmux yazi .dotfiles-bundle $b/"
+    su -c "install -m 755 chezmoi fish fzf k9s tmux yazi yq .dotfiles-bundle $b/"
     rm -f ~/.local/bin/{chezmoi,fish,fzf,k9s,tmux,.bundle}
 fi
