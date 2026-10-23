@@ -7,7 +7,7 @@
 # BASE_IMAGE (PI_BASE_IMAGE): replace the whole reference, for mirrors that
 # lay the image out under a different path.
 ARG BASE_REGISTRY=cgr.dev
-ARG BASE_IMAGE=${BASE_REGISTRY}/chainguard/node:latest-dev@sha256:3c44d09ba6e4f6561afa74e470ba764bc984fc7c293bb9258b6181e171ca95be
+ARG BASE_IMAGE=${BASE_REGISTRY}/chainguard/node:latest-dev@sha256:80259017868d998f6e82f31b32f31284b12f45583af85f6f7906911d58efd273
 FROM ${BASE_IMAGE}
 
 USER root
