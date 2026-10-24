@@ -355,3 +355,83 @@ def test_pass_real_terminal_entry_hides_input(store):
     assert value not in output
     assert b"saved in pass store" in output
     assert pass_show("team/token") == value.decode() + "\n"
+
+
+def tpm_usable() -> bool:
+    if not shutil.which("systemd-creds"):
+        return False
+    probe = subprocess.run(
+        [
+            "systemd-creds",
+            "--user",
+            "encrypt",
+            "--with-key=host+tpm2",
+            "--name=probe",
+            "-",
+            "-",
+        ],
+        input=b"x",
+        capture_output=True,
+        check=False,
+    )
+    return probe.returncode == 0
+
+
+needs_tpm = pytest.mark.skipif(
+    not tpm_usable(), reason="systemd-creds with a TPM2 is required"
+)
+
+
+@needs_tpm
+def test_tpm_round_trip_is_bound_to_its_name(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    assert secret_entry.host_secret("DUMMY_TOKEN") is None
+    assert secret_entry.main(["status", "--tpm", "DUMMY_TOKEN"]) == 1
+    secret_entry.tpm_save("DUMMY_TOKEN", "first-dummy-value")
+    secret_entry.tpm_save("DUMMY_TOKEN", "rotated-dummy-value")
+    sealed = tmp_path / "secret-entry/DUMMY_TOKEN.cred"
+    assert b"dummy-value" not in sealed.read_bytes()
+    assert oct(sealed.stat().st_mode & 0o777) == "0o600"
+    assert oct(sealed.parent.stat().st_mode & 0o777) == "0o700"
+    assert secret_entry.host_secret("DUMMY_TOKEN") == "rotated-dummy-value"
+    assert secret_entry.main(["status", "--tpm", "DUMMY_TOKEN"]) == 0
+    # The name is sealed in: a credential copied to another key does not open.
+    sealed.rename(tmp_path / "secret-entry/OTHER_TOKEN.cred")
+    with pytest.raises(secret_entry.SecretError, match="only opens on the host"):
+        secret_entry.tpm_read("OTHER_TOKEN")
+    out, err = capsys.readouterr()
+    assert "dummy-value" not in out + err
+
+
+@needs_tpm
+def test_read_prints_for_pipes_only(tmp_path):
+    env = {**os.environ, "XDG_DATA_HOME": str(tmp_path)}
+    os.environ["XDG_DATA_HOME"] = str(tmp_path)
+    try:
+        secret_entry.tpm_save("DUMMY_TOKEN", "piped-dummy-value")
+    finally:
+        del os.environ["XDG_DATA_HOME"]
+    command = [
+        sys.executable,
+        "-c",
+        "from scripts.secret_entry import entrypoint; entrypoint()",
+    ]
+    piped = subprocess.run(
+        [*command, "read", "DUMMY_TOKEN"], env=env, capture_output=True, check=False
+    )
+    assert piped.returncode == 0 and piped.stdout == b"piped-dummy-value"
+    pid, fd = pty.fork()
+    if pid == 0:
+        os.execvpe(command[0], [*command, "read", "DUMMY_TOKEN"], env)
+    output = b""
+    while True:
+        try:
+            chunk = os.read(fd, 1024)
+        except OSError:
+            break
+        if not chunk:
+            break
+        output += chunk
+    _, status = os.waitpid(pid, 0)
+    assert os.waitstatus_to_exitcode(status) == 2
+    assert b"piped-dummy-value" not in output and b"Refusing" in output

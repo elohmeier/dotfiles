@@ -2,7 +2,9 @@
 
 Agents hand users `secret-entry request ...`; values never pass through chat,
 arguments, or logs. Backends: a flat SOPS env file (default `env.enc.yaml` at
-the git root) or the pass password store.
+the git root), the pass password store, or `--tpm`: systemd-creds bound to this
+host's TPM2 chip, its host key and the current user, readable without a
+password by tools on this host only (`secret-entry read NAME`).
 """
 
 import fcntl
@@ -226,6 +228,79 @@ def pass_save(name: str, value: str) -> None:
         )
 
 
+def tpm_dir() -> Path:
+    data = os.environ.get("XDG_DATA_HOME") or Path.home() / ".local/share"
+    return Path(data).expanduser() / "secret-entry"
+
+
+def tpm_path(name: str) -> Path:
+    validate_key(name)
+    return tpm_dir() / f"{name}.cred"
+
+
+def systemd_creds(*args: str, payload: bytes) -> bytes:
+    try:
+        result = subprocess.run(
+            ["systemd-creds", "--user", *args],
+            input=payload,
+            capture_output=True,
+            timeout=60,
+            check=False,
+        )
+    except FileNotFoundError:
+        raise SecretError("systemd-creds is unavailable on this host.") from None
+    except subprocess.TimeoutExpired:
+        raise SecretError("systemd-creds timed out.") from None
+    if result.returncode:
+        raise SecretError(
+            "systemd-creds failed. The credential only opens on the host and for the user "
+            "that stored it; diagnostics withheld."
+        )
+    return result.stdout
+
+
+def tpm_contains(name: str) -> bool:
+    return tpm_path(name).is_file()
+
+
+def tpm_save(name: str, value: str) -> None:
+    validate_value(value)
+    path = tpm_path(name)
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    # --name is sealed into the credential, so a file renamed to another key fails to open.
+    sealed = systemd_creds(
+        "encrypt",
+        "--with-key=host+tpm2",
+        f"--name={name}",
+        "-",
+        "-",
+        payload=value.encode(),
+    )
+    with tempfile.NamedTemporaryFile(
+        dir=path.parent, prefix=f".{name}-", delete=False
+    ) as temp:
+        temp.write(sealed)
+    os.replace(temp.name, path)
+    if tpm_read(name) != value:
+        raise SecretError("The stored credential failed verification.")
+
+
+def tpm_read(name: str) -> str:
+    path = tpm_path(name)
+    if not path.is_file():
+        raise SecretError(
+            f"{name} is not stored; run `secret-entry request --tpm {name}`."
+        )
+    return systemd_creds(
+        "decrypt", f"--name={name}", "-", "-", payload=path.read_bytes()
+    ).decode()
+
+
+def host_secret(name: str) -> str | None:
+    """The value stored with `secret-entry request --tpm NAME`, or None."""
+    return tpm_read(name) if tpm_contains(name) else None
+
+
 def prompt_secret(label: str) -> str:
     if not sys.stdin.isatty() or not sys.stderr.isatty():
         raise SecretError(
@@ -272,6 +347,12 @@ pass_option = click.option(
     is_flag=True,
     help="Use the pass password store; NAME is an entry such as team/service/token.",
 )
+tpm_option = click.option(
+    "--tpm",
+    "use_tpm",
+    is_flag=True,
+    help="Seal NAME with systemd-creds to this host's TPM2 and the current user.",
+)
 
 
 @click.group(help=__doc__)
@@ -283,7 +364,14 @@ def cli():
 @target
 @file_option
 @pass_option
-def request(name: str, file: str | None, use_pass: bool) -> int:
+@tpm_option
+def request(name: str, file: str | None, use_pass: bool, use_tpm: bool) -> int:
+    if use_tpm:
+        where = f"host credentials {tpm_dir()}"
+        print(f"{'Replace' if tpm_contains(name) else 'Add'} {name} in {where}.")
+        tpm_save(name, prompt_secret(name))
+        print(f"{name}: sealed to this host and user, decryption verified.")
+        return 0
     if use_pass:
         validate_pass_name(name)
         where = f"pass store {pass_store()}"
@@ -307,14 +395,31 @@ def request(name: str, file: str | None, use_pass: bool) -> int:
 @target
 @file_option
 @pass_option
-def status(name: str, file: str | None, use_pass: bool) -> int:
-    if use_pass:
+@tpm_option
+def status(name: str, file: str | None, use_pass: bool, use_tpm: bool) -> int:
+    if use_tpm:
+        present, where = tpm_contains(name), f"host credentials {tpm_dir()}"
+    elif use_pass:
         present, where = pass_contains(name), f"pass store {pass_store()}"
     else:
         path = env_file(file)
         present, where = sops_contains(path, name), shown(path)
     print(f"{name}: {'present' if present else 'missing'} in {where}")
     return 0 if present else 1
+
+
+@cli.command(
+    help="Print NAME from the host credentials (--tpm) for a tool to consume, "
+    "e.g. FOO_TOKEN_COMMAND='secret-entry read FOO_TOKEN'. Refuses a terminal."
+)
+@target
+def read(name: str) -> int:
+    if sys.stdout.isatty():
+        raise SecretError(
+            "Refusing to print a secret to a terminal; pipe it into a tool."
+        )
+    sys.stdout.write(tpm_read(name))
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
