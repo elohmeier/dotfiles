@@ -19,6 +19,11 @@ terminal and writes straight to encrypted storage. It never prints values.
 - **pass** (`--pass`): NAME is an entry such as `team/service/token` in
   `$PASSWORD_STORE_DIR`. pass encrypts to the store's GPG recipients and
   commits if the store is a git repository.
+- **Host credential** (`--tpm`): sealed with `systemd-creds --user` to this
+  host's TPM2, its host key and the current user, in
+  `~/.local/share/secret-entry/KEY.cred`. Tools decrypt it without a password,
+  on this host and for this user only. Use it for personal tokens of CLIs
+  (e.g. `KANBOARD_TOKEN`); Linux with a TPM2 only.
 
 ## Handoff
 
@@ -28,16 +33,19 @@ terminal and writes straight to encrypted storage. It never prints values.
    ```sh
    secret-entry status KEY            # exit 0 present, 1 missing, 2 error
    secret-entry status --pass team/service/token
+   secret-entry status --tpm KEY
    ```
 
 3. If it must be added or rotated, give the user the command to run **in
-   their own terminal** (suggest the `! <command>` prefix where the client
-   supports it). Never run the prompt in an agent-owned terminal:
+   their own terminal window**. Claude Code's `! <command>` prefix has no
+   terminal, so the hidden prompt refuses to run there. Never run the prompt
+   in an agent-owned terminal:
 
    ```sh
    secret-entry request KEY
    secret-entry request --file clusters/production/.env.enc.yaml TF_VAR_token
    secret-entry request --pass team/service/token
+   secret-entry request --tpm KEY
    ```
 
    Running `request` again replaces the value (rotation).
@@ -58,6 +66,11 @@ Secrets), use that wrapper; its own instructions take precedence.
   `sops decrypt` piped into a program, `pass show` captured by a program) and
   send it directly to the intended API. Keep values out of `curl` or CLI
   arguments and withhold request bodies and credentials from logs.
+- `secret-entry read KEY` prints a host credential for a tool to consume
+  (`FOO_TOKEN_COMMAND='secret-entry read FOO_TOKEN'`, or `host_secret()` in
+  dotfiles Python). It refuses a terminal; never run it on its own in an agent
+  tool call. To check that a stored token is the intended one, compare hashes
+  (`sha256sum`), never values.
 - `secret-entry` stores only; it does not deploy, publish, or commit SOPS
   files. Review and commit the encrypted file when persistence is intended.
 - Values must be nonempty single-line text. Multiline material (certificates,

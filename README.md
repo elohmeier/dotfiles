@@ -40,11 +40,12 @@ path/to/skills/scripts/install-local-skills.sh \
 | `fabric`                | Fabric.js geometry, rendering, serialization quirks |
 | `grafana`               | Grafana dashboards and scenes app plugins           |
 | `human-centered-design` | Human-centered design, usability, and UX heuristics |
+| `kanboard`              | Inspect and change Kanboard boards and tasks        |
 | `layerchart`            | LayerChart visualizations for Svelte                |
 | `msgvault`              | Search emails in msgvault archive                   |
 | `n64`                   | Build, debug, and validate N64 homebrew             |
 | `opendataloader-pdf`    | PDF text/table extraction CLI                       |
-| `secret-entry`          | Request secrets into SOPS env files or pass         |
+| `secret-entry`          | Request secrets into SOPS, pass or the host TPM     |
 | `taskjuggler`           | Text-based project scheduling and reporting         |
 | `typst`                 | Typst document authoring and scripting              |
 | `vnc-browser`           | Share a headed agent-browser session over noVNC     |
