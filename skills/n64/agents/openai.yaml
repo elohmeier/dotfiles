@@ -1,0 +1,3 @@
+interface:
+  display_name: "N64 Homebrew"
+  short_description: "Build, debug, and test N64 homebrew"
