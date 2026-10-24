@@ -61,10 +61,6 @@ if status is-interactive
   {{ . }} init fish | source
 {{- end }}
 
-{{- with lookPath "direnv" }}
-  {{ . }} hook fish | source
-{{- end }}
-
 {{- with lookPath "mise" }}
   {{ . }} activate fish | source
 {{- end }}
