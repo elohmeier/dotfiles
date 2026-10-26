@@ -17,7 +17,7 @@ env:
   # renovate: datasource=github-releases depName=astral-sh/uv
   UV_VERSION: 0.13.5
   # renovate: datasource=npm depName=renovate
-  RENOVATE_VERSION: 44.181.10
+  RENOVATE_VERSION: 44.182.1
   # renovate: datasource=npm depName=dprint
   DPRINT_VERSION: 0.64.3
 
