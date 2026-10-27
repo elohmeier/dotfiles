@@ -3,6 +3,6 @@
   "typescript": {
   },
   "plugins": [
-    "https://plugins.dprint.dev/typescript-0.96.0.wasm"
+    "https://plugins.dprint.dev/typescript-0.96.1.wasm"
   ]
 }
