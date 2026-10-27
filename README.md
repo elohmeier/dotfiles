@@ -85,6 +85,38 @@ container instead of prompting.
 Fish completes options and available media devices. These commands are installed
 by `home/.chezmoiscripts/run_onchange_after_install-uv-tools.sh.tmpl`.
 
+### Agent sessions
+
+`agent-session` lists Claude Code, Pi and Codex sessions for the current directory.
+Run it without arguments to select a session and preview, resume or copy it:
+
+```sh
+agent-session
+agent-session list --all
+agent-session show claude:host:<id-prefix>
+agent-session copy claude:host:<id-prefix> --to pi
+agent-session copy pi:<id-prefix> --to codex:sandbox --resume
+```
+
+Copies create a new session with the active conversation context, existing
+compaction summaries and historical tool calls/results rendered as text. The
+source session stays unchanged. Claude and Pi retain inline images; Codex's
+native importer replaces images with omission notices. Opaque Codex compactions
+cannot be transferred. Models, permissions, instructions, running tools and
+file checkpoints belong to the destination agent.
+
+Host stores honor `CLAUDE_CONFIG_DIR`, `PI_CODING_AGENT_DIR`,
+`PI_CODING_AGENT_SESSION_DIR` and `CODEX_HOME`. Claude/Codex sandbox stores live
+under `${XDG_DATA_HOME:-~/.local/share}/agent-sandbox`; Pi shares its host store.
+Use `claude:sandbox` or `codex:sandbox` as a destination to resume through
+`mise run agent:<agent>`. Plain `claude` and `codex` destinations select the host.
+Codex copies require the Codex CLI and use its native session importer; sandbox
+copies also require the shared agent container.
+
+Fish completes subcommands, options, destinations and current-directory session
+references. The CLI is installed by
+`home/.chezmoiscripts/run_onchange_after_install-uv-tools.sh.tmpl`.
+
 ### Btrfs home snapshots (Fedora Atomic / Bluefin)
 
 Enable 30 daily read-only snapshots of the `/home` subvolume:
