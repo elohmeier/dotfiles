@@ -1,0 +1,75 @@
+{
+  "stat_last_percent": {
+    "type": "stat",
+    "options": {
+      "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" },
+      "orientation": "auto",
+      "textMode": "auto",
+      "colorMode": "background",
+      "graphMode": "area"
+    },
+    "fieldConfig": {
+      "defaults": {
+        "unit": "percentunit",
+        "min": 0,
+        "max": 1,
+        "thresholds": {
+          "mode": "absolute",
+          "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 0.75 },
+            { "color": "red", "value": 0.9 }
+          ]
+        }
+      },
+      "overrides": []
+    }
+  },
+  "timeseries_rate": {
+    "type": "timeseries",
+    "options": {
+      "legend": { "showLegend": true, "displayMode": "list", "placement": "bottom" },
+      "tooltip": { "mode": "multi", "sort": "desc" }
+    },
+    "fieldConfig": {
+      "defaults": {
+        "unit": "reqps",
+        "custom": {
+          "drawStyle": "line",
+          "lineInterpolation": "linear",
+          "lineWidth": 1,
+          "fillOpacity": 8,
+          "showPoints": "never"
+        }
+      },
+      "overrides": []
+    }
+  },
+  "table_basic": {
+    "type": "table",
+    "options": {
+      "showHeader": true,
+      "cellHeight": "sm",
+      "enablePagination": true
+    },
+    "fieldConfig": {
+      "defaults": {
+        "custom": {
+          "align": "auto",
+          "cellOptions": { "type": "auto" },
+          "inspect": false,
+          "minWidth": 90
+        }
+      },
+      "overrides": []
+    }
+  },
+  "text_runbook": {
+    "type": "text",
+    "options": {
+      "mode": "markdown",
+      "content": "### Dashboard purpose\nDescribe the operational question, owner, alert links, and runbook links."
+    },
+    "fieldConfig": { "defaults": {}, "overrides": [] }
+  }
+}

@@ -17,7 +17,7 @@ diskless-swap-status:
 
 # Install or update agent skills for Claude Code and Codex
 install-skills:
-    "{{ lookPath "npx" | default "npx" }}" --yes skills add elohmeier/skills --skill '*' --agent claude-code --agent codex --global --yes
+    "{{ lookPath "npx" }}" --yes skills add "{{ .chezmoi.workingTree }}/skills" --skill '*' --agent claude-code --agent codex --global --yes
 
 {{- if eq .chezmoi.os "linux" }}
 # Install Caddy and enable the agent-publish user service (requires systemd)

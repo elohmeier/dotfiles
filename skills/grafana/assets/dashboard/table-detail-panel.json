@@ -1,0 +1,56 @@
+{
+  "type": "table",
+  "title": "Detail table",
+  "gridPos": { "x": 0, "y": 0, "w": 24, "h": 8 },
+  "datasource": { "type": "prometheus", "uid": "$datasource" },
+  "targets": [
+    {
+      "refId": "A",
+      "expr": "topk(20, sum(rate(http_requests_total{service=~\"$service\"}[$__rate_interval])) by (service, route, method, status))",
+      "legendFormat": "{{service}} {{method}} {{route}} {{status}}",
+      "format": "table",
+      "instant": true
+    }
+  ],
+  "transformations": [
+    {
+      "id": "organize",
+      "options": {
+        "excludeByName": {},
+        "indexByName": {},
+        "renameByName": {
+          "Value": "Requests/s"
+        }
+      }
+    }
+  ],
+  "options": {
+    "showHeader": true,
+    "cellHeight": "sm",
+    "enablePagination": true,
+    "frozenColumns": { "left": 1 },
+    "sortBy": [{ "desc": true, "displayName": "Requests/s" }]
+  },
+  "fieldConfig": {
+    "defaults": {
+      "custom": {
+        "align": "auto",
+        "cellOptions": { "type": "auto" },
+        "filterable": true,
+        "inspect": false,
+        "minWidth": 90
+      }
+    },
+    "overrides": [
+      {
+        "matcher": { "id": "byName", "options": "Requests/s" },
+        "properties": [
+          { "id": "unit", "value": "reqps" },
+          { "id": "decimals", "value": 2 },
+          { "id": "custom.width", "value": 180 },
+          { "id": "custom.cellOptions", "value": { "type": "gauge", "mode": "gradient" } }
+        ]
+      }
+    ]
+  }
+}

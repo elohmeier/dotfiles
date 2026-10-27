@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "datasources": {
+    "complete": true,
+    "items": [
+      {
+        "uid": "prometheus-main",
+        "name": "Prometheus",
+        "type": "prometheus",
+        "id": 1,
+        "default": true,
+        "apiVersion": "v1"
+      }
+    ]
+  },
+  "libraryElements": {
+    "complete": true,
+    "items": []
+  }
+}

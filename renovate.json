@@ -85,8 +85,10 @@
     },
     {
       "customType": "regex",
-      "managerFilePatterns": ["dprint.json", "home/dot_config/dprint.json"],
-      "matchStrings": ["https://plugins\\.dprint\\.dev/(?<depName>json|markdown|toml)-(?<currentValue>[0-9.]+)\\.wasm"],
+      "managerFilePatterns": ["dprint.json", "home/dot_config/dprint.json", "skills/dprint.json"],
+      "matchStrings": [
+        "https://plugins\\.dprint\\.dev/(?<depName>json|markdown|toml|typescript)-(?<currentValue>[0-9.]+)\\.wasm"
+      ],
       "packageNameTemplate": "dprint/dprint-plugin-{{{depName}}}",
       "datasourceTemplate": "github-releases"
     },

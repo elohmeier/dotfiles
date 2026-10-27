@@ -1,0 +1,3 @@
+interface:
+  display_name: "Agent Publish"
+  short_description: "Publish project artifacts through shared Caddy"

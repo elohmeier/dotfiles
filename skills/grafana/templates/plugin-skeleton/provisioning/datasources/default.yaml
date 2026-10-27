@@ -1,0 +1,9 @@
+apiVersion: 1
+
+# Auto-provisioned datasources for local development.
+# Loaded by the dev Grafana container when running `npm run server`.
+
+datasources:
+  - name: gdev-testdata
+    isDefault: true
+    type: testdata

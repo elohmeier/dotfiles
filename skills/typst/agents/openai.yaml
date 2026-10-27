@@ -1,0 +1,4 @@
+interface:
+  display_name: "Typst"
+  short_description: "Typst documents, presentations, and diagrams"
+  default_prompt: "Use $typst to write, debug, or format a Typst document, presentation, Fletcher diagram, Lucide icon treatment, table, math section, or layout."

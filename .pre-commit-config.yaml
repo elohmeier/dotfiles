@@ -30,7 +30,7 @@ repos:
         entry: dprint fmt --allow-no-files
         language: system
         pass_filenames: false
-        files: \.(json|md|toml|yaml|yml)$
+        files: \.(json|md|toml|yaml|yml|ts|tsx)$
       - id: stylua
         name: Format Lua files with stylua
         entry: stylua

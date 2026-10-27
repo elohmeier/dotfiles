@@ -1,6 +1,6 @@
 # Grafana tools
 
-This repository owns the tools, tests, dependencies, and stable Grafana pin. The separate `elohmeier/skills` repository owns Grafana guidance and examples, and invokes these commands on PATH.
+This repository owns the tools, tests, dependencies, and stable Grafana pin. Grafana guidance and examples live in [skills/grafana](../skills/grafana/SKILL.md) and invoke these commands on PATH.
 
 | Command             | Purpose                                                                                                            |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------ |

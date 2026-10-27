@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pi Usage"
+  short_description: "Use and extend Pi coding-agent libraries"
+  default_prompt: "Use $pi to integrate Pi into my tool or extend the Pi coding agent."

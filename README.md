@@ -144,11 +144,13 @@ which caps memory and is the preferred OOM victim. Override its arguments with
 
 ## Agent Skills
 
-Install or update the skills from [elohmeier/skills](https://github.com/elohmeier/skills) for Claude Code and Codex:
+Skills live in [skills/](skills/README.md). Install or update them for Claude Code and Codex from this checkout:
 
 ```bash
 djust install-skills
 ```
+
+Run this again after editing skills or pulling updates; installed skills are copies.
 
 The Python Grafana utilities are installed by chezmoi; build the Go/Node ones with `djust install-grafana-tools`. See [Grafana tools](docs/grafana-tools.md) for commands, validation, and stable-release updates.
 

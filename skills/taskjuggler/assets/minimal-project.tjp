@@ -1,0 +1,38 @@
+/*
+ * Minimal TaskJuggler project.
+ * Replace the project interval, timezone, resources, tasks, and report names.
+ */
+project example "Example Project" 2026-01-01 +6m {
+  timezone "Europe/Berlin"
+  timeformat "%Y-%m-%d"
+}
+
+resource delivery_team "Delivery Team" {
+  resource alice "Alice"
+  resource bob "Bob"
+}
+
+task delivery "Delivery" {
+  task discovery "Discovery" {
+    start ${projectstart}
+    effort 5d
+    allocate alice
+  }
+
+  task implementation "Implementation" {
+    depends !discovery
+    effort 15d
+    allocate alice, bob
+  }
+
+  task release "Release" {
+    depends !implementation
+  }
+}
+
+taskreport overview "index" {
+  formats html
+  columns bsi, name, start, end, effort, resources, chart
+  hideresource @all
+  sorttasks tree, plan.start.up
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "TaskJuggler"
+  short_description: "Plan, report, and share with TaskJuggler"
+  default_prompt: "Use $taskjuggler to create, validate, report, or privately serve a TaskJuggler project."

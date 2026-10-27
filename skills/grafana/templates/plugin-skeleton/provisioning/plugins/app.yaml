@@ -1,0 +1,10 @@
+apiVersion: 1
+
+# Auto-enable this app for the default org during local dev.
+
+apps:
+  - type: ${PLUGIN_ID}
+    org_id: 1
+    org_name: Main Org.
+    disabled: false
+    jsonData: {}

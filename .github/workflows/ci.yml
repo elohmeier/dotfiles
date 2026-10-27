@@ -30,7 +30,7 @@ jobs:
         with:
           node-version: "24"
       - run: npx --yes --allow-scripts=re2,protobufjs,core-js-pure,dtrace-provider --package "renovate@$RENOVATE_VERSION" renovate-config-validator --strict renovate.json
-      - run: npx --yes --package "dprint@$DPRINT_VERSION" dprint check renovate.json .github/workflows/ci.yml README.md
+      - run: npx --yes --package "dprint@$DPRINT_VERSION" dprint check renovate.json .github/workflows/ci.yml README.md skills
 
   python:
     strategy:

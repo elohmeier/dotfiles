@@ -36,7 +36,7 @@ Platform filtering is handled by `home/.chezmoiignore.tmpl`.
 
 ## Agent Skills
 
-Agent skills live in the dedicated [elohmeier/skills](https://github.com/elohmeier/skills) repository and are installed globally for Claude Code and Codex with `djust install-skills`. Do not vendor skills or agent-specific skill symlinks in this repository.
+Agent skills live in `skills/` and are installed globally for Claude Code and Codex from this checkout with `djust install-skills`. Edit the source skills here, then reinstall to update the installed copies. Do not commit project-level skill installations or agent-specific skill symlinks.
 
 ## Python
 

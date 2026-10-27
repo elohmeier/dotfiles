@@ -1,0 +1,4 @@
+interface:
+  display_name: "Telemetry Semantics (OTel + ECS)"
+  short_description: "Apply OTel and ECS conventions correctly"
+  default_prompt: "Use $apply-telemetry-semantics to implement and verify the OpenTelemetry and ECS semantics for these logs, metrics, and traces."

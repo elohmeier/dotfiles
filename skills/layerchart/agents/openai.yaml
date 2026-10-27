@@ -1,0 +1,4 @@
+interface:
+  display_name: "LayerChart"
+  short_description: "Build and debug LayerChart visualizations"
+  default_prompt: "Use $layerchart to build a Svelte chart with LayerChart."

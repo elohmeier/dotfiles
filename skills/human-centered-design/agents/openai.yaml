@@ -1,0 +1,4 @@
+interface:
+  display_name: "Human-Centered Design"
+  short_description: "Usability, behavior, and ethical design"
+  default_prompt: "Use $human-centered-design to review this product flow for usability, user error, feedback, accessibility, and ethical tradeoffs."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Grafana"
+  short_description: "Convert and validate Grafana dashboards and apps"
+  default_prompt: "Use $grafana to design or convert a Grafana dashboard, validate stable v2 JSON, or build a Grafana app plugin with scenes."
