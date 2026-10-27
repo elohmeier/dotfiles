@@ -16,9 +16,12 @@ account, so every change is attributed to them. The web UI is
 A personal API token (Kanboard: avatar > My profile > API > generate), not the
 global application token under Settings > API. The CLI reads `KANBOARD_TOKEN`,
 then `KANBOARD_TOKEN_COMMAND`, then the host credential from
-`secret-entry request --tpm KANBOARD_TOKEN` (see the `secret-entry` skill).
-If `kanboard whoami` fails, check `secret-entry status --tpm KANBOARD_TOKEN`
-and hand the user that request command.
+`secret-entry request --host KANBOARD_TOKEN` (macOS Keychain or Linux TPM2;
+see the `secret-entry` skill). Check `secret-entry status --host KANBOARD_TOKEN`
+before handing the user that request command. If host storage is unavailable,
+use `KANBOARD_TOKEN_COMMAND` with an existing password manager, for example
+`export KANBOARD_TOKEN_COMMAND='pass show kanboard/token'` after saving with
+`secret-entry request --pass kanboard/token`. Never suggest `--tpm` on macOS.
 
 ## Output
 

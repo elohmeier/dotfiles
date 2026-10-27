@@ -11,6 +11,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 
@@ -357,6 +358,110 @@ def test_pass_real_terminal_entry_hides_input(store):
     assert pass_show("team/token") == value.decode() + "\n"
 
 
+@pytest.mark.parametrize("command", ["request", "status"])
+def test_tpm_refuses_non_linux_before_prompt(command, monkeypatch, capsys):
+    monkeypatch.setattr(secret_entry.sys, "platform", "darwin")
+    monkeypatch.setattr(
+        secret_entry, "prompt_secret", lambda name: pytest.fail("prompted for a secret")
+    )
+    assert secret_entry.main([command, "--tpm", "DUMMY_TOKEN"]) == 2
+    out, err = capsys.readouterr()
+    assert not out
+    assert "--tpm requires Linux" in err
+
+
+@pytest.mark.parametrize("unavailable", [True, False])
+@pytest.mark.parametrize("option", ["--tpm", "--host"])
+def test_tpm_preflight_failure_before_prompt(unavailable, option, monkeypatch, capsys):
+    monkeypatch.setattr(secret_entry.sys, "platform", "linux")
+    monkeypatch.setattr(
+        secret_entry, "prompt_secret", lambda name: pytest.fail("prompted for a secret")
+    )
+
+    def fail(command, **kwargs):
+        assert "--no-ask-password" in command
+        assert kwargs["input"] == b"preflight"
+        if unavailable:
+            raise FileNotFoundError
+        return subprocess.CompletedProcess(command, 1, b"", b"private diagnostics")
+
+    monkeypatch.setattr(secret_entry.subprocess, "run", fail)
+    assert secret_entry.main(["request", option, "DUMMY_TOKEN"]) == 2
+    out, err = capsys.readouterr()
+    assert not out
+    assert "systemd-creds" in err
+    assert "private diagnostics" not in err
+
+
+def test_read_refuses_terminal_before_loading_a_secret(monkeypatch, capsys):
+    monkeypatch.setattr(secret_entry.sys.stdout, "isatty", lambda: True)
+    monkeypatch.setattr(
+        secret_entry, "host_secret", lambda name: pytest.fail("loaded a secret")
+    )
+    assert secret_entry.main(["read", "DUMMY_TOKEN"]) == 2
+    out, err = capsys.readouterr()
+    assert not out
+    assert "Refusing" in err
+
+
+@pytest.mark.parametrize("command", ["request", "status"])
+@pytest.mark.parametrize(
+    "options",
+    [["--host", "--tpm"], ["--host", "--pass"], ["--tpm", "--file", "env.enc.yaml"]],
+)
+def test_conflicting_backends_fail_before_prompt(command, options, monkeypatch):
+    monkeypatch.setattr(
+        secret_entry, "prompt_secret", lambda name: pytest.fail("prompted for a secret")
+    )
+    assert secret_entry.main([command, *options, "DUMMY_TOKEN"]) == 2
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="macOS Keychain is required")
+def test_keychain_round_trip_and_host_commands(monkeypatch, capsys):
+    from keyring.backends.macOS import Keyring
+
+    service = f"secret-entry-test-{uuid4()}"
+    monkeypatch.setattr(secret_entry, "KEYCHAIN_SERVICE", service)
+    try:
+        assert secret_entry.host_secret("DUMMY_TOKEN") is None
+        assert secret_entry.main(["status", "--host", "DUMMY_TOKEN"]) == 1
+        for value in ["first-dummy-value", "rotated ' ü $() `dummy` value"]:
+            monkeypatch.setattr(
+                secret_entry, "prompt_secret", lambda name, value=value: value
+            )
+            assert secret_entry.main(["request", "--host", "DUMMY_TOKEN"]) == 0
+            assert secret_entry.host_secret("DUMMY_TOKEN") == value
+        assert secret_entry.main(["status", "--host", "DUMMY_TOKEN"]) == 0
+        assert secret_entry.main(["read", "DUMMY_TOKEN"]) == 0
+        out, err = capsys.readouterr()
+        # Only the explicit pipe-only read command emits the dummy value.
+        assert out.endswith(value)
+        assert value not in out[: -len(value)] + err
+        assert "first-dummy-value" not in out + err
+    finally:
+        if Keyring().get_password(service, "DUMMY_TOKEN") is not None:
+            Keyring().delete_password(service, "DUMMY_TOKEN")
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="macOS Keychain is required")
+def test_keychain_denied_before_prompt(monkeypatch, capsys):
+    from keyring.backends.macOS import Keyring
+    from keyring.errors import KeyringLocked
+
+    def denied(*args):
+        raise KeyringLocked("private diagnostics")
+
+    monkeypatch.setattr(Keyring, "get_password", denied)
+    monkeypatch.setattr(
+        secret_entry, "prompt_secret", lambda name: pytest.fail("prompted for a secret")
+    )
+    assert secret_entry.main(["request", "--host", "DUMMY_TOKEN"]) == 2
+    out, err = capsys.readouterr()
+    assert not out
+    assert "Keychain" in err
+    assert "private diagnostics" not in err
+
+
 def tpm_usable() -> bool:
     if not shutil.which("systemd-creds"):
         return False
@@ -395,6 +500,7 @@ def test_tpm_round_trip_is_bound_to_its_name(tmp_path, monkeypatch, capsys):
     assert oct(sealed.parent.stat().st_mode & 0o777) == "0o700"
     assert secret_entry.host_secret("DUMMY_TOKEN") == "rotated-dummy-value"
     assert secret_entry.main(["status", "--tpm", "DUMMY_TOKEN"]) == 0
+    assert secret_entry.main(["status", "--host", "DUMMY_TOKEN"]) == 0
     # The name is sealed in: a credential copied to another key does not open.
     sealed.rename(tmp_path / "secret-entry/OTHER_TOKEN.cred")
     with pytest.raises(secret_entry.SecretError, match="only opens on the host"):

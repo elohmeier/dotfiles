@@ -19,11 +19,18 @@ terminal and writes straight to encrypted storage. It never prints values.
 - **pass** (`--pass`): NAME is an entry such as `team/service/token` in
   `$PASSWORD_STORE_DIR`. pass encrypts to the store's GPG recipients and
   commits if the store is a git repository.
-- **Host credential** (`--tpm`): sealed with `systemd-creds --user` to this
-  host's TPM2, its host key and the current user, in
-  `~/.local/share/secret-entry/KEY.cred`. Tools decrypt it without a password,
-  on this host and for this user only. Use it for personal tokens of CLIs
-  (e.g. `KANBOARD_TOKEN`); Linux with a TPM2 only.
+- **Host credential** (`--host`): use for personal CLI tokens such as
+  `KANBOARD_TOKEN`. On macOS, stores in the user's Keychain under service
+  `secret-entry`, with KEY as the account, using the native API. Keychain may
+  ask the user to unlock or allow access. On Linux, seals with
+  `systemd-creds --user` to this host's TPM2, host key and current user in
+  `~/.local/share/secret-entry/KEY.cred`. Linux needs a usable TPM2 and access
+  to the host key. `--tpm` explicitly selects Linux TPM storage and fails on
+  macOS; recommend `--host` for portable setup. Unsupported TPM storage is
+  rejected before the hidden prompt. If unavailable, use SOPS or pass and
+  configure the consuming tool's token command.
+
+Backend options (`--file`, `--pass`, `--host`, `--tpm`) are mutually exclusive.
 
 ## Handoff
 
@@ -33,8 +40,12 @@ terminal and writes straight to encrypted storage. It never prints values.
    ```sh
    secret-entry status KEY            # exit 0 present, 1 missing, 2 error
    secret-entry status --pass team/service/token
-   secret-entry status --tpm KEY
+   secret-entry status --host KEY
    ```
+
+   With `--host`, exit 2 means storage is unavailable or failed; resolve that
+   before asking the user to enter a credential. Exit 1 means the selected
+   store is ready but the value is missing.
 
 3. If it must be added or rotated, give the user the command to run **in
    their own terminal window**. Claude Code's `! <command>` prefix has no
@@ -45,7 +56,7 @@ terminal and writes straight to encrypted storage. It never prints values.
    secret-entry request KEY
    secret-entry request --file clusters/production/.env.enc.yaml TF_VAR_token
    secret-entry request --pass team/service/token
-   secret-entry request --tpm KEY
+   secret-entry request --host KEY
    ```
 
    Running `request` again replaces the value (rotation).

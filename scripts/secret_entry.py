@@ -2,9 +2,9 @@
 
 Agents hand users `secret-entry request ...`; values never pass through chat,
 arguments, or logs. Backends: a flat SOPS env file (default `env.enc.yaml` at
-the git root), the pass password store, or `--tpm`: systemd-creds bound to this
-host's TPM2 chip, its host key and the current user, readable without a
-password by tools on this host only (`secret-entry read NAME`).
+the git root), the pass password store, or `--host`: macOS Keychain or Linux
+systemd-creds bound to this host's TPM2 chip, its host key and the current
+user. Tools consume host credentials with `secret-entry read NAME`.
 """
 
 import fcntl
@@ -22,6 +22,7 @@ from pathlib import Path
 import click
 
 DEFAULT_FILE = "env.enc.yaml"
+KEYCHAIN_SERVICE = "secret-entry"
 
 
 class SecretError(Exception):
@@ -241,7 +242,7 @@ def tpm_path(name: str) -> Path:
 def systemd_creds(*args: str, payload: bytes) -> bytes:
     try:
         result = subprocess.run(
-            ["systemd-creds", "--user", *args],
+            ["systemd-creds", "--user", "--no-ask-password", *args],
             input=payload,
             capture_output=True,
             timeout=60,
@@ -261,6 +262,24 @@ def systemd_creds(*args: str, payload: bytes) -> bytes:
 
 def tpm_contains(name: str) -> bool:
     return tpm_path(name).is_file()
+
+
+def check_tpm() -> None:
+    if sys.platform != "linux":
+        raise SecretError(
+            "--tpm requires Linux with systemd-creds and a usable TPM2. "
+            "On macOS use --host for Keychain storage."
+        )
+    # Exercise the actual encryption mode before collecting a secret. Merely
+    # finding the executable or TPM does not establish access to the host key.
+    systemd_creds(
+        "encrypt",
+        "--with-key=host+tpm2",
+        "--name=secret-entry-check",
+        "-",
+        "-",
+        payload=b"preflight",
+    )
 
 
 def tpm_save(name: str, value: str) -> None:
@@ -297,8 +316,39 @@ def tpm_read(name: str) -> str:
 
 
 def host_secret(name: str) -> str | None:
-    """The value stored with `secret-entry request --tpm NAME`, or None."""
+    """The value stored with `secret-entry request --host NAME`, or None."""
+    if sys.platform == "darwin":
+        return keychain_secret(name)
     return tpm_read(name) if tpm_contains(name) else None
+
+
+def keychain_secret(name: str, value: str | None = None) -> str | None:
+    """Read or replace a value through the native API, never subprocess arguments."""
+    if sys.platform != "darwin":
+        raise SecretError("Keychain storage requires macOS.")
+    from keyring.backends.macOS import Keyring
+    from keyring.errors import KeyringError
+
+    validate_key(name)
+    try:
+        backend = Keyring()
+        _ = backend.priority  # Check that the native Security API loaded successfully.
+        if value is not None:
+            validate_value(value)
+            backend.set_password(KEYCHAIN_SERVICE, name, value)
+        return backend.get_password(KEYCHAIN_SERVICE, name)
+    except (KeyringError, RuntimeError):
+        raise SecretError(
+            "macOS Keychain is unavailable or access was denied; diagnostics withheld."
+        ) from None
+
+
+def host_storage() -> str:
+    """Check host storage before prompting or recommending a setup command."""
+    if sys.platform == "darwin":
+        return "macOS Keychain (service secret-entry)"
+    check_tpm()
+    return f"host credentials {tpm_dir()}"
 
 
 def prompt_secret(label: str) -> str:
@@ -351,8 +401,19 @@ tpm_option = click.option(
     "--tpm",
     "use_tpm",
     is_flag=True,
-    help="Seal NAME with systemd-creds to this host's TPM2 and the current user.",
+    help="Linux only: seal NAME to this host's TPM2 and the current user.",
 )
+host_option = click.option(
+    "--host",
+    "use_host",
+    is_flag=True,
+    help="Use macOS Keychain or Linux TPM2 credentials for this user.",
+)
+
+
+def check_options(file: str | None, *backends: bool) -> None:
+    if bool(file) + sum(backends) > 1:
+        raise SecretError("Choose only one of --file, --pass, --host, or --tpm.")
 
 
 @click.group(help=__doc__)
@@ -365,8 +426,22 @@ def cli():
 @file_option
 @pass_option
 @tpm_option
-def request(name: str, file: str | None, use_pass: bool, use_tpm: bool) -> int:
-    if use_tpm:
+@host_option
+def request(
+    name: str, file: str | None, use_pass: bool, use_tpm: bool, use_host: bool
+) -> int:
+    check_options(file, use_pass, use_tpm, use_host)
+    if use_host and sys.platform == "darwin":
+        present = keychain_secret(name) is not None
+        print(f"{'Replace' if present else 'Add'} {name} in {host_storage()}.")
+        value = prompt_secret(name)
+        if keychain_secret(name, value) != value:
+            raise SecretError("The stored credential failed verification.")
+        print(f"{name}: saved in macOS Keychain, read verified.")
+        return 0
+    if use_host or use_tpm:
+        validate_key(name)
+        check_tpm()
         where = f"host credentials {tpm_dir()}"
         print(f"{'Replace' if tpm_contains(name) else 'Add'} {name} in {where}.")
         tpm_save(name, prompt_secret(name))
@@ -396,8 +471,16 @@ def request(name: str, file: str | None, use_pass: bool, use_tpm: bool) -> int:
 @file_option
 @pass_option
 @tpm_option
-def status(name: str, file: str | None, use_pass: bool, use_tpm: bool) -> int:
-    if use_tpm:
+@host_option
+def status(
+    name: str, file: str | None, use_pass: bool, use_tpm: bool, use_host: bool
+) -> int:
+    check_options(file, use_pass, use_tpm, use_host)
+    if use_host and sys.platform == "darwin":
+        present, where = keychain_secret(name) is not None, host_storage()
+    elif use_host or use_tpm:
+        validate_key(name)
+        check_tpm()
         present, where = tpm_contains(name), f"host credentials {tpm_dir()}"
     elif use_pass:
         present, where = pass_contains(name), f"pass store {pass_store()}"
@@ -409,7 +492,7 @@ def status(name: str, file: str | None, use_pass: bool, use_tpm: bool) -> int:
 
 
 @cli.command(
-    help="Print NAME from the host credentials (--tpm) for a tool to consume, "
+    help="Print NAME from host storage (--host) for a tool to consume, "
     "e.g. FOO_TOKEN_COMMAND='secret-entry read FOO_TOKEN'. Refuses a terminal."
 )
 @target
@@ -418,7 +501,12 @@ def read(name: str) -> int:
         raise SecretError(
             "Refusing to print a secret to a terminal; pipe it into a tool."
         )
-    sys.stdout.write(tpm_read(name))
+    value = host_secret(name)
+    if value is None:
+        raise SecretError(
+            f"{name} is not stored; run `secret-entry request --host {name}`."
+        )
+    sys.stdout.write(value)
     return 0
 
 

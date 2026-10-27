@@ -1,8 +1,8 @@
 import json
 
-from click.testing import CliRunner
 import httpx
 import pytest
+from click.testing import CliRunner
 
 from scripts import kanboard
 
@@ -184,5 +184,36 @@ def test_token_sources_in_order(monkeypatch):
     monkeypatch.delenv("KANBOARD_TOKEN")
     monkeypatch.delenv("KANBOARD_TOKEN_COMMAND")
     monkeypatch.setattr(kanboard, "host_secret", lambda name: None)
-    with pytest.raises(kanboard.Error, match="secret-entry request --tpm"):
+    monkeypatch.setattr(kanboard, "host_storage", lambda: "macOS Keychain")
+    with pytest.raises(kanboard.Error, match="secret-entry request --host"):
         kanboard.token()
+
+
+def test_missing_token_without_host_storage(monkeypatch):
+    monkeypatch.delenv("KANBOARD_TOKEN", raising=False)
+    monkeypatch.delenv("KANBOARD_TOKEN_COMMAND", raising=False)
+    monkeypatch.setattr(kanboard, "host_secret", lambda name: None)
+
+    def unavailable():
+        raise kanboard.SecretError("TPM unavailable")
+
+    monkeypatch.setattr(kanboard, "host_storage", unavailable)
+    result, _ = run("whoami")
+    assert result.exit_code == 1
+    error = json.loads(result.stderr)["error"]
+    assert "KANBOARD_TOKEN_COMMAND" in error
+    assert "pass show kanboard/token" in error
+    assert "secret-entry request" not in error
+
+
+def test_host_storage_errors_are_json(monkeypatch):
+    monkeypatch.delenv("KANBOARD_TOKEN", raising=False)
+    monkeypatch.delenv("KANBOARD_TOKEN_COMMAND", raising=False)
+
+    def denied(name):
+        raise kanboard.SecretError("Keychain access denied")
+
+    monkeypatch.setattr(kanboard, "host_secret", denied)
+    result, _ = run("whoami")
+    assert result.exit_code == 1
+    assert json.loads(result.stderr) == {"error": "Keychain access denied"}

@@ -19,6 +19,7 @@ dependencies = [
   "pillow",
   "watchdog",
   "tomlkit",
+  "keyring; sys_platform == 'darwin'",
 ]
 
 [project.scripts]

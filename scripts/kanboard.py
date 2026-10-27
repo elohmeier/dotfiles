@@ -5,25 +5,25 @@ an identifier, name or ID; columns, swimlanes, users and tags take names or IDs.
 
 Acts as KANBOARD_USER with a personal API token (Kanboard: My profile > API):
 KANBOARD_TOKEN, KANBOARD_TOKEN_COMMAND, or the host credential stored with
-`secret-entry request --tpm KANBOARD_TOKEN`.
+`secret-entry request --host KANBOARD_TOKEN` (macOS Keychain or Linux TPM2).
 """
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
-from functools import cached_property
 import json
 import os
 import shlex
 import subprocess
 import sys
+from datetime import UTC, datetime, timedelta
+from functools import cached_property
 
+import click
 import httpx
 from rich.console import Console
 from rich.table import Table
-import click
 
-from scripts.secret_entry import host_secret
+from scripts.secret_entry import SecretError, host_secret, host_storage
 
 DEFAULT_URL = "https://kanboard-api.pug-coho.ts.net/jsonrpc.php"
 DEFAULT_WEB = "https://violet-ridge-anchor.hf40.de"
@@ -58,15 +58,28 @@ class ApiError(Error):
 def token() -> str:
     value = os.getenv("KANBOARD_TOKEN")
     if not value and (command := os.getenv("KANBOARD_TOKEN_COMMAND")):
-        result = subprocess.run(shlex.split(command), capture_output=True, text=True)
+        result = subprocess.run(
+            shlex.split(command), capture_output=True, text=True, check=False
+        )
         if result.returncode:
             raise Error("KANBOARD_TOKEN_COMMAND failed")
         value = result.stdout
-    value = value or host_secret("KANBOARD_TOKEN")
     if not value:
+        try:
+            value = host_secret("KANBOARD_TOKEN")
+        except SecretError as error:
+            raise Error(str(error)) from None
+    if not value:
+        try:
+            host_storage()
+            setup = "run `secret-entry request --host KANBOARD_TOKEN` in your terminal"
+        except SecretError:
+            setup = (
+                "set KANBOARD_TOKEN or KANBOARD_TOKEN_COMMAND to read it from your "
+                "password manager (e.g. 'pass show kanboard/token')"
+            )
         raise Error(
-            "no token: create one under My profile > API, then run "
-            "`secret-entry request --tpm KANBOARD_TOKEN`"
+            f"no token: create a personal API token under My profile > API, then {setup}"
         )
     return value.strip()
 
@@ -331,7 +344,10 @@ def projects() -> None:
 def board(project: str) -> None:
     p = kb().project(project)
     open_tasks = p.tasks("status:open")
-    count = lambda **f: sum(all(t[k] == v for k, v in f.items()) for t in open_tasks)  # noqa: E731
+
+    def count(**filters):
+        return sum(all(t[k] == v for k, v in filters.items()) for t in open_tasks)
+
     emit(
         {
             **p.summary(),
