@@ -6,7 +6,7 @@ require (
 	github.com/grafana/grafana/apps/dashboard v0.0.0-20260915110713-3db12332b664
 	github.com/grafana/grafana/pkg/apimachinery v0.0.0-20260915110713-3db12332b664
 	github.com/prometheus/prometheus v0.315.1
-	k8s.io/apimachinery v0.37.1
+	k8s.io/apimachinery v0.37.2
 	k8s.io/kube-openapi v0.0.0-20261014044854-ca3452a79603
 )
 
