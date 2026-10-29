@@ -120,31 +120,65 @@ by `home/.chezmoiscripts/run_onchange_after_install-uv-tools.sh.tmpl`.
 
 ### Agent sessions
 
-`agent-session` lists Claude Code, Pi and Codex sessions for the current directory.
-Run it without arguments to select a session and preview, resume, copy, or copy
-and resume it:
+`agent-session` searches Claude Code, Pi and Codex sessions across host and sandbox
+stores. Run it without arguments for the fzf picker, with a transcript preview,
+first prompt, latest reply and matching message. Enter opens the resume, preview,
+fork and copy actions. In the picker, Ctrl-D selects the current directory,
+Ctrl-G the repository (including worktrees), Ctrl-B the recorded branch and
+Ctrl-A all sessions. Queries support `agent:pi`, `store:codex:sandbox`,
+`b:feature` and `m:opus` filters, words and quoted phrases; the final unquoted
+word also matches prefixes.
 
 ```sh
 agent-session
+agent-session --scope repo --query 'migration agent:pi'
 agent-session list --all
+agent-session search 'flaky test' --scope repo --json
 agent-session show claude:host:<id-prefix>
+agent-session show pi:<id-prefix> --start -10 --tools --json
+agent-session fork pi:<id-prefix> --resume
 agent-session copy claude:host:<id-prefix> --to pi
 agent-session copy pi:<id-prefix> --to codex:sandbox --resume
 agent-session copy claude:host:<id-prefix> --to codex --resume -- --yolo
 agent-session resume codex:host:<id-prefix> -- --yolo
+agent-session resume pi:<id-prefix> --print
 ```
+
+`show` reads full history, including messages before compaction and abandoned
+branches. `--context` selects only the active context that a cross-agent copy
+would transfer. Tool inputs and outputs are folded unless `--tools` is given.
+Pages default to 20 messages and 16,000 text characters; `--start`, `--limit`,
+`--offset` and `--chars` control paging. JSON includes a `next` cursor with
+`start` and `offset`, plus block types, tool IDs and error status. Images are
+represented by metadata rather than base64 data. Search JSON includes
+`match_line`, which `show --match-line` opens in context. Search covers titles,
+conversation text, tool inputs and recorded metadata, excluding tool outputs
+and image data.
 
 `copy --resume` imports the session and immediately launches the destination
 agent in its recorded working directory. Arguments after `--` are forwarded to
 the agent unchanged, for example Codex's `--yolo` or `--model` options. This also
 works with `resume` for sessions that have already been copied.
 
-Copies create a new session with the active conversation context, existing
+Cross-agent copies create a new session with the active conversation context, existing
 compaction summaries and historical tool calls/results rendered as text. The
 source session stays unchanged. Claude and Pi retain inline images; Codex's
-native importer replaces images with omission notices. Opaque Codex compactions
-cannot be transferred. Models, permissions, instructions, running tools and
+native importer replaces images with omission notices. Copies report message
+count, approximate text tokens, flattened tools and omitted images before
+writing; `--dry-run` reports without creating a session. Copies keep all available
+context by default. `--max-tokens N` sets an optional text budget (UTF-8 bytes
+divided by four, excluding images). Opaque compactions and contexts exceeding an
+explicit budget fail unless `--allow-partial` is given; partial copies mark unavailable context
+and omit older turns when needed. `--tool-output-limit N` clips each tool result
+to N characters plus an omission notice, keeping both ends. Repeatable
+`--redact REGEX` replaces matches in transferred text. Models, permissions, instructions, running tools and
 file checkpoints belong to the destination agent.
+
+`fork`, and `copy` to the same agent, preserve native records, tool calls,
+images and compactions under a new session ID. Codex forks use its app-server
+fork API; Claude and Pi retain their native parent references. Forks and
+cross-agent continuations record their source store/session and are grouped
+under their parent in listings and the picker.
 
 Host stores honor `CLAUDE_CONFIG_DIR`, `PI_CODING_AGENT_DIR`,
 `PI_CODING_AGENT_SESSION_DIR` and `CODEX_HOME`. Claude/Codex sandbox stores live
@@ -154,8 +188,20 @@ Use `claude:sandbox` or `codex:sandbox` as a destination to resume through
 Codex copies require the Codex CLI and use its native session importer; sandbox
 copies also require the shared agent container.
 
-Fish completes subcommands, options, destinations and current-directory session
-references. The CLI is installed by
+The disposable SQLite/FTS5 index lives under
+`${XDG_CACHE_HOME:-~/.cache}/agent-session/`. Commands refresh changed transcripts
+from their last complete-line checkpoint and detect replaced/rewritten files.
+`agent-session reindex` rebuilds it from the native transcripts; no daemon or
+sync service is required. Branch filters use recorded metadata rather than
+assuming a session ran on the checkout's current branch. Outside a repository,
+repository/branch scope falls back to all sessions; a detached HEAD falls back
+to repository scope.
+
+`resume --print` includes the working directory, store environment and quoted
+agent arguments without launching the agent. `agent-session --print` combines
+this with the picker. Fish binds Ctrl-] to insert the selected resume command
+for review, and completes subcommands, options, destinations and current-directory
+session references. The CLI is installed by
 `home/.chezmoiscripts/run_onchange_after_install-uv-tools.sh.tmpl`.
 
 ### Btrfs home snapshots (Fedora Atomic / Bluefin)

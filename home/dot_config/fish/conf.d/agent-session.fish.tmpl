@@ -1,0 +1,6 @@
+{{- if and (lookPath "fzf") (lookPath "agent-session") }}
+if status is-interactive
+    bind \c] _agent_session_search
+    bind -M insert \c] _agent_session_search
+end
+{{- end }}

@@ -11,6 +11,11 @@ from scripts import agent_session as app
 STAMP = "2026-10-01T12:00:00.000Z"
 
 
+@pytest.fixture(autouse=True)
+def isolated_index(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+
+
 def pi_entry(id_, parent, role, text) -> app.Record:
     return {
         "type": "message",
@@ -408,6 +413,42 @@ def test_store_launch_commands_keep_sandbox_identity(tmp_path):
         "resume",
         "id",
     ]
+
+
+def test_default_claude_resume_leaves_config_directory_unset(tmp_path, monkeypatch):
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    store = app.Store("claude:host", app.Path.home() / ".claude")
+    session = app.Session(
+        store, "session-id", tmp_path / "session.jsonl", tmp_path, "Fixture", 0
+    )
+    monkeypatch.setattr(app, "discover", lambda _: [session])
+    run = Mock()
+    monkeypatch.setattr(app.subprocess, "run", run)
+
+    result = CliRunner().invoke(app.main, ["resume", session.ref])
+
+    assert result.exit_code == 0, result.output
+    assert "CLAUDE_CONFIG_DIR" not in run.call_args.kwargs["env"]
+    printed = CliRunner().invoke(app.main, ["resume", session.ref, "--print"])
+    assert printed.exit_code == 0, printed.output
+    assert "env -u CLAUDE_CONFIG_DIR claude --resume session-id" in printed.output
+
+
+@pytest.mark.parametrize("directory", ["default", "custom"])
+def test_explicit_claude_config_directory_is_preserved(
+    tmp_path, monkeypatch, directory
+):
+    root = (
+        app.Path.home() / ".claude" if directory == "default" else tmp_path / "claude"
+    )
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(root))
+    store = app.Store("claude:host", root)
+    session = app.Session(
+        store, "session-id", tmp_path / "session.jsonl", tmp_path, "Fixture", 0
+    )
+
+    assert store.environment()["CLAUDE_CONFIG_DIR"] == str(root)
+    assert f"CLAUDE_CONFIG_DIR={root}" in app.render_resume(session)
 
 
 @pytest.mark.parametrize(
