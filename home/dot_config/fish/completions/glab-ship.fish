@@ -1,5 +1,1 @@
-complete -c glab-ship -f
-complete -c glab-ship -l help -d 'Show help'
-complete -c glab-ship -l squash -d 'Squash commits on merge'
-complete -c glab-ship -l no-squash -d 'Do not squash commits on merge'
-complete -c glab-ship -s t -l title -r -d 'MR title (required when HEAD is a merge commit)'
+complete -c glab-ship -f -a '(env _GLAB_SHIP_COMPLETE=fish_complete COMP_WORDS=(commandline -cp) COMP_CWORD=(commandline -t) glab-ship | string replace -r "^plain," "")'
