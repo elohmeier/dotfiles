@@ -1,36 +1,3 @@
 export PATH="$HOME/.cargo/bin:$HOME/go/bin:$PATH"
 
-{{- if eq .chezmoi.os "darwin" }}
-export SSH_SK_PROVIDER=/usr/lib/ssh-keychain.dylib
-
-t() {
-    local session="${1:-{{ .chezmoi.hostname }}}"
-    [ -n "$TMUX" ] && return 0
-    if [ -n "$SSH_AUTH_SOCK" ]; then
-        [ "$SSH_AUTH_SOCK" = "$HOME/.ssh/agent.sock" ] || ln -sfn "$SSH_AUTH_SOCK" ~/.ssh/agent.sock
-        export SSH_AUTH_SOCK="$HOME/.ssh/agent.sock"
-        tmux set-environment -g SSH_AUTH_SOCK "$SSH_AUTH_SOCK" 2>/dev/null
-        tmux set-environment -t "$session" SSH_AUTH_SOCK "$SSH_AUTH_SOCK" 2>/dev/null
-    fi
-    if tmux has-session -t "$session" 2>/dev/null; then
-        tmux attach-session -t "$session"
-    else
-        if ! security show-keychain-info ~/Library/Keychains/login.keychain-db &>/dev/null; then
-            security unlock-keychain ~/Library/Keychains/login.keychain-db || return 1
-        fi
-        tmux new-session -s "$session"
-    fi
-}
-{{- else }}
-t() {
-    local session="${1:-{{ .chezmoi.hostname }}}"
-    [ -n "$TMUX" ] && return 0
-    if [ -n "$SSH_AUTH_SOCK" ]; then
-        [ "$SSH_AUTH_SOCK" = "$HOME/.ssh/agent.sock" ] || ln -sfn "$SSH_AUTH_SOCK" ~/.ssh/agent.sock
-        export SSH_AUTH_SOCK="$HOME/.ssh/agent.sock"
-        tmux set-environment -g SSH_AUTH_SOCK "$SSH_AUTH_SOCK" 2>/dev/null
-        tmux set-environment -t "$session" SSH_AUTH_SOCK "$SSH_AUTH_SOCK" 2>/dev/null
-    fi
-    tmux has-session -t "$session" 2>/dev/null && tmux attach-session -t "$session" || tmux new-session -s "$session"
-}
-{{- end }}
+{{ template "tmux-session" . }}

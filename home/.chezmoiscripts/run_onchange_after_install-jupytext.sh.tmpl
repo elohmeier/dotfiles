@@ -1,0 +1,5 @@
+{{- with lookPath "uv" -}}
+#!/bin/sh
+# Required by jupytext.nvim to convert .ipynb files.
+{{ . | quote }} tool install jupytext
+{{- end }}

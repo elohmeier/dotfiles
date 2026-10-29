@@ -1,0 +1,5 @@
+{{- with lookPath "tic" -}}
+#!/bin/sh
+# Terminfo: {{ include "dot_local/share/terminfo/xterm-ghostty.terminfo" | sha256sum }}
+{{ . | quote }} -x -o {{ joinPath $.chezmoi.homeDir ".terminfo" | quote }} {{ joinPath $.chezmoi.homeDir ".local/share/terminfo/xterm-ghostty.terminfo" | quote }}
+{{- end }}

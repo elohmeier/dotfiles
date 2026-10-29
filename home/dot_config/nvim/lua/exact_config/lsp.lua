@@ -257,8 +257,9 @@ local function is_executable(cmd)
 end
 
 -- Enable LSP servers only if their commands are executable
+local python_lsp = vim.env.NVIM_PYTHON_LSP or "ty"
 local servers_to_enable = {
-  { name = "basedpyright", config = vim.lsp.config.basedpyright },
+  { name = python_lsp, config = vim.lsp.config[python_lsp] },
   { name = "bashls", config = vim.lsp.config.bashls },
   { name = "helm_ls", config = vim.lsp.config.helm_ls },
   { name = "jsonnet_ls", config = vim.lsp.config.jsonnet_ls },
@@ -271,7 +272,6 @@ local servers_to_enable = {
   { name = "terraformls", config = vim.lsp.config.terraformls },
   { name = "tinymist", config = vim.lsp.config.tinymist },
   { name = "tsserver", config = vim.lsp.config.tsserver },
-  { name = "ty", config = vim.lsp.config.ty },
   { name = "yamlls", config = vim.lsp.config.yamlls },
 }
 

@@ -1,0 +1,21 @@
+{{- $fish := lookPath "fish" -}}
+{{- if $fish -}}
+#!/bin/sh
+{{- if lookPath "vivid" }}
+# Vivid theme: {{ include (printf "dot_config/vivid/themes/%s.yaml" (includeTemplate "theme" .)) | sha256sum }}
+{{- end }}
+{{ $fish | quote }} --no-config <<'FISH'
+{{- with lookPath "nvim" }}
+set -Ux EDITOR {{ . | quote }}
+{{- end }}
+{{- if lookPath "bat" }}
+set -Ux BAT_THEME {{ template "theme" . }}
+{{- end }}
+{{- if lookPath "fzf" }}
+set -Ux FZF_DEFAULT_OPTS "--highlight-line --info=inline-right --ansi --layout=reverse --border=none {{ includeTemplate "fzf-theme" . }}"
+{{- end }}
+{{- with lookPath "vivid" }}
+set -Ux LS_COLORS ({{ . | quote }} generate "{{ $.chezmoi.homeDir }}/.config/vivid/themes/{{ template "theme" $ }}.yaml")
+{{- end }}
+FISH
+{{- end }}

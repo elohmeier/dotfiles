@@ -31,7 +31,8 @@ After setup, log in as the standard user and manually install what you need:
 
 ```bash
 brew install fish chezmoi
-chezmoi init --apply https://github.com/elohmeier/dotfiles.git
+chezmoi init https://github.com/elohmeier/dotfiles.git
+sh "$(chezmoi source-path)/../scripts/bootstrap.sh"
 ```
 
 ## Quick Start (Existing User)
@@ -39,8 +40,13 @@ chezmoi init --apply https://github.com/elohmeier/dotfiles.git
 For existing macOS installations:
 
 ```bash
-chezmoi init --apply https://github.com/elohmeier/dotfiles.git
+chezmoi init https://github.com/elohmeier/dotfiles.git
+sh "$(chezmoi source-path)/../scripts/bootstrap.sh"
 ```
+
+Bootstrap installs the base Homebrew/APK packages first, then starts a fresh
+`chezmoi apply` so templates detect the newly installed tools. On other systems,
+install the tools you need before applying the configuration.
 
 On Workbrew-managed Macs, the package hooks use `/opt/workbrew/bin/brew`.
 Keep that wrapper ahead of `/opt/homebrew/bin` on `PATH`.
@@ -54,11 +60,38 @@ login user, so they do not appear as installed casks.
 chezmoi init https://github.com/elohmeier/dotfiles.git
 
 # Preview changes
-chezmoi diff
+chezmoi --skip-secrets diff
 
-# Apply dotfiles
-chezmoi apply
+# Install base packages, then apply dotfiles
+sh "$(chezmoi source-path)/../scripts/bootstrap.sh"
 ```
+
+Subsequent updates use `chezmoi update` or `chezmoi apply` as usual.
+
+## Configuration
+
+Fish activates mise once and skips rbenv's startup rehash. Run `rbenv rehash`
+after installing Ruby executables when the installer has not already done so.
+Fish universal defaults and Ghostty terminfo are updated only when their inputs
+change.
+
+Neovim uses Ruff for Python linting and ty for type checking. To use basedpyright
+in a project, set `NVIM_PYTHON_LSP = "basedpyright"` in its mise `[env]` table
+before starting Neovim.
+
+macOS application config links under `~/Library` are managed directly by chezmoi.
+Move any existing directories at those link paths aside before the first apply.
+
+Run the dotfiles checks with chezmoi, Fish, Bash, Zsh, and jq installed:
+
+```sh
+uv run --locked pytest -q tests/test_chezmoi.py
+```
+
+The checks render macOS, Linux, and WSL configurations across all four themes in
+an isolated home, check shell syntax, and parse JSON, TOML, and YAML. Installation
+hooks are rendered without executing them. Pre-commit and CI use Ruff from
+`uv.lock`.
 
 ## Scripts
 
@@ -167,7 +200,8 @@ the container's agent CLIs, mise, uv, Python standalone builds, and tunneldigger
 pinned upstream commit. Updates,
 including major versions and weekly lockfile maintenance, automatically
 squash-merge after the required `CI` check passes. CI tests Python on Linux and
-macOS, validates Grafana pins and tools, and builds and tests the agent/proxy
+macOS, renders the dotfiles for all supported platforms and themes, validates
+Grafana pins and tools, and builds and tests the agent/proxy
 images. Python CLI installation in
 `home/.chezmoiscripts/run_onchange_after_install-uv-tools.sh.tmpl` uses constraints
 exported from `uv.lock`.

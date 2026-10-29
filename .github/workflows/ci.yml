@@ -20,6 +20,8 @@ env:
   RENOVATE_VERSION: 44.192.2
   # renovate: datasource=npm depName=dprint
   DPRINT_VERSION: 0.64.3
+  # renovate: datasource=github-releases depName=twpayne/chezmoi
+  CHEZMOI_VERSION: v2.73.3
 
 jobs:
   config:
@@ -31,6 +33,24 @@ jobs:
           node-version: "26"
       - run: npx --yes --allow-scripts=re2,protobufjs,core-js-pure,dtrace-provider --package "renovate@$RENOVATE_VERSION" renovate-config-validator --strict renovate.json
       - run: npx --yes --package "dprint@$DPRINT_VERSION" dprint check renovate.json .github/workflows/ci.yml README.md skills
+
+  dotfiles:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: "3.14"
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - name: Install dotfiles validation tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fish zsh jq
+          curl -fsSL "https://github.com/twpayne/chezmoi/releases/download/$CHEZMOI_VERSION/chezmoi-linux-amd64-musl" -o "$RUNNER_TEMP/chezmoi"
+          chmod +x "$RUNNER_TEMP/chezmoi"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - run: uv run --locked pytest -q tests/test_chezmoi.py
 
   python:
     strategy:
@@ -114,7 +134,7 @@ jobs:
   ci:
     name: CI
     if: always()
-    needs: [config, python, grafana, containers]
+    needs: [config, dotfiles, python, grafana, containers]
     runs-on: ubuntu-latest
     steps:
       - run: test "$RESULTS" = success
