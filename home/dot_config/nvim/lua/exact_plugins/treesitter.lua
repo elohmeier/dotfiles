@@ -1,7 +1,4 @@
-vim.pack.add({
-  "https://github.com/nvim-treesitter/nvim-treesitter",
-  "https://github.com/nvim-treesitter/nvim-treesitter-context",
-})
+vim.pack.add({ "https://github.com/nvim-treesitter/nvim-treesitter" })
 
 require("nvim-treesitter").install({
   "bash",
@@ -57,6 +54,3 @@ vim.api.nvim_create_autocmd("FileType", {
     end
   end,
 })
-
-require("treesitter-context").setup({})
-vim.keymap.set("n", "<leader>tc", require("treesitter-context").toggle, { desc = "Toggle Treesitter Context" })

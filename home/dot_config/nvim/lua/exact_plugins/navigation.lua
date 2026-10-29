@@ -4,8 +4,6 @@ vim.pack.add({
   "https://github.com/MunifTanjim/nui.nvim",
   "https://github.com/nvim-neo-tree/neo-tree.nvim",
   "https://github.com/nvim-telescope/telescope.nvim",
-  "https://github.com/nvim-telescope/telescope-ui-select.nvim",
-  "https://github.com/debugloop/telescope-undo.nvim",
   "https://github.com/dmtrKovalenko/fff.nvim",
 })
 
@@ -64,8 +62,8 @@ telescope.setup({
   },
 })
 
-telescope.load_extension("ui-select")
-telescope.load_extension("undo")
+vim.cmd.packadd("nvim.undotree")
+vim.keymap.set("n", "<leader>su", "<cmd>Undotree<cr>", { desc = "Undo Tree" })
 
 vim.keymap.set("n", "<leader>/", function()
   require("telescope.builtin").live_grep({ cwd = root() })
@@ -91,7 +89,14 @@ vim.keymap.set("n", "<leader>sR", "<cmd>Telescope resume<cr>", { desc = "Resume"
 vim.keymap.set("n", "<leader>fs", "<cmd>Telescope lsp_document_symbols<cr>", { desc = "Document symbols" })
 vim.keymap.set("n", "<C-j>", "<cmd>Telescope lsp_references<cr>", { desc = "References" })
 vim.keymap.set("n", "<leader>sd", "<cmd>Telescope diagnostics bufnr=0<cr>", { desc = "Document diagnostics" })
-vim.keymap.set("n", "<leader>st", "<cmd>TodoTelescope<cr>", { silent = true, desc = "Todo (Telescope)" })
+vim.keymap.set("n", "<leader>st", function()
+  require("telescope.builtin").grep_string({
+    cwd = root(),
+    prompt_title = "TODO comments",
+    search = [[\b(FIX|FIXME|BUG|FIXIT|ISSUE|TODO|HACK|WARN|WARNING|XXX|PERF|OPTIM|PERFORMANCE|OPTIMIZE|NOTE|INFO|TEST|TESTING|PASSED|FAILED):]],
+    use_regex = true,
+  })
+end, { desc = "Todo (Telescope)" })
 
 vim.keymap.set("n", "<leader>ft", function()
   require("telescope.builtin").find_files({

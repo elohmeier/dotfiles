@@ -10,6 +10,32 @@ vim.keymap.set("i", "<C-c>", "<Esc>")
 
 vim.keymap.set("n", "Q", "<nop>")
 
+-- Readline shortcuts using native motions; keep the built-in Ctrl-W/Ctrl-U.
+for lhs, rhs in pairs({
+  ["<M-f>"] = "<C-Right>",
+  ["<M-b>"] = "<C-Left>",
+  ["<C-a>"] = "<Home>",
+  ["<C-e>"] = "<End>",
+  ["<M-BS>"] = "<C-w>",
+}) do
+  vim.keymap.set("!", lhs, rhs)
+end
+vim.keymap.set("i", "<M-d>", function()
+  return vim.fn.col(".") > #vim.fn.getline(".") and "<Del>" or "<C-o>dw"
+end, { expr = true })
+vim.keymap.set("i", "<C-k>", function()
+  return vim.fn.col(".") > #vim.fn.getline(".") and "" or "<C-o>D"
+end, { expr = true })
+vim.keymap.set("c", "<C-k>", function()
+  vim.fn.setcmdline(vim.fn.getcmdline():sub(1, vim.fn.getcmdpos() - 1))
+end)
+vim.keymap.set("c", "<M-d>", function()
+  local line, pos = vim.fn.getcmdline(), vim.fn.getcmdpos()
+  local stop = vim.fn.matchend(line, [[\W*\w*]], pos - 1)
+  vim.fn.setcmdline(line:sub(1, pos - 1) .. line:sub(stop + 1), pos)
+end)
+vim.keymap.set("i", "<C-Space>", "<C-n>", { desc = "Complete" })
+
 -- Map :W to :w and :Q to :q (common typos) but only when they're the whole command
 vim.cmd([[cnoreabbrev <expr> W ((getcmdtype() == ':' && getcmdline() == 'W') ? 'w' : 'W')]])
 vim.cmd([[cnoreabbrev <expr> Q ((getcmdtype() == ':' && getcmdline() == 'Q') ? 'q' : 'Q')]])

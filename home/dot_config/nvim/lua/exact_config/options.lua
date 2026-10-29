@@ -12,6 +12,10 @@ vim.opt.mouse = "a"
 vim.opt.ignorecase = true
 vim.opt.smartcase = true
 vim.opt.grepprg = "rg --vimgrep"
+vim.opt.autocomplete = true
+vim.opt.complete = { "o", ".", "w", "b" }
+vim.opt.completeopt = { "menuone", "noselect", "popup", "fuzzy" }
+vim.opt.wildoptions:append("fuzzy")
 vim.opt.updatetime = 250 -- Delay before document highlights and notebook sync checks.
 vim.opt.swapfile = false
 vim.opt.undofile = true

@@ -1,4 +1,3 @@
-vim.lsp.config("*", { capabilities = require("blink.cmp").get_lsp_capabilities() })
 vim.lsp.enable({
   vim.env.NVIM_PYTHON_LSP or "ty",
   "bashls",
@@ -19,6 +18,15 @@ vim.lsp.enable({
 vim.diagnostic.config({ virtual_lines = { current_line = true } })
 
 local group = vim.api.nvim_create_augroup("config.lsp", { clear = true })
+vim.api.nvim_create_autocmd("LspAttach", {
+  group = group,
+  callback = function(ev)
+    local client = vim.lsp.get_client_by_id(ev.data.client_id)
+    if client:supports_method("textDocument/completion") then
+      vim.lsp.completion.enable(true, client.id, ev.buf, { autotrigger = true })
+    end
+  end,
+})
 vim.api.nvim_create_autocmd({ "CursorHold", "CursorHoldI" }, {
   group = group,
   callback = function(ev)

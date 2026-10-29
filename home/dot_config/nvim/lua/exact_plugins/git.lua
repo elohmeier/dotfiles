@@ -1,6 +1,5 @@
 vim.pack.add({
   "https://github.com/lewis6991/gitsigns.nvim",
-  "https://github.com/julienvincent/hunk.nvim",
   "https://github.com/rafikdraoui/jj-diffconflicts",
 })
 
@@ -11,7 +10,7 @@ require("gitsigns").setup({
     end
   end,
 })
-require("hunk").setup()
+vim.cmd.packadd("nvim.difftool")
 
 vim.keymap.set("n", "<leader>ghb", "<cmd>Gitsigns blame_line<cr>", { desc = "Blame Line" })
 vim.keymap.set("n", "<leader>ghd", "<cmd>Gitsigns diffthis<cr>", { desc = "Diff This" })
