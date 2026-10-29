@@ -101,7 +101,7 @@
     },
     {
       "customType": "regex",
-      "managerFilePatterns": ["home/dot_config/nvim/lua/plugins.lua"],
+      "managerFilePatterns": ["home/dot_config/nvim/lua/exact_plugins/*.lua"],
       "matchStrings": ["src = \"https://github\\.com/(?<depName>[^\"]+)\", version = \"(?<currentValue>v[0-9.]+)\""],
       "datasourceTemplate": "github-tags"
     }

@@ -1,17 +1,26 @@
 {{- if .isWSL -}}
--- WSL clipboard configuration using wl-copy/wl-paste
-local home = os.getenv("HOME")
+local copy = {{ lookPath "wl-copy" | quote }}
+local paste = {{ lookPath "wl-paste" | quote }}
 vim.g.clipboard = {
-  name = 'wsl-clipboard',
-  copy = {
-    ['+'] = home .. '/.local/bin/wl-copy',
-  },
-  paste = {
-    ['+'] = home .. '/.local/bin/wl-paste',
-  },
-  cache_enabled = true,
+  name = "wsl-clipboard",
+  copy = { ["+"] = copy, ["*"] = copy },
+  paste = { ["+"] = paste, ["*"] = paste },
+  cache_enabled = false,
 }
+
+vim.api.nvim_create_user_command("ClipboardTest", function()
+  vim.fn.setreg("+", "test clipboard")
+  vim.notify("Clipboard: " .. vim.fn.getreg("+"))
+end, {})
+for suffix, value in pairs({ On = "1", Off = "" }) do
+  vim.api.nvim_create_user_command("ClipboardDebug" .. suffix, function()
+    vim.env.WSL_CLIPBOARD_DEBUG = value
+    vim.notify("Clipboard debug " .. suffix:lower())
+  end, {})
+end
+vim.api.nvim_create_user_command("ClipboardHealth", function()
+  vim.cmd.checkhealth("vim.provider")
+end, {})
 {{- else -}}
--- Keep default clipboard behavior to avoid automatic copying on selection
-vim.opt.clipboard = ''
-{{- end -}}
+-- Clipboard providers are detected automatically outside WSL.
+{{- end }}

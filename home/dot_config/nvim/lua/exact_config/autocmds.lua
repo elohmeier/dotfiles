@@ -1,20 +1,14 @@
-vim.filetype.add({ extension = { bean = "beancount", rhai = "rhai" } })
+local function helm(path)
+  local chart = vim.fs.root(path, "Chart.yaml")
+  if chart and vim.fs.relpath(chart, path):match("^templates/") then
+    return "helm"
+  end
+end
 
--- Autocmd to set filetype to helm for Helm chart files
-local helm_ft_group = vim.api.nvim_create_augroup("helm_filetype_detection", { clear = true })
-
-vim.api.nvim_create_autocmd({ "BufNewFile", "BufRead" }, {
-  group = helm_ft_group,
+vim.filetype.add({
+  extension = { bean = "beancount", rhai = "rhai" },
   pattern = {
-    "Chart.yaml",
-    "*/templates/*.yaml",
-    "*/templates/*.tpl",
-    "*/charts/*/templates/*.yaml",
-    "*/charts/*/templates/*.tpl",
-    "*/crds/*.yaml",
+    [".*/templates/.*%.ya?ml"] = helm,
+    [".*/templates/.*%.tpl"] = helm,
   },
-  callback = function()
-    vim.bo.filetype = "helm"
-  end,
-  desc = "Set filetype to helm for Helm chart files",
 })
