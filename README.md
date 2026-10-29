@@ -88,7 +88,8 @@ by `home/.chezmoiscripts/run_onchange_after_install-uv-tools.sh.tmpl`.
 ### Agent sessions
 
 `agent-session` lists Claude Code, Pi and Codex sessions for the current directory.
-Run it without arguments to select a session and preview, resume or copy it:
+Run it without arguments to select a session and preview, resume, copy, or copy
+and resume it:
 
 ```sh
 agent-session
@@ -96,7 +97,14 @@ agent-session list --all
 agent-session show claude:host:<id-prefix>
 agent-session copy claude:host:<id-prefix> --to pi
 agent-session copy pi:<id-prefix> --to codex:sandbox --resume
+agent-session copy claude:host:<id-prefix> --to codex --resume -- --yolo
+agent-session resume codex:host:<id-prefix> -- --yolo
 ```
+
+`copy --resume` imports the session and immediately launches the destination
+agent in its recorded working directory. Arguments after `--` are forwarded to
+the agent unchanged, for example Codex's `--yolo` or `--model` options. This also
+works with `resume` for sessions that have already been copied.
 
 Copies create a new session with the active conversation context, existing
 compaction summaries and historical tool calls/results rendered as text. The

@@ -811,7 +811,7 @@ def complete_sessions(
     ]
 
 
-def resume_session(session: Session) -> None:
+def resume_session(session: Session, agent_args: tuple[str, ...] = ()) -> None:
     args = (
         ["--session", str(session.path)]
         if session.store.agent == "pi"
@@ -819,7 +819,7 @@ def resume_session(session: Session) -> None:
         if session.store.agent == "claude"
         else ["resume", session.id]
     )
-    command = session.store.command(*args)
+    command = session.store.command(*args, *agent_args)
     console.print(shlex.join(command), markup=False)
     subprocess.run(
         command, cwd=session.cwd, env=session.store.environment(), check=True
@@ -848,12 +848,14 @@ def main(ctx: click.Context) -> None:
     ).ask()
     if chosen is None:
         return
-    action = questionary.select("Action", choices=["Preview", "Resume", "Copy"]).ask()
+    action = questionary.select(
+        "Action", choices=["Preview", "Resume", "Copy", "Copy and resume"]
+    ).ask()
     if action == "Preview":
         show_session(chosen)
     elif action == "Resume":
         resume_session(chosen)
-    elif action == "Copy":
+    elif action in {"Copy", "Copy and resume"}:
         target = questionary.select(
             "Copy to",
             choices=[
@@ -863,7 +865,10 @@ def main(ctx: click.Context) -> None:
             ],
         ).ask()
         if target:
-            report_copy(copy_session(chosen, target))
+            copied = copy_session(chosen, target)
+            report_copy(copied)
+            if action == "Copy and resume":
+                resume_session(copied)
 
 
 @main.command("list")
@@ -923,9 +928,10 @@ def show(session: str) -> None:
 
 @main.command()
 @click.argument("session", shell_complete=complete_sessions)
-def resume(session: str) -> None:
-    """Resume with the original agent and store."""
-    resume_session(resolve(session, discover(None)))
+@click.argument("agent_args", nargs=-1, type=click.UNPROCESSED)
+def resume(session: str, agent_args: tuple[str, ...]) -> None:
+    """Resume with the original agent and store. Pass agent options after --."""
+    resume_session(resolve(session, discover(None)), agent_args)
 
 
 def report_copy(session: Session) -> None:
@@ -935,6 +941,7 @@ def report_copy(session: Session) -> None:
 
 @main.command("copy")
 @click.argument("session", shell_complete=complete_sessions)
+@click.argument("agent_args", nargs=-1, type=click.UNPROCESSED)
 @click.option(
     "--to",
     "destination",
@@ -954,8 +961,12 @@ def report_copy(session: Session) -> None:
 @click.option(
     "--resume", "launch", is_flag=True, help="Resume the copied session immediately."
 )
-def copy_command(session: str, destination: str, launch: bool) -> None:
-    """Copy current conversation context into a new native session."""
+def copy_command(
+    session: str, agent_args: tuple[str, ...], destination: str, launch: bool
+) -> None:
+    """Copy into a new native session. With --resume, pass agent options after --."""
+    if agent_args and not launch:
+        raise click.UsageError("Agent arguments require --resume.")
     destination = (
         destination
         if ":" in destination or destination == "pi"
@@ -965,7 +976,7 @@ def copy_command(session: str, destination: str, launch: bool) -> None:
     copied = copy_session(resolve(session, discover(None)), target)
     report_copy(copied)
     if launch:
-        resume_session(copied)
+        resume_session(copied, agent_args)
 
 
 if __name__ == "__main__":

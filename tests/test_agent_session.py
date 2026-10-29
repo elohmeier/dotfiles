@@ -1,6 +1,7 @@
 import json
 import os
 import sqlite3
+from unittest.mock import Mock
 
 import pytest
 from click.testing import CliRunner
@@ -407,6 +408,82 @@ def test_store_launch_commands_keep_sandbox_identity(tmp_path):
         "resume",
         "id",
     ]
+
+
+@pytest.mark.parametrize(
+    ("store_name", "resume_args"),
+    [
+        ("claude:host", ["--resume", "session-id"]),
+        ("claude:sandbox", ["--resume", "session-id"]),
+        ("pi", ["--session", "session.jsonl"]),
+        ("codex:host", ["resume", "session-id"]),
+        ("codex:sandbox", ["resume", "session-id"]),
+    ],
+)
+@pytest.mark.parametrize("agent_args", [[], ["--model", "model with spaces"]])
+def test_resume_cli_preserves_store_cwd_and_agent_arguments(
+    tmp_path, monkeypatch, store_name, resume_args, agent_args
+):
+    store = app.Store(store_name, tmp_path / "store")
+    session = app.Session(
+        store, "session-id", app.Path("session.jsonl"), tmp_path, "Fixture", 0
+    )
+    monkeypatch.setattr(app, "discover", lambda _: [session])
+    run = Mock()
+    monkeypatch.setattr(app.subprocess, "run", run)
+    result = CliRunner().invoke(app.main, ["resume", session.ref, "--", *agent_args])
+    assert result.exit_code == 0, result.output
+    run.assert_called_once_with(
+        store.command(*resume_args, *agent_args),
+        cwd=tmp_path,
+        env=store.environment(),
+        check=True,
+    )
+
+
+@pytest.mark.parametrize("destination", ["codex", "codex:sandbox"])
+@pytest.mark.parametrize("agent_args", [None, [], ["--yolo", "--model", "my model"]])
+def test_copy_cli_resumes_imported_session(
+    tmp_path, monkeypatch, destination, agent_args
+):
+    source = make_source(tmp_path, "claude")
+    store_name = "codex:host" if destination == "codex" else destination
+    store = app.Store(store_name, tmp_path / "codex")
+    copied = app.Session(
+        store, "imported-id", tmp_path / "imported.jsonl", source.cwd, "Imported", 0
+    )
+    monkeypatch.setattr(app, "discover", lambda _: [source])
+    monkeypatch.setattr(app, "stores", lambda: [store])
+    copy = Mock(return_value=copied)
+    run = Mock()
+    monkeypatch.setattr(app, "copy_session", copy)
+    monkeypatch.setattr(app.subprocess, "run", run)
+    args = ["copy", source.ref, "--to", destination]
+    if agent_args is not None:
+        args.extend(["--resume", "--", *agent_args])
+    result = CliRunner().invoke(app.main, args)
+    assert result.exit_code == 0, result.output
+    copy.assert_called_once_with(source, store)
+    if agent_args is None:
+        run.assert_not_called()
+    else:
+        run.assert_called_once_with(
+            store.command("resume", copied.id, *agent_args),
+            cwd=source.cwd,
+            env=store.environment(),
+            check=True,
+        )
+
+
+def test_copy_rejects_agent_arguments_without_resume(monkeypatch):
+    copy = Mock()
+    monkeypatch.setattr(app, "copy_session", copy)
+    result = CliRunner().invoke(
+        app.main, ["copy", "source", "--to", "codex", "--", "--yolo"]
+    )
+    assert result.exit_code == 2
+    assert "Agent arguments require --resume" in result.output
+    copy.assert_not_called()
 
 
 @pytest.mark.skipif(
