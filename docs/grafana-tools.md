@@ -44,7 +44,7 @@ Canonical validation uses upstream Go types and CUE. Editor-schema validation us
 
 `query-check` parses PromQL using the upstream Prometheus parser through
 `grafana-dashboard validate-promql`. It includes inactive tabs and hidden targets,
-interpolates saved variable values, and substitutes known duration/time macros
+interpolates saved dashboard and row/tab variable values, and substitutes known duration/time macros
 only in syntax probes. It fails on unresolved variables or invalid syntax (such
 as single-backslash regex escapes inside PromQL strings), without repairing the
 query behind the operator's back. Non-PromQL languages are explicitly reported as
@@ -58,14 +58,16 @@ query results and propagates errors even when the outer response is HTTP 200.
 It carries panel maxDataPoints and Prometheus minimum interval into requests.
 
 Data inspection is not a browser renderer: variable queries, non-SQL datasource
-frontend processing, panel plugin UI, repeats, section-scoped variables,
+frontend processing, panel plugin UI, repeats,
 conditional rendering, and selected-tab visibility are not fully emulated.
 The common explicit variable formats (`raw`, `csv`, `text`, `glob`, `regex`,
 `pipe`, quoting, URL encoding, and JSON) and MSSQL/MySQL/PostgreSQL `rawSql`
 interpolation match the pinned Grafana release. Custom All values remain
 deliberately unescaped, as they do in Grafana. Repeat `--var NAME=VALUE` with
 the same name to select multiple values. Use bounded panel selections and
-explicit variable values. Use browser checks when the remaining frontend
+explicit variable values. Row and tab saved variables shadow their ancestors
+only for descendant panels; command-line overrides take precedence over each
+section's saved selection. Use browser checks when the remaining frontend
 behaviors matter.
 
 Grouped alert creation intentionally retains the provisioning API: integration against 13.2.2 confirmed that app-resource creation rejects setting a rule group. The Python converter preserves that existing capability. Mutation confirmations, managed-resource protections, and the distinction between local-only alert dry runs and server dashboard dry runs remain intact.

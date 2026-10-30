@@ -11,7 +11,9 @@ export function syntaxProbe(expr: string): string {
     __range_s: "1800", __range_ms: "1800000", __from: "1700000000000", __to: "1700001800000",
   };
   const probe = expr.replace(/\$\{(\w+)\}|\$(\w+)/g, (original, braced, bare) => macros[braced || bare] ?? original);
-  if (/\$(?:\{\w+[^}]*\}|\w+)/.test(probe) || /\[\[\w+[^\]]*\]\]/.test(probe)) {
+  // PromQL label_replace uses literal $1 / ${1} capture replacements.
+  // Dashboard variable identifiers start with a letter or underscore.
+  if (/\$(?:\{[A-Za-z_]\w*[^}]*\}|[A-Za-z_]\w*)/.test(probe) || /\[\[[A-Za-z_]\w*[^\]]*\]\]/.test(probe)) {
     throw new Error("Unresolved query variable; provide a saved dashboard value or a supported macro");
   }
   return probe;
@@ -22,7 +24,7 @@ export async function main(args: string[]): Promise<number> {
     help: { type: "boolean" }, format: { type: "string", default: "text" },
   } });
   if (values.help) {
-    console.log("Usage: grafana-inspect query-check DASHBOARD [--format text|json]\nOffline PromQL syntax validation, including hidden queries and inactive tabs. Uses saved variable values and placeholder built-in durations. Does not validate metric existence, datasource access, non-PromQL languages or runtime results; use data for live checks.");
+    console.log("Usage: grafana-inspect query-check DASHBOARD [--format text|json]\nOffline PromQL syntax validation, including hidden queries and inactive tabs. Uses saved dashboard and row/tab variable values and placeholder built-in durations. Does not validate metric existence, datasource access, non-PromQL languages or runtime results; use data for live checks.");
     return 0;
   }
   if (positionals.length !== 1) throw new Error("provide one dashboard JSON file");

@@ -204,6 +204,7 @@ interface Panel {
   options: JsonObject;
   order: number;
   source: "classic" | "v2";
+  variables: Record<string, TemplateValue>;
 }
 
 interface PanelResult {
@@ -382,6 +383,7 @@ export function collectDashboardEditorDiagnosticsInput(
 
   const variables = collectVariables(shape, dashboard);
   applyVariableOverrides(variables, options.vars || []);
+  for (const panel of panels) applyVariableOverrides(panel.variables, options.vars || []);
 
   return {
     schemaVersion: 1,
@@ -441,6 +443,7 @@ async function queryDashboardVisibleData(
   const end = options.end || defaultEnd;
   const variables = collectVariables(shape, dashboard);
   applyVariableOverrides(variables, options.vars || []);
+  for (const panel of panels) applyVariableOverrides(panel.variables, options.vars || []);
   const queryVariables = { ...variables };
   const stepMs = options.step ? parseStepMs(options.step) : undefined;
 
@@ -808,43 +811,45 @@ function classicPanels(
     options: isObject(raw.options) ? raw.options : {},
     order,
     source: "classic",
+    variables: {},
   }));
 }
 
-function v2LayoutOrder(layout: unknown): Record<string, number> {
-  const order: Record<string, number> = {};
-  const walk = (node: unknown): void => {
+function v2LayoutPanels(layout: unknown): Record<string, { order: number; variables: Record<string, TemplateValue> }> {
+  const panels: Record<string, { order: number; variables: Record<string, TemplateValue> }> = {};
+  const walk = (node: unknown, inherited: Record<string, TemplateValue> = {}): void => {
     if (Array.isArray(node)) {
-      node.forEach(walk);
+      node.forEach(child => walk(child, inherited));
       return;
     }
     if (!isObject(node)) {
       return;
     }
+    const variables = { ...inherited, ...collectVariables("v2", node) };
     if (node.kind === "ElementReference") {
       const name = asText(node.name);
-      if (name && !(name in order)) {
-        order[name] = Object.keys(order).length;
+      if (name && !(name in panels)) {
+        panels[name] = { order: Object.keys(panels).length, variables };
       }
     }
     for (const key of ["items", "children", "rows", "tabs"]) {
       const child = node[key];
       if (Array.isArray(child)) {
-        child.forEach(walk);
+        child.forEach(item => walk(item, variables));
       }
     }
     if (isObject(node.spec)) {
-      walk(node.spec);
+      walk(node.spec, variables);
     }
     if (isObject(node.element)) {
-      walk(node.element);
+      walk(node.element, variables);
     }
     if (isObject(node.layout)) {
-      walk(node.layout);
+      walk(node.layout, variables);
     }
   };
   walk(layout);
-  return order;
+  return panels;
 }
 
 function v2QueryToTarget(query: JsonObject, refId: string): JsonObject {
@@ -919,7 +924,7 @@ function expressionDependencies(targets: JsonObject[]): Set<string> {
 
 function v2Panels(dashboard: JsonObject, includeHiddenTargets: boolean): Panel[] {
   const elements = isObject(dashboard.elements) ? dashboard.elements : {};
-  const orderMap = v2LayoutOrder(dashboard.layout);
+  const layoutPanels = v2LayoutPanels(dashboard.layout);
   const panels: Panel[] = [];
 
   for (const [name, element] of Object.entries(elements)) {
@@ -939,8 +944,9 @@ function v2Panels(dashboard: JsonObject, includeHiddenTargets: boolean): Panel[]
       transformations,
       fieldConfig: fieldConfigSource(vizSpec.fieldConfig),
       options: isObject(vizSpec.options) ? vizSpec.options : {},
-      order: orderMap[name] ?? Object.keys(orderMap).length + panels.length,
+      order: layoutPanels[name]?.order ?? Object.keys(layoutPanels).length + panels.length,
       source: "v2",
+      variables: { ...layoutPanels[name]?.variables },
     });
   }
 
@@ -1021,6 +1027,7 @@ function targetDatasource(target: JsonObject): string {
 }
 
 export function prepareTargets(panel: Panel, variables: Record<string, TemplateValue>, stepMs?: number): JsonObject[] {
+  variables = { ...variables, ...panel.variables };
   const targets = panel.targets.map(target => {
     const substituted = substituteVars(target, variables, legacyTargetFormatter);
     if (!isObject(substituted)) {
@@ -1207,6 +1214,7 @@ async function processPanelResult(result: PanelResult, variables: Record<string,
   }
 
   let frames = result.frames;
+  variables = { ...variables, ...result.panel.variables };
   const tableLike = panelIsTableLike(result.panel, frames);
   if (tableLike || result.panel.transformations.length > 0) {
     frames = await applyGrafanaTransformations(frames, result.panel.transformations, variables);

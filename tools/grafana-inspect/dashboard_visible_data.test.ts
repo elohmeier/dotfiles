@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -12,12 +13,67 @@ import {
   collectPanels,
   collectVariables,
   collectDashboardEditorDiagnosticsInput,
+  collectDashboardVisibleData,
   dataTransformerConfigs,
   formatVariableValue,
   initGrafanaDataForCli,
   prepareTargets,
   type JsonObject,
 } from "./dashboard_visible_data.js";
+
+test("live v2 queries and field display names share tab scope and explicit overrides", async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "grafana-tab-scope-"));
+  const filename = path.join(directory, "dashboard.json");
+  const expressions: string[] = [];
+  const server = http.createServer(async (request, response) => {
+    let body = "";
+    for await (const chunk of request) body += chunk;
+    const queries = JSON.parse(body).queries;
+    expressions.push(...queries.map((query: JsonObject) => String(query.expr)));
+    response.setHeader("Content-Type", "application/json");
+    response.end(JSON.stringify({ results: Object.fromEntries(queries.map((query: JsonObject) => [query.refId, {
+      frames: [{ schema: { refId: query.refId, fields: [{ name: "Value", type: "number" }] }, data: { values: [[1]] } }],
+    }])) }));
+  });
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address() as { port: number };
+  const saved = { GRAFANA_URL: process.env.GRAFANA_URL, GRAFANA_TOKEN: process.env.GRAFANA_TOKEN };
+  process.env.GRAFANA_URL = `http://127.0.0.1:${address.port}`;
+  process.env.GRAFANA_TOKEN = "test";
+  fs.writeFileSync(filename, JSON.stringify({
+    apiVersion: "dashboard.grafana.app/v2", kind: "Dashboard", metadata: { name: "scopes" }, spec: {
+      title: "Scopes", variables: [],
+      elements: Object.fromEntries(["first", "second"].map((name, index) => [name, { kind: "Panel", spec: {
+        id: index + 1, title: name,
+        data: { spec: { queries: [{ spec: { refId: "A", query: {
+          group: "prometheus", datasource: { name: "p" }, spec: { expr: 'up{scope="$scope"}' },
+        } } }] } },
+        vizConfig: { group: "table", spec: { fieldConfig: { defaults: { displayName: "$scope" }, overrides: [] } } },
+      } }])),
+      layout: { kind: "TabsLayout", spec: { tabs: ["first", "second"].map(name => ({ kind: "TabsLayoutTab", spec: {
+        variables: [{ kind: "TextVariable", spec: { name: "scope", current: { text: name, value: name } } }],
+        layout: { kind: "GridLayout", spec: { items: [{ spec: { element: { kind: "ElementReference", name } } }] } },
+      } })) } },
+    },
+  }));
+  try {
+    const report = await collectDashboardVisibleData(filename);
+    assert.deepEqual(expressions.sort(), ['up{scope="first"}', 'up{scope="second"}']);
+    assert.deepEqual(report.panels.map(panel => panel.errors), [[], []]);
+    assert.deepEqual(report.panels.map(panel => panel.frames[0].fields), [["first"], ["second"]]);
+    expressions.length = 0;
+    const overridden = await collectDashboardVisibleData(filename, { vars: ["scope=override"] });
+    assert.deepEqual(expressions, ['up{scope="override"}', 'up{scope="override"}']);
+    assert.deepEqual(overridden.panels.map(panel => panel.frames[0].fields), [["override"], ["override"]]);
+  } finally {
+    for (const [name, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
 
 test("editor diagnostics use synthetic frames without a Grafana endpoint", () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "grafana-editor-synthetic-test-"));
