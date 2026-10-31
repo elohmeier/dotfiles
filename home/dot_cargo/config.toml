@@ -1,0 +1,8 @@
+# Debug info is most of what a dev build writes to target/; config profiles
+# override the projects' Cargo.toml. For a debugger session with variables:
+# CARGO_PROFILE_DEV_DEBUG=true cargo …
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false

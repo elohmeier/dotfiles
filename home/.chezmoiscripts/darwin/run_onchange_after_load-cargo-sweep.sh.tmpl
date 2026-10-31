@@ -1,0 +1,8 @@
+{{- if lookPath "cargo-sweep" -}}
+#!/bin/sh
+# plist hash: {{ include "Library/private_LaunchAgents/de.enno.cargo-sweep.plist.tmpl" | sha256sum }}
+set -eu
+plist="$HOME/Library/LaunchAgents/de.enno.cargo-sweep.plist"
+launchctl bootout "gui/$(id -u)" "$plist" 2>/dev/null || true
+launchctl bootstrap "gui/$(id -u)" "$plist"
+{{ end -}}
