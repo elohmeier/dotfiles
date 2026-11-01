@@ -5,9 +5,7 @@ from __future__ import annotations
 import json
 import os
 import shlex
-import shutil
 import subprocess
-import sys
 import tempfile
 from pathlib import Path
 
@@ -115,17 +113,9 @@ def _tree(title: str, paths) -> None:
 
 
 def _clip(text: str) -> None:
-    if sys.platform == "darwin":
-        cmd = ["pbcopy"]
-    elif os.environ.get("WAYLAND_DISPLAY"):
-        cmd = ["wl-copy"]
-    elif shutil.which("clip.exe"):
-        cmd = ["clip.exe"]
-    else:
-        cmd = ["xclip", "-selection", "clipboard"]
-    subprocess.run(cmd, input=text, text=True, check=True)
+    subprocess.run(["clip"], input=text, text=True, check=True)
     subprocess.Popen(
-        ["sh", "-c", f"sleep {CLIP_TIME}; printf '' | {shlex.join(cmd)}"],
+        ["sh", "-c", f"sleep {CLIP_TIME}; printf '' | clip"],
         start_new_session=True,
     )
 

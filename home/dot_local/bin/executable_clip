@@ -1,0 +1,15 @@
+#!/bin/sh
+# clip: copy stdin to the clipboard of the terminal you're looking at
+if [ -n "$WSL_DISTRO_NAME" ]; then
+	exec "$HOME/.local/bin/wl-copy"
+elif [ -n "$TMUX" ]; then
+	exec tmux load-buffer -w -
+elif [ "$(uname)" = Darwin ]; then
+	exec pbcopy
+elif [ -z "$SSH_TTY" ] && [ -n "$WAYLAND_DISPLAY" ]; then
+	exec wl-copy
+elif [ -z "$SSH_TTY" ] && [ -n "$DISPLAY" ]; then
+	exec xclip -selection clipboard
+else
+	printf '\033]52;c;%s\a' "$(base64 | tr -d '\n')" >/dev/tty
+fi
