@@ -29,12 +29,4 @@ Host github.com
     User git
     PKCS11Provider /usr/lib64/pkcs11/libtpm2_pkcs11.so
 {{ end }}
-Host docs.nn42.de
-    IdentityFile ~/.ssh/mb4_id_ed25519
 
-Host storagebox-backup
-    HostName u267169.your-storagebox.de
-    User u267169-sub2
-    Port 23
-    IdentityFile {{ .chezmoi.homeDir }}/.ssh/nwbackup.id_ed25519
-    IdentitiesOnly yes
