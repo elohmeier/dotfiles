@@ -21,7 +21,7 @@ env:
   # renovate: datasource=npm depName=dprint
   DPRINT_VERSION: 0.64.3
   # renovate: datasource=github-releases depName=twpayne/chezmoi
-  CHEZMOI_VERSION: v2.73.3
+  CHEZMOI_VERSION: v2.74.0
 
 jobs:
   config:
