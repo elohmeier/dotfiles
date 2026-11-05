@@ -10,7 +10,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
@@ -358,6 +358,7 @@ def read_pi(rows: list[Record], *, context: bool = True) -> list[Message]:
         )
         path = [checkpoint, *path[kept:compact], *path[compact + 1 :]]
     result = []
+    row: dict[str, Any]
     for row in path:
         before = len(result)
         if context and row.get("id") in edits:
@@ -841,7 +842,7 @@ class Codex:
 
 
 @contextmanager
-def codex(store: Store, cwd: Path) -> Iterator[Codex]:
+def codex(store: Store, cwd: Path) -> Generator[Codex]:
     server = Codex(store, cwd)
     try:
         server.call(

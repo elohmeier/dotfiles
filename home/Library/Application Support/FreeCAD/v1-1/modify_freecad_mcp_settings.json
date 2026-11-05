@@ -1,0 +1,2 @@
+{{- /* chezmoi:modify-template */ -}}
+{{ .chezmoi.stdin | default "{}" | fromJson | setValueAtPath "remote_enabled" true | setValueAtPath "allowed_ips" "127.0.0.1" | setValueAtPath "auto_start_rpc" false | toPrettyJson }}

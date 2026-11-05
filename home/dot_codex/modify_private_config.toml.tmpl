@@ -1,3 +1,7 @@
+{{- $freecadCmd := joinPath .chezmoi.homeDir "Applications/FreeCAD.app/Contents/Resources/bin/freecadcmd" -}}
+{{- if not (stat $freecadCmd) -}}
+{{- $freecadCmd = "/Applications/FreeCAD.app/Contents/Resources/bin/freecadcmd" -}}
+{{- end -}}
 #!/usr/bin/env python3
 import json
 import sys
@@ -16,6 +20,11 @@ writable_roots = ["{{ .chezmoi.homeDir }}/.cache"]
 
 [projects."{{ .chezmoi.homeDir }}/repos"]
 trust_level = "trusted"
+{{ if and (eq .chezmoi.os "darwin") (lookPath "uvx") (stat $freecadCmd) }}
+[mcp_servers.freecad]
+command = {{ lookPath "uvx" | toJson }}
+args = ["freecad-mcp@0.1.28", "--host", "127.0.0.1", "--freecadcmd", {{ $freecadCmd | toJson }}]
+{{ end }}
 """
 
 current = sys.stdin.buffer.read()

@@ -1,0 +1,9 @@
+from pathlib import Path
+import runpy
+
+import FreeCAD
+
+runpy.run_path(
+    str(Path(FreeCAD.getUserAppDataDir()) / "Mod/PrusaSlicerBridge/bridge.py"),
+    run_name="__main__",
+)

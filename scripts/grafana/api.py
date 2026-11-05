@@ -156,7 +156,7 @@ def cmd_metrics(c: httpx.Client, args: Any) -> int:
         return 1
     names: list[str] = r.json().get("data", [])
     if args.grep:
-        rx = re.compile(args.grep)
+        rx = re.compile(str(args.grep))
         names = [n for n in names if rx.search(n)]
     total = len(names)
     if args.limit and args.limit > 0:

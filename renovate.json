@@ -101,6 +101,21 @@
     },
     {
       "customType": "regex",
+      "managerFilePatterns": [
+        "home/.chezmoiexternal.toml",
+        "home/dot_codex/modify_private_config.toml.tmpl",
+        "tests/test_codex_config.py"
+      ],
+      "matchStrings": [
+        "neka-nat/freecad-mcp/archive/refs/tags/v(?<currentValue>[0-9.]+)",
+        "freecad-mcp@(?<currentValue>[0-9.]+)"
+      ],
+      "depNameTemplate": "neka-nat/freecad-mcp",
+      "datasourceTemplate": "github-tags",
+      "extractVersionTemplate": "^v(?<version>.+)$"
+    },
+    {
+      "customType": "regex",
       "managerFilePatterns": ["home/dot_config/nvim/lua/exact_plugins/*.lua"],
       "matchStrings": ["src = \"https://github\\.com/(?<depName>[^\"]+)\", version = \"(?<currentValue>v[0-9.]+)\""],
       "datasourceTemplate": "github-tags"
