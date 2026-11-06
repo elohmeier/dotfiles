@@ -109,7 +109,7 @@ RUN set -e \
 && rm "${name}" SHA256SUMS
 
 # Pin the CLIs together so rebuilding gives a reproducible agent toolchain.
-RUN npm install -g "@earendil-works/pi-coding-agent@1.4.0" \
+RUN npm install -g "@earendil-works/pi-coding-agent@1.5.0" \
     "@openai/codex@0.166.0" "@anthropic-ai/claude-code@2.1.312"
 
 # Complete Claude's native binary installation even when npm skips postinstall.
