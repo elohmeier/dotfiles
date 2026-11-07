@@ -75,6 +75,18 @@ after installing Ruby executables when the installer has not already done so.
 Fish universal defaults and Ghostty terminfo are updated only when their inputs
 change.
 
+Password-store recipient public keys live in
+`home/private_dot_gnupg/pass-recipients.asc`.
+`home/.chezmoiscripts/run_onchange_after_import-pass-recipients.sh.tmpl` imports
+the bundle when it changes and GPG is available. Refresh it from the repo root:
+
+```sh
+gpg --armor --export FINGERPRINT... > home/private_dot_gnupg/pass-recipients.asc
+```
+
+Keep `.gpg-id` in the password-store repository. Private keys and GPG ownertrust
+are provisioned separately.
+
 Neovim uses Ruff for Python linting and ty for type checking. To use basedpyright
 in a project, set `NVIM_PYTHON_LSP = "basedpyright"` in its mise `[env]` table
 before starting Neovim.
