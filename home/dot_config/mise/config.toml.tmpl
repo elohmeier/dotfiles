@@ -4,3 +4,6 @@ experimental = true
 
 [env]
 SOPS_AGE_KEY_FILE = "{{ .chezmoi.homeDir }}/.config/sops/age/keys.txt"
+{{- if stat (joinPath .chezmoi.homeDir "repos/github.com/elohmeier/password-store") }}
+PASSWORD_STORE_DIR = "{{ .chezmoi.homeDir }}/repos/github.com/elohmeier/password-store"
+{{- end }}
