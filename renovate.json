@@ -102,7 +102,7 @@
     {
       "customType": "regex",
       "managerFilePatterns": [
-        "home/.chezmoiexternal.toml",
+        "home/.chezmoiexternal.toml.tmpl",
         "home/dot_codex/modify_private_config.toml.tmpl",
         "tests/test_codex_config.py"
       ],
@@ -112,6 +112,14 @@
       ],
       "depNameTemplate": "neka-nat/freecad-mcp",
       "datasourceTemplate": "github-tags",
+      "extractVersionTemplate": "^v(?<version>.+)$"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["home/.chezmoiexternal.toml.tmpl"],
+      "matchStrings": ["\\$sshTpmAgent := \"(?<currentValue>[0-9.]+)\""],
+      "depNameTemplate": "Foxboron/ssh-tpm-agent",
+      "datasourceTemplate": "github-releases",
       "extractVersionTemplate": "^v(?<version>.+)$"
     },
     {

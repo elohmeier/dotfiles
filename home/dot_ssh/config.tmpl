@@ -23,10 +23,3 @@ Host *
     # skip Touch ID per host with "IdentityFile ~/.ssh/id_ecdsa_sk_none" + "IdentitiesOnly yes"
     SecurityKeyProvider /usr/lib/ssh-keychain.dylib
 {{- end }}
-
-{{ if stat "/usr/lib64/pkcs11/libtpm2_pkcs11.so" -}}
-Host github.com
-    User git
-    PKCS11Provider /usr/lib64/pkcs11/libtpm2_pkcs11.so
-{{ end }}
-

@@ -3,6 +3,9 @@ status is-interactive; or exit
 {{- if eq .chezmoi.os "darwin" }}
 # Use the launchd ssh-agent; Secure Enclave keys via ssh-keychain.dylib (djust setup-se-ssh)
 set -gx SSH_SK_PROVIDER /usr/lib/ssh-keychain.dylib
+{{- else if stat "/dev/tpmrm0" }}
+# TPM-backed keys via ssh-tpm-agent (djust setup-tpm-ssh); keep forwarded agents in SSH sessions
+test -n "$SSH_CONNECTION"; or set -gx SSH_AUTH_SOCK $XDG_RUNTIME_DIR/ssh-tpm-agent.sock
 {{- else }}
 # Use traditional SSH agent
 if test -z "$SSH_ENV"

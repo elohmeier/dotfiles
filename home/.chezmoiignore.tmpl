@@ -50,3 +50,7 @@ Library/**
 .local/bin/agent-pushover-notify
 .pi/agent/extensions/pushover.ts
 {{- end }}
+
+{{ if not (stat "/dev/tpmrm0") }}
+.config/systemd/user/ssh-tpm-agent.*
+{{- end }}

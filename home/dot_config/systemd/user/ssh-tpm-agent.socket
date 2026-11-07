@@ -1,0 +1,9 @@
+[Unit]
+Description=SSH TPM agent socket
+
+[Socket]
+ListenStream=%t/ssh-tpm-agent.sock
+SocketMode=0600
+
+[Install]
+WantedBy=sockets.target

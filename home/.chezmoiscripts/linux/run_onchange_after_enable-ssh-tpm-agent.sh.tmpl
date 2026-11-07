@@ -1,0 +1,8 @@
+{{- if stat "/dev/tpmrm0" -}}
+#!/bin/sh
+# ssh-tpm-agent.socket: {{ include "dot_config/systemd/user/ssh-tpm-agent.socket" | sha256sum }}
+# ssh-tpm-agent.service: {{ include "dot_config/systemd/user/ssh-tpm-agent.service" | sha256sum }}
+systemctl --user daemon-reload
+systemctl --user enable --now ssh-tpm-agent.socket
+systemctl --user try-restart ssh-tpm-agent.service
+{{ end -}}

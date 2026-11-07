@@ -1,0 +1,16 @@
+["Library/Application Support/FreeCAD/v1-1/Mod/FreeCADMCP"]
+type = "archive"
+url = "https://github.com/neka-nat/freecad-mcp/archive/refs/tags/v0.1.28.tar.gz"
+stripComponents = 3
+include = ["*/addon/FreeCADMCP", "*/addon/FreeCADMCP/**"]
+{{- if stat "/dev/tpmrm0" }}
+{{- $sshTpmAgent := "0.9.0" }}
+{{- range list "ssh-tpm-agent" "ssh-tpm-keygen" "ssh-tpm-add" }}
+
+[".local/bin/{{ . }}"]
+type = "archive-file"
+url = "https://github.com/Foxboron/ssh-tpm-agent/releases/download/v{{ $sshTpmAgent }}/ssh-tpm-agent-v{{ $sshTpmAgent }}-linux-{{ $.chezmoi.arch }}.tar.gz"
+path = "ssh-tpm-agent/{{ . }}"
+executable = true
+{{- end }}
+{{- end }}

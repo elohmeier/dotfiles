@@ -1,11 +1,7 @@
 function __ssh_agent_start -d "start a new ssh agent"
   command -q ssh-agent || return 1
   mkdir -p -m 700 (path dirname $SSH_ENV)
-{{- if stat "/usr/lib64/pkcs11/libtpm2_pkcs11.so" }}
-  ssh-agent -c -P '/usr/lib64/pkcs11/*' | sed 's/^echo/#echo/' > $SSH_ENV
-{{- else }}
   ssh-agent -c | sed 's/^echo/#echo/' > $SSH_ENV
-{{- end }}
   chmod 600 $SSH_ENV
   source $SSH_ENV > /dev/null
 end
