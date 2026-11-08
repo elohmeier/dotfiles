@@ -4,8 +4,10 @@ status is-interactive; or exit
 # Use the launchd ssh-agent; Secure Enclave keys via ssh-keychain.dylib (djust setup-se-ssh)
 set -gx SSH_SK_PROVIDER /usr/lib/ssh-keychain.dylib
 {{- else if includeTemplate "ssh-tpm-agent" . }}
-# TPM-backed keys via ssh-tpm-agent (djust setup-tpm-ssh); keep forwarded agents in SSH sessions
-test -n "$SSH_CONNECTION"; or set -gx SSH_AUTH_SOCK $XDG_RUNTIME_DIR/ssh-tpm-agent.sock
+# TPM-backed keys via ssh-tpm-agent (djust setup-tpm-ssh); in SSH sessions keep a reachable forwarded agent
+if test -z "$SSH_CONNECTION"; or begin; ssh-add -l >/dev/null 2>&1; test $status -eq 2; end
+    set -gx SSH_AUTH_SOCK $XDG_RUNTIME_DIR/ssh-tpm-agent.sock
+end
 {{- else }}
 # Use traditional SSH agent
 if test -z "$SSH_ENV"
