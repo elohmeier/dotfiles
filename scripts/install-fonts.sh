@@ -2,12 +2,6 @@
 
 set -euo pipefail
 
-if [[ -x /opt/workbrew/bin/brew ]]; then
-	brew=/opt/workbrew/bin/brew
-else
-	brew=$(command -v brew) || exit 0
-fi
-
 CASKS=(
 	font-ibm-plex-mono
 	font-ibm-plex-sans
@@ -15,6 +9,38 @@ CASKS=(
 )
 
 echo "Installing fonts..."
+
+if [[ $(uname -s) == Linux ]]; then
+	font_dir="${XDG_DATA_HOME:-$HOME/.local/share}/fonts"
+	mkdir -p "$font_dir"
+	archive=$(mktemp)
+	trap 'unlink "$archive"' EXIT
+
+	for cask in "${CASKS[@]}"; do
+		metadata=$(curl -fsSL "https://formulae.brew.sh/api/cask/$cask.json")
+		url=$(jq -r '.url' <<<"$metadata")
+		sha=$(jq -r '.sha256' <<<"$metadata")
+		curl -fsSL "$url" -o "$archive"
+		printf '%s  %s\n' "$sha" "$archive" | sha256sum -c - >/dev/null
+
+		case "$url" in
+		*.zip) unzip -jo "$archive" '*/fonts/complete/otf/*.otf' -d "$font_dir" ;;
+		*.tar.gz) tar -xzf "$archive" -C "$font_dir" --strip-components=1 --wildcards '*.otf' ;;
+		esac
+	done
+
+	if command -v restorecon >/dev/null; then
+		restorecon -Rv "$font_dir"
+	fi
+	fc-cache -f "$font_dir"
+	exit 0
+fi
+
+if [[ -x /opt/workbrew/bin/brew ]]; then
+	brew=/opt/workbrew/bin/brew
+else
+	brew=$(command -v brew) || exit 0
+fi
 
 font_dir="$HOME/Library/Fonts"
 mkdir -p "$font_dir"

@@ -29,8 +29,8 @@ install-packages:
     [ "$#" -eq 0 ] || "{{ . }}" install "$@"
 
 {{ end -}}
-{{ if eq .chezmoi.os "darwin" -}}
-# Install fonts in ~/Library/Fonts
+{{ if or (eq .chezmoi.os "darwin") (eq .chezmoi.os "linux") -}}
+# Install IBM Plex and Spleen in the user font directory
 install-fonts:
     "{{ lookPath "bash" }}" "{{ .chezmoi.workingTree }}/scripts/install-fonts.sh"
 

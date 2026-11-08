@@ -44,7 +44,7 @@ chezmoi init https://github.com/elohmeier/dotfiles.git
 sh "$(chezmoi source-path)/../scripts/bootstrap.sh"
 ```
 
-Chezmoi does not install Homebrew packages or macOS fonts automatically. Use
+Chezmoi does not install Homebrew packages or fonts automatically. Use
 `djust install-packages` for base packages and `djust install-fonts` for fonts.
 Base package installation skips commands already in `PATH`, including `python3`
 on Alpine. It includes ripgrep (`rg`) and excludes Node.js/npm.
@@ -58,6 +58,13 @@ On Workbrew-managed Macs, `djust install-packages` uses `/opt/workbrew/bin/brew`
 Keep that wrapper ahead of `/opt/homebrew/bin` on `PATH`.
 `djust install-fonts` uses cask metadata to install fonts in `~/Library/Fonts` as the
 login user, so they do not appear as installed casks.
+
+On Linux, `djust install-fonts` downloads IBM Plex Mono, IBM Plex Sans, and Spleen
+using Homebrew's public cask metadata and verifies their SHA-256 checksums. It
+installs the OTF files in `${XDG_DATA_HOME:-$HOME/.local/share}/fonts`, restores
+SELinux labels when `restorecon` is available, and refreshes the font cache.
+Requires `curl`, `jq`, `unzip`, GNU `tar`, and `fc-cache`; Homebrew is not required.
+No root access, package layering, or reboot is needed on Fedora Atomic/secureblue.
 
 ## Manual Setup
 
