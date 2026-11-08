@@ -3,6 +3,9 @@
 {{- with lookPath "nvim" }}
 set -gx EDITOR {{ . }}
 {{- end }}
+{{- if stat (joinPath .chezmoi.homeDir "repos/github.com/elohmeier/password-store") }}
+set -gx PASSWORD_STORE_DIR "{{ .chezmoi.homeDir }}/repos/github.com/elohmeier/password-store"
+{{- end }}
 
 if status is-interactive
   set -g fish_greeting
