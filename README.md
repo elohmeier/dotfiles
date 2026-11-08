@@ -99,6 +99,11 @@ an existing TPM key and refuses to overwrite an existing software key. The TPM
 private key is bound to this machine; copying the `.tpm` file to another machine
 does not make it usable there.
 
+For passphrase-protected keys, chezmoi sets `SSH_ASKPASS` in the agent service
+using `ssh-askpass` from `PATH` or an installed GCR helper (GCR 4, then GCR 3).
+The Linux hook reloads systemd and restarts a running TPM agent when the rendered
+service configuration changes.
+
 Open a new terminal after setup and run `ssh-add -l`. Fish selects the TPM agent
 for local sessions and preserves forwarded agents over SSH. To check this
 machine's TPM agent explicitly, including over SSH:
