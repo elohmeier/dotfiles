@@ -3,5 +3,5 @@ Description=SSH TPM agent
 Requires=ssh-tpm-agent.socket
 
 [Service]
-ExecStart=%h/.local/bin/ssh-tpm-agent
+ExecStart={{ includeTemplate "ssh-tpm-agent" . }}/ssh-tpm-agent
 SuccessExitStatus=2

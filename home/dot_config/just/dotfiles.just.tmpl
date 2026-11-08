@@ -291,13 +291,18 @@ setup-se-ssh:
             gh ssh-key add "$dst.pub" -t "$(scutil --get ComputerName) Secure Enclave ($prot)"
     done
 
-{{ else if stat "/dev/tpmrm0" -}}
-# Create a TPM-sealed SSH key (~/.ssh/id_ecdsa.tpm) for ssh-tpm-agent and register it on GitHub
+{{ else if includeTemplate "ssh-tpm-agent" . -}}
+# Create a TPM-sealed SSH key (~/.ssh/id_ecdsa.tpm) for ssh-tpm-agent and optionally register it on GitHub
 setup-tpm-ssh:
     #!/usr/bin/env bash
     set -euo pipefail
     [ -f ~/.ssh/id_ecdsa.tpm ] || ssh-tpm-keygen -f ~/.ssh/id_ecdsa -C "$(hostname) TPM"
     systemctl --user try-restart ssh-tpm-agent.service
+    cat ~/.ssh/id_ecdsa.pub
+    read -rp "Add this key to GitHub? [y/N] " answer
+    [[ $answer == [yY]* ]] || exit 0
+    gh api -i user | grep -iE '^x-oauth-scopes:.*(admin|write):public_key' >/dev/null ||
+        gh auth refresh -h github.com -s admin:public_key
     gh api user/keys --jq '.[].key' | grep -qF "$(cut -d' ' -f2 ~/.ssh/id_ecdsa.pub)" ||
         gh ssh-key add ~/.ssh/id_ecdsa.pub -t "$(hostname) TPM"
 
