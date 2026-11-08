@@ -1,5 +1,0 @@
-{{- with lookPath "gpg" -}}
-#!/bin/sh
-# Keys: {{ include "private_dot_gnupg/pass-recipients.asc" | sha256sum }}
-{{ . | quote }} --batch --import {{ joinPath $.chezmoi.homeDir ".gnupg/pass-recipients.asc" | quote }}
-{{- end }}

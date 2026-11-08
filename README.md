@@ -138,17 +138,10 @@ change.
 Chezmoi adds [GitHub's official SSH host keys](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints)
 to `~/.ssh/known_hosts`, preserving existing entries without adding duplicates.
 
-Password-store recipient public keys live in
-`home/private_dot_gnupg/pass-recipients.asc`.
-`home/.chezmoiscripts/run_onchange_after_import-pass-recipients.sh.tmpl` imports
-the bundle when it changes and GPG is available. Refresh it from the repo root:
-
-```sh
-gpg --armor --export FINGERPRINT... > home/private_dot_gnupg/pass-recipients.asc
-```
-
-Keep `.gpg-id` in the password-store repository. Private keys and GPG ownertrust
-are provisioned separately.
+The password store uses passage (age). Its recipients are listed in
+`.age-recipients` in the password-store repository; the identity lives in
+`~/.passage/identities` (Secure Enclave key on macOS, TPM key on Linux) and is
+unlocked once per boot through the age-plugin-se / age-plugin-tpm agent.
 
 `djust install-nvim` installs Neovim, Tree-sitter CLI, Git, and ripgrep for code
 browsing, skipping commands already in `PATH`. Tree-sitter parser installation
