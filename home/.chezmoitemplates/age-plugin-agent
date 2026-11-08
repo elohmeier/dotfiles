@@ -1,0 +1,10 @@
+{{- /* path of an installed age plugin with unlock-agent support (age-plugin-se on macOS, age-plugin-tpm on TPM Linux machines), empty otherwise */ -}}
+{{- if eq .chezmoi.os "darwin" -}}
+{{- with lookPath "age-plugin-se" -}}
+{{- if contains " agent" (output . "--help") }}{{ . }}{{ end -}}
+{{- end -}}
+{{- else if and (eq .chezmoi.os "linux") (stat "/dev/tpmrm0") -}}
+{{- with lookPath "age-plugin-tpm" -}}
+{{- if contains "--agent" (output . "--help") }}{{ . }}{{ end -}}
+{{- end -}}
+{{- end -}}

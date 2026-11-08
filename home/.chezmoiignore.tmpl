@@ -51,6 +51,11 @@ Library/**
 .pi/agent/extensions/pushover.ts
 {{- end }}
 
+{{ if not (includeTemplate "age-plugin-agent" .) }}
+.config/systemd/user/age-plugin-tpm-agent.*
+Library/LaunchAgents/de.enno.age-plugin-se-agent.plist
+{{- end }}
+
 {{ if not (includeTemplate "ssh-tpm-agent" .) }}
 .config/systemd/user/ssh-tpm-agent.*
 {{- end }}

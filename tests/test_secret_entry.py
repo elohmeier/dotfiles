@@ -21,6 +21,10 @@ needs_sops = pytest.mark.skipif(
     not (shutil.which("sops") and shutil.which("age-keygen")),
     reason="sops and age-keygen are required",
 )
+needs_passage = pytest.mark.skipif(
+    not (shutil.which("passage") and shutil.which("age-keygen")),
+    reason="passage and age are required",
+)
 needs_pass = pytest.mark.skipif(
     not (shutil.which("pass") and shutil.which("gpg")),
     reason="pass and gpg are required",
@@ -286,6 +290,7 @@ def store(monkeypatch):
     store = home / "store"
     monkeypatch.setenv("GNUPGHOME", str(gnupg))
     monkeypatch.setenv("PASSWORD_STORE_DIR", str(store))
+    monkeypatch.delenv("PASSAGE_DIR", raising=False)
     monkeypatch.delenv("PASSWORD_STORE_GPG_OPTS", raising=False)
     subprocess.run(
         [
@@ -541,3 +546,44 @@ def test_read_prints_for_pipes_only(tmp_path):
     _, status = os.waitpid(pid, 0)
     assert os.waitstatus_to_exitcode(status) == 2
     assert b"piped-dummy-value" not in output and b"Refusing" in output
+
+
+@pytest.fixture
+def age_store(tmp_path, monkeypatch):
+    identities = tmp_path / "identities"
+    subprocess.run(
+        ["age-keygen", "-o", str(identities)], capture_output=True, check=True
+    )
+    store = tmp_path / "store"
+    store.mkdir()
+    (store / ".age-recipients").write_text(
+        subprocess.run(
+            ["age-keygen", "-y", str(identities)],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+    )
+    monkeypatch.delenv("PASSAGE_DIR", raising=False)
+    monkeypatch.setenv("PASSWORD_STORE_DIR", str(store))
+    monkeypatch.setenv("PASSAGE_IDENTITIES_FILE", str(identities))
+    return store
+
+
+@needs_passage
+def test_passage_used_once_store_has_age_recipients(age_store, capsys):
+    assert secret_entry.main(["status", "--pass", "team/token"]) == 1
+    secret_entry.pass_save("team/token", "first-dummy-value")
+    shown = subprocess.run(
+        ["passage", "show", "team/token"],
+        env={**os.environ, "PASSAGE_DIR": str(age_store)},
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    assert shown == "first-dummy-value\n"
+    assert not (age_store / "team/token.gpg").exists()
+    assert secret_entry.main(["status", "--pass", "team/token"]) == 0
+    out, err = capsys.readouterr()
+    assert "present in passage store" in out
+    assert "dummy-value" not in out + err

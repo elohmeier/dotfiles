@@ -1,0 +1,6 @@
+[Unit]
+Description=age-plugin-tpm unlock agent
+Requires=age-plugin-tpm-agent.socket
+
+[Service]
+ExecStart={{ includeTemplate "age-plugin-agent" . }} --agent

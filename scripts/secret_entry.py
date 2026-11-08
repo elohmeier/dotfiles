@@ -2,7 +2,7 @@
 
 Agents hand users `secret-entry request ...`; values never pass through chat,
 arguments, or logs. Backends: a flat SOPS env file (default `env.enc.yaml` at
-the git root), the pass password store, or `--host`: macOS Keychain or Linux
+the git root), the pass or passage password store, or `--host`: macOS Keychain or Linux
 systemd-creds bound to this host's TPM2 chip, its host key and the current
 user. Tools consume host credentials with `secret-entry read NAME`.
 """
@@ -190,8 +190,17 @@ def sops_save(path: Path, key: str, value: str) -> bool:
 
 def pass_store() -> Path:
     return Path(
-        os.environ.get("PASSWORD_STORE_DIR") or Path.home() / ".password-store"
+        os.environ.get("PASSAGE_DIR")
+        or os.environ.get("PASSWORD_STORE_DIR")
+        or Path.home() / ".password-store"
     ).expanduser()
+
+
+def pass_tool() -> str:
+    """passage once the store is migrated to age, pass otherwise."""
+    if os.environ.get("PASSAGE_DIR") or (pass_store() / ".age-recipients").is_file():
+        return "passage"
+    return "pass"
 
 
 def validate_pass_name(name: str) -> None:
@@ -205,27 +214,30 @@ def validate_pass_name(name: str) -> None:
 
 def pass_contains(name: str) -> bool:
     validate_pass_name(name)
-    return (pass_store() / f"{name}.gpg").is_file()
+    suffix = ".age" if pass_tool() == "passage" else ".gpg"
+    return (pass_store() / f"{name}{suffix}").is_file()
 
 
 def pass_save(name: str, value: str) -> None:
     validate_pass_name(name)
     validate_value(value)
+    tool = pass_tool()
     try:
         result = subprocess.run(
-            ["pass", "insert", "--multiline", "--force", name],
+            [tool, "insert", "--multiline", "--force", name],
             input=f"{value}\n".encode(),
             capture_output=True,
             timeout=120,
             check=False,
+            env={**os.environ, "PASSAGE_DIR": str(pass_store())},
         )
     except FileNotFoundError:
-        raise SecretError("pass is unavailable; install password-store.") from None
+        raise SecretError(f"{tool} is unavailable; install it.") from None
     except subprocess.TimeoutExpired:
-        raise SecretError("pass timed out; the entry may not be saved.") from None
+        raise SecretError(f"{tool} timed out; the entry may not be saved.") from None
     if result.returncode or not pass_contains(name):
         raise SecretError(
-            "pass failed. Check the store and its GPG recipients; diagnostics withheld."
+            f"{tool} failed. Check the store and its recipients; diagnostics withheld."
         )
 
 
@@ -395,7 +407,8 @@ pass_option = click.option(
     "--pass",
     "use_pass",
     is_flag=True,
-    help="Use the pass password store; NAME is an entry such as team/service/token.",
+    help="Use the pass (or, once migrated to age, passage) password store; "
+    "NAME is an entry such as team/service/token.",
 )
 tpm_option = click.option(
     "--tpm",
@@ -449,7 +462,7 @@ def request(
         return 0
     if use_pass:
         validate_pass_name(name)
-        where = f"pass store {pass_store()}"
+        where = f"{pass_tool()} store {pass_store()}"
         print(f"{'Replace' if pass_contains(name) else 'Add'} {name} in {where}.")
         pass_save(name, prompt_secret(name))
         print(f"{name}: saved in {where}.")
@@ -483,7 +496,7 @@ def status(
         check_tpm()
         present, where = tpm_contains(name), f"host credentials {tpm_dir()}"
     elif use_pass:
-        present, where = pass_contains(name), f"pass store {pass_store()}"
+        present, where = pass_contains(name), f"{pass_tool()} store {pass_store()}"
     else:
         path = env_file(file)
         present, where = sops_contains(path, name), shown(path)

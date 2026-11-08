@@ -1,0 +1,8 @@
+{{- if includeTemplate "age-plugin-agent" . -}}
+#!/bin/sh
+# plist hash: {{ includeTemplate "Library/private_LaunchAgents/de.enno.age-plugin-se-agent.plist.tmpl" . | sha256sum }}
+set -eu
+plist="$HOME/Library/LaunchAgents/de.enno.age-plugin-se-agent.plist"
+launchctl bootout "gui/$(id -u)" "$plist" 2>/dev/null || true
+launchctl bootstrap "gui/$(id -u)" "$plist"
+{{ end -}}

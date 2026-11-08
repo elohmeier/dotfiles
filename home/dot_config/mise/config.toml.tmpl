@@ -4,6 +4,12 @@ experimental = true
 
 [env]
 SOPS_AGE_KEY_FILE = "{{ .chezmoi.homeDir }}/.config/sops/age/keys.txt"
-{{- if stat (joinPath .chezmoi.homeDir "repos/github.com/elohmeier/password-store") }}
-PASSWORD_STORE_DIR = "{{ .chezmoi.homeDir }}/repos/github.com/elohmeier/password-store"
+{{- $store := joinPath .chezmoi.homeDir "repos/github.com/elohmeier/password-store" }}
+{{- if stat $store }}
+PASSWORD_STORE_DIR = "{{ $store }}"
+{{- end }}
+{{- /* passage takes over once the store has been migrated to age */}}
+{{- if stat (joinPath $store ".age-recipients") }}
+PASSAGE_DIR = "{{ $store }}"
+PASSAGE_IDENTITIES_FILE = "{{ .chezmoi.homeDir }}/.passage/identities"
 {{- end }}

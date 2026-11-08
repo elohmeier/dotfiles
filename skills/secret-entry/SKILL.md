@@ -1,6 +1,6 @@
 ---
 name: secret-entry
-description: Request a credential (token, password, API key) from the user without it passing through chat, tool calls, arguments, or logs. Use whenever a task needs a secret the user must supply or rotate, when checking whether a secret is already stored in a repository's SOPS env file (env.enc.yaml) or the pass password store, or when a repository's instructions mention `secret-entry` or `secrets:request`.
+description: Request a credential (token, password, API key) from the user without it passing through chat, tool calls, arguments, or logs. Use whenever a task needs a secret the user must supply or rotate, when checking whether a secret is already stored in a repository's SOPS env file (env.enc.yaml) or the pass/passage password store, or when a repository's instructions mention `secret-entry` or `secrets:request`.
 ---
 
 # Secret Entry
@@ -16,9 +16,11 @@ terminal and writes straight to encrypted storage. It never prints values.
   selects another file (e.g. `clusters/production/.env.enc.yaml`). Encryption
   follows the nearest `.sops.yaml` above the file. Run from the repository so
   its mise-pinned `sops` is on PATH.
-- **pass** (`--pass`): NAME is an entry such as `team/service/token` in
-  `$PASSWORD_STORE_DIR`. pass encrypts to the store's GPG recipients and
-  commits if the store is a git repository.
+- **pass/passage** (`--pass`): NAME is an entry such as `team/service/token`
+  in `$PASSAGE_DIR` or `$PASSWORD_STORE_DIR`. Once the store has an
+  `.age-recipients` file (or `PASSAGE_DIR` is set), passage encrypts to its
+  age recipients; otherwise pass encrypts to the GPG recipients. Both commit if
+  the store is a git repository.
 - **Host credential** (`--host`): use for personal CLI tokens such as
   `KANBOARD_TOKEN`. On macOS, stores in the user's Keychain under service
   `secret-entry`, with KEY as the account, using the native API. Keychain may
@@ -71,10 +73,11 @@ Secrets), use that wrapper; its own instructions take precedence.
 
 - Never ask for secret values in chat, clarification tools, screenshots,
   command arguments, shell history, or plaintext files.
-- Never print secrets: no `sops decrypt` of whole files, no `pass show` in an
-  agent tool call, no `env` dumps.
+- Never print secrets: no `sops decrypt` of whole files, no `pass show`/`passage show`
+  in an agent tool call, no `env` dumps.
 - Consume a stored value inside the process that needs it (mise env loading,
-  `sops decrypt` piped into a program, `pass show` captured by a program) and
+  `sops decrypt` piped into a program, `pass show`/`passage show`
+  captured by a program) and
   send it directly to the intended API. Keep values out of `curl` or CLI
   arguments and withhold request bodies and credentials from logs.
 - `secret-entry read KEY` prints a host credential for a tool to consume

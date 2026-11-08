@@ -1,0 +1,10 @@
+[Unit]
+Description=age-plugin-tpm unlock agent socket
+
+[Socket]
+ListenStream=%t/age-plugin-tpm/agent.sock
+DirectoryMode=0700
+SocketMode=0600
+
+[Install]
+WantedBy=sockets.target

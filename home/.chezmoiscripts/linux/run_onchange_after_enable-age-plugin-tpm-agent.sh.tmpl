@@ -1,0 +1,8 @@
+{{- if includeTemplate "age-plugin-agent" . -}}
+#!/bin/sh
+# age-plugin-tpm-agent.socket: {{ include "dot_config/systemd/user/age-plugin-tpm-agent.socket" | sha256sum }}
+# age-plugin-tpm-agent.service: {{ includeTemplate "dot_config/systemd/user/age-plugin-tpm-agent.service.tmpl" . | sha256sum }}
+systemctl --user daemon-reload
+systemctl --user enable --now age-plugin-tpm-agent.socket
+systemctl --user try-restart age-plugin-tpm-agent.service
+{{ end -}}
