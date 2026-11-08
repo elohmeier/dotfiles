@@ -100,7 +100,9 @@ private key is bound to this machine; copying the `.tpm` file to another machine
 does not make it usable there.
 
 For passphrase-protected keys, chezmoi sets `SSH_ASKPASS` in the agent service
-using `ssh-askpass` from `PATH` or an installed GCR helper (GCR 4, then GCR 3).
+using a standalone `ssh-askpass` or, when `pinentry-gnome3` is installed, the
+managed `~/.local/bin/ssh-tpm-askpass` adapter. GCR's internal `gcr*-ssh-askpass`
+programs require a private GCR socket and cannot be used directly.
 The Linux hook reloads systemd and restarts a running TPM agent when the rendered
 service configuration changes.
 

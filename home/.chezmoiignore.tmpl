@@ -54,3 +54,7 @@ Library/**
 {{ if not (includeTemplate "ssh-tpm-agent" .) }}
 .config/systemd/user/ssh-tpm-agent.*
 {{- end }}
+
+{{ if not (and (includeTemplate "ssh-tpm-agent" .) (lookPath "pinentry-gnome3")) }}
+.local/bin/ssh-tpm-askpass
+{{- end }}

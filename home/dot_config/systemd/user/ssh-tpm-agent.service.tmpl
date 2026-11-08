@@ -3,7 +3,7 @@ Description=SSH TPM agent
 Requires=ssh-tpm-agent.socket
 
 [Service]
-{{- with or (lookPath "ssh-askpass") (lookPath "/usr/libexec/gcr4-ssh-askpass") (lookPath "/usr/libexec/gcr-ssh-askpass") }}
+{{- with or (lookPath "ssh-askpass") (lookPath "/usr/libexec/openssh/gnome-ssh-askpass") (and (lookPath "pinentry-gnome3") "%h/.local/bin/ssh-tpm-askpass") }}
 Environment=SSH_ASKPASS={{ . }}
 {{- end }}
 ExecStart={{ includeTemplate "ssh-tpm-agent" . }}/ssh-tpm-agent

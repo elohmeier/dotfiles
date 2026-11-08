@@ -1,0 +1,28 @@
+#!{{ lookPath "bash" }}
+set -euo pipefail
+
+prompt=${1//%/%25}
+prompt=${prompt//$'\r'/%0D}
+prompt=${prompt//$'\n'/%0A}
+prompt=${prompt//\\/%5C}
+{
+    printf 'SETTITLE SSH key\nSETDESC %s\n' "$prompt"
+    case ${SSH_ASKPASS_PROMPT:-} in
+        confirm) printf 'CONFIRM\n' ;;
+        none) printf 'CONFIRM --one-button\n' ;;
+        *) printf 'GETPIN\n' ;;
+    esac
+    printf 'BYE\n'
+} | "{{ lookPath "pinentry-gnome3" }}" | {
+    password=
+    while IFS= read -r line; do
+        case $line in
+            'D '*) password+=${line#D } ;;
+            'ERR '*) exit 1 ;;
+        esac
+    done
+    password=${password//%0D/$'\r'}
+    password=${password//%0A/$'\n'}
+    password=${password//%25/%}
+    printf '%s' "$password"
+}
