@@ -23,6 +23,7 @@ dependencies = [
 ]
 
 [project.scripts]
+h = "scripts.h:main"
 ghq-glab-cloneall = "scripts.ghq_glab_cloneall:main"
 ghq-bitbucket-cloneall = "scripts.ghq_bitbucket_cloneall:main"
 backup-pg = "scripts.backup_pg:cli"
