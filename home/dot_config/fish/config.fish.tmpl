@@ -6,6 +6,10 @@ set -gx EDITOR {{ . }}
 {{- if stat (joinPath .chezmoi.homeDir "repos/github.com/elohmeier/password-store") }}
 set -gx PASSWORD_STORE_DIR "{{ .chezmoi.homeDir }}/repos/github.com/elohmeier/password-store"
 {{- end }}
+{{- if stat (joinPath .chezmoi.homeDir "repos/github.com/elohmeier/password-store/.age-recipients") }}
+set -gx PASSAGE_DIR "$PASSWORD_STORE_DIR"
+set -gx PASSAGE_IDENTITIES_FILE "{{ .chezmoi.homeDir }}/.passage/identities"
+{{- end }}
 
 if status is-interactive
   set -g fish_greeting
