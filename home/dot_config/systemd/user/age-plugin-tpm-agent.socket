@@ -5,6 +5,7 @@ Description=age-plugin-tpm unlock agent socket
 ListenStream=%t/age-plugin-tpm/agent.sock
 DirectoryMode=0700
 SocketMode=0600
+RemoveOnStop=yes
 
 [Install]
 WantedBy=sockets.target
