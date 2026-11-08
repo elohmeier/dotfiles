@@ -1,4 +1,6 @@
-{{- /* brew bin dir of ssh-tpm-agent on TPM machines, empty otherwise */ -}}
+{{- /* brew bin dir of installed ssh-tpm-agent on TPM machines, empty otherwise */ -}}
 {{- if and (eq .chezmoi.os "linux") (stat "/dev/tpmrm0") (lookPath "brew") -}}
-{{- lookPath "brew" | dir | dir }}/opt/ssh-tpm-agent/bin
+{{- with lookPath (joinPath (lookPath "brew" | dir | dir) "opt/ssh-tpm-agent/bin/ssh-tpm-agent") -}}
+{{- dir . -}}
+{{- end -}}
 {{- end -}}

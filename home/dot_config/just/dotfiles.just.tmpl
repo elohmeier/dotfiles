@@ -15,11 +15,35 @@ diskless-swap-status:
     diskless-swap status
 {{- end }}
 
+{{ with (lookPath "/opt/workbrew/bin/brew" | default (lookPath "brew")) -}}
+# Install missing base command-line tools via Homebrew
+install-packages:
+    #!/bin/sh
+    set -eu
+    set --
+    for package in bat btop eza fd fish fzf just ncdu ripgrep sops uv vivid zoxide{{ if and (eq $.chezmoi.os "linux") (stat "/dev/tpmrm0") }} elohmeier/tap/ssh-tpm-agent{{ end }}; do
+        tool=${package##*/}
+        [ "$package" != ripgrep ] || tool=rg
+        command -v "$tool" >/dev/null 2>&1 || set -- "$@" "$package"
+    done
+    [ "$#" -eq 0 ] || "{{ . }}" install "$@"
+
+{{ end -}}
+{{ if eq .chezmoi.os "darwin" -}}
+# Install fonts in ~/Library/Fonts
+install-fonts:
+    "{{ lookPath "bash" }}" "{{ .chezmoi.workingTree }}/scripts/install-fonts.sh"
+
+{{ end -}}
 # Install or update agent skills for Claude Code and Codex
 install-skills:
     "{{ lookPath "npx" }}" --yes skills add "{{ .chezmoi.workingTree }}/skills" --skill '*' --agent claude-code --agent codex --global --yes
 
 {{- if eq .chezmoi.os "linux" }}
+# Allow the wheel group to access the TPM device (requires sudo)
+setup-tpm-udev:
+    "{{ lookPath "sh" }}" "{{ .chezmoi.workingTree }}/scripts/setup-tpm-udev.sh"
+
 # Install Caddy and enable the agent-publish user service (requires systemd)
 enable-agent-publish:
 {{- if lookPath "brew" }}

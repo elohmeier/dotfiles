@@ -16,9 +16,12 @@ ui = "auto"
 gpgSign = false
 verbose = true
 
+{{ with lookPath "hunk" -}}
 [core]
-pager = "{{ lookPath "hunk" | default "hunk" }} pager"
+pager = "{{ . }} pager"
 
+{{ end -}}
+{{ if lookPath "delta" -}}
 [delta]
 features = "{{- template "theme" . -}}"
 navigate = true
@@ -30,6 +33,7 @@ hunk-header-decoration-style = "blue box"
 whitespace-error-style = "22 reverse"
 
 {{ includeTemplate "git-delta-theme" . -}}
+{{ end -}}
 [diff]
 algorithm = "histogram"
 colorMoved = "plain"

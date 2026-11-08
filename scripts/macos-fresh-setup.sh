@@ -273,7 +273,7 @@ Standard user: $STANDARD_USER
 Next steps:
 1. Log out and log in as '$STANDARD_USER'
 2. Open Terminal
-3. Run: brew install fish chezmoi
+3. Run: brew install fish chezmoi just
 4. Run: chezmoi init https://github.com/elohmeier/dotfiles.git
 5. Run: sh ~/.local/share/chezmoi/scripts/bootstrap.sh
 

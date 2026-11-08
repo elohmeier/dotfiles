@@ -30,7 +30,7 @@ This will:
 After setup, log in as the standard user and manually install what you need:
 
 ```bash
-brew install fish chezmoi
+brew install fish chezmoi just
 chezmoi init https://github.com/elohmeier/dotfiles.git
 sh "$(chezmoi source-path)/../scripts/bootstrap.sh"
 ```
@@ -44,13 +44,19 @@ chezmoi init https://github.com/elohmeier/dotfiles.git
 sh "$(chezmoi source-path)/../scripts/bootstrap.sh"
 ```
 
-Bootstrap installs the base Homebrew/APK packages first, then starts a fresh
-`chezmoi apply` so templates detect the newly installed tools. On other systems,
-install the tools you need before applying the configuration.
+Chezmoi does not install Homebrew packages or macOS fonts automatically. Use
+`djust install-packages` for base packages and `djust install-fonts` for fonts.
+Base package installation skips commands already in `PATH`, including `python3`
+on Alpine. It includes ripgrep (`rg`) and excludes Node.js/npm.
+Run `chezmoi apply` afterwards so templates detect the newly installed tools.
+Install Fish and just before using `djust` in Fish.
 
-On Workbrew-managed Macs, the package hooks use `/opt/workbrew/bin/brew`.
+Bootstrap installs base APK packages on Alpine before applying the dotfiles.
+On other systems, install the tools you need before applying the configuration.
+
+On Workbrew-managed Macs, `djust install-packages` uses `/opt/workbrew/bin/brew`.
 Keep that wrapper ahead of `/opt/homebrew/bin` on `PATH`.
-The font hook uses cask metadata to install fonts in `~/Library/Fonts` as the
+`djust install-fonts` uses cask metadata to install fonts in `~/Library/Fonts` as the
 login user, so they do not appear as installed casks.
 
 ## Manual Setup
@@ -62,11 +68,14 @@ chezmoi init https://github.com/elohmeier/dotfiles.git
 # Preview changes
 chezmoi --skip-secrets diff
 
-# Install base packages, then apply dotfiles
+# Apply dotfiles (also installs base APK packages on Alpine)
 sh "$(chezmoi source-path)/../scripts/bootstrap.sh"
 ```
 
 Subsequent updates use `chezmoi update` or `chezmoi apply` as usual.
+
+On Linux, TPM device permissions are configured only with `djust setup-tpm-udev`
+(requires sudo).
 
 ## Configuration
 

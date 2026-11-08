@@ -1,4 +1,4 @@
-{{- if .woodpeckerURL -}}
+{{- if and .woodpeckerURL (lookPath "woodpecker-cli") -}}
 # Use the token file written by `djust forge-login` instead of the keyring.
 function woodpecker-cli --wraps woodpecker-cli
     set -l config_home (set -q XDG_CONFIG_HOME; and echo $XDG_CONFIG_HOME; or echo ~/.config)

@@ -1,18 +1,15 @@
-{{- $brew := lookPath "/opt/workbrew/bin/brew" | default (lookPath "brew") -}}
-{{- $apk := lookPath "apk" -}}
+{{- with lookPath "apk" -}}
 #!/bin/sh
-{{ if $brew -}}
 set -eu
 
-echo "Installing packages..."
-
-"{{ $brew }}" install bat btop eza fd fzf just node ncdu sops uv vivid zoxide{{ if not (lookPath "fish") }} fish{{ end }}{{ if includeTemplate "ssh-tpm-agent" . }} elohmeier/tap/ssh-tpm-agent{{ end }}
-{{ else if $apk -}}
-set -eu
-
-echo "Installing packages..."
-
-"{{ $apk }}" add bat btop curl eza fd fish fzf git just ncdu ncurses nodejs npm python3 ripgrep sops uv vivid zoxide
-{{ else -}}
-exit 0
+set --
+for package in bat btop curl eza fd fish fzf git just ncdu ncurses python3 ripgrep sops uv vivid zoxide; do
+	tool=$package
+	case "$package" in
+	ncurses) tool=tic ;;
+	ripgrep) tool=rg ;;
+	esac
+	command -v "$tool" >/dev/null 2>&1 || set -- "$@" "$package"
+done
+[ "$#" -eq 0 ] || "{{ . }}" add "$@"
 {{ end -}}

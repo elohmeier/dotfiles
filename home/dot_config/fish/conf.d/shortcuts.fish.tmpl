@@ -18,25 +18,37 @@ abbr --add -- gl 'git log'
 abbr --add -- gp 'git pull'
 abbr --add -- gpp 'git push'
 abbr --add -- gst 'git status'
-abbr --add -- kc kubectl
-abbr --add -- nb 'nix build'
-abbr --add -- nf 'nix flake'
-abbr --add -- nfl 'nix flake lock'
-abbr --add -- nfu 'nix flake update'
-abbr --add -- nr 'nix run'
-abbr --add -- rc 'ruff check .'
-abbr --add -- rcu 'ruff check . --unsafe-fixes'
-abbr --add -- rf 'ruff format .'
-abbr --add -- rff 'ruff format . && ruff check . --unsafe-fixes'
-abbr --add -- y yazi
+{{- if lookPath "kubectl" }}
+    abbr --add -- kc kubectl
+{{- end }}
+{{- if or (lookPath "nix") (lookPath "orb") }}
+    abbr --add -- nb 'nix build'
+    abbr --add -- nf 'nix flake'
+    abbr --add -- nfl 'nix flake lock'
+    abbr --add -- nfu 'nix flake update'
+    abbr --add -- nr 'nix run'
+{{- end }}
+{{- if lookPath "ruff" }}
+    abbr --add -- rc 'ruff check .'
+    abbr --add -- rcu 'ruff check . --unsafe-fixes'
+    abbr --add -- rf 'ruff format .'
+    abbr --add -- rff 'ruff format . && ruff check . --unsafe-fixes'
+{{- end }}
+{{- if lookPath "yazi" }}
+    abbr --add -- y yazi
+{{- end }}
 
 alias gaapf 'git add . && git commit --amend --no-edit && git push --force-with-lease'
 alias ww 'git add . && git commit -m wip'
 alias gapf 'git commit --amend --no-edit && git push --force-with-lease'
-alias gg lazygit
+{{- if lookPath "lazygit" }}
+    alias gg lazygit
+    alias lgg lazygit
+{{- end }}
 alias grep 'grep --color'
-alias lgg lazygit
-alias nbconvert 'jupyter nbconvert --to script --stdout'
+{{- if lookPath "jupyter" }}
+    alias nbconvert 'jupyter nbconvert --to script --stdout'
+{{- end }}
 
 {{- if lookPath "eza" }}
     alias l 'eza -al'
@@ -54,7 +66,9 @@ alias nbconvert 'jupyter nbconvert --to script --stdout'
     alias vi nvim
     alias vim nvim
 {{- end }}
-alias djust "just --justfile $HOME/.config/just/dotfiles.just"
+{{- if lookPath "just" }}
+    alias djust "just --justfile $HOME/.config/just/dotfiles.just"
+{{- end }}
 
 {{- if and (not (lookPath "nix")) (lookPath "orb") }}
     alias nix 'orb -m nixos nix --extra-experimental-features "nix-command flakes"'
