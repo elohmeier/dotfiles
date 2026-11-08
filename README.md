@@ -74,8 +74,52 @@ sh "$(chezmoi source-path)/../scripts/bootstrap.sh"
 
 Subsequent updates use `chezmoi update` or `chezmoi apply` as usual.
 
-On Linux, TPM device permissions are configured only with `djust setup-tpm-udev`
-(requires sudo).
+### TPM-backed SSH on Linux
+
+On a Linux machine with TPM 2.0 and a systemd user session:
+
+```sh
+brew install elohmeier/tap/ssh-tpm-agent
+chezmoi apply
+djust setup-tpm-udev
+djust setup-tpm-ssh
+```
+
+`setup-tpm-udev` uses [run0](https://www.freedesktop.org/software/systemd/man/latest/run0.html)
+(systemd 256+) and polkit for administrator authorization. Run it as your normal
+user. It installs `/etc/udev/rules.d/99-tpm.rules`, granting that user's UID
+read/write access to `/dev/tpmrm0` with mode `0600`, and applies the rule immediately.
+No wheel membership or logout is needed; access also works over SSH. This is a
+single-user rule: rerunning it for another user replaces the owner. Chezmoi hooks
+do not change system TPM permissions.
+
+`setup-tpm-ssh` checks prerequisites, creates `~/.ssh/id_ecdsa.tpm` and
+`~/.ssh/id_ecdsa.pub`, starts the agent, and offers GitHub registration. It reuses
+an existing TPM key and refuses to overwrite an existing software key. The TPM
+private key is bound to this machine; copying the `.tpm` file to another machine
+does not make it usable there.
+
+Open a new terminal after setup and run `ssh-add -l`. Fish selects the TPM agent
+for local sessions and preserves forwarded agents over SSH. To check this
+machine's TPM agent explicitly, including over SSH:
+
+```sh
+env SSH_AUTH_SOCK="$XDG_RUNTIME_DIR/ssh-tpm-agent.sock" ssh-add -l
+```
+
+If setup fails:
+
+- **Recipe missing:** run `chezmoi apply` to refresh `djust` recipes after updating
+  this checkout or installing tools. Both TPM setup recipes are available on Linux.
+- **No `/dev/tpmrm0`:** enable TPM/fTPM/PTT in firmware, or expose a TPM to the VM.
+- **Permission denied:** run `djust setup-tpm-udev`, then retry `djust setup-tpm-ssh`.
+- **run0 missing or authorization fails:** install systemd 256+ and polkit using
+  your distribution's package manager. Retry from an interactive login session
+  with an administrator available to approve the polkit prompt. Inspect
+  `systemctl status polkit.service systemd-udevd.service`.
+- **Agent failure:** inspect `journalctl --user -b -u ssh-tpm-agent.service`.
+- **GitHub registration fails:** run `gh auth login -h github.com`, then retry, or
+  paste `~/.ssh/id_ecdsa.pub` at <https://github.com/settings/ssh/new>.
 
 ## Configuration
 

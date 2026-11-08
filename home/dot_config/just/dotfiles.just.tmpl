@@ -40,7 +40,7 @@ install-skills:
     "{{ lookPath "npx" }}" --yes skills add "{{ .chezmoi.workingTree }}/skills" --skill '*' --agent claude-code --agent codex --global --yes
 
 {{- if eq .chezmoi.os "linux" }}
-# Allow the wheel group to access the TPM device (requires sudo)
+# Grant this user TPM access through run0/polkit; then run setup-tpm-ssh
 setup-tpm-udev:
     "{{ lookPath "sh" }}" "{{ .chezmoi.workingTree }}/scripts/setup-tpm-udev.sh"
 
@@ -315,20 +315,10 @@ setup-se-ssh:
             gh ssh-key add "$dst.pub" -t "$(scutil --get ComputerName) Secure Enclave ($prot)"
     done
 
-{{ else if includeTemplate "ssh-tpm-agent" . -}}
-# Create a TPM-sealed SSH key (~/.ssh/id_ecdsa.tpm) for ssh-tpm-agent and optionally register it on GitHub
+{{ else if eq .chezmoi.os "linux" -}}
+# Check TPM access, create or reuse ~/.ssh/id_ecdsa.tpm, and optionally register it on GitHub
 setup-tpm-ssh:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    [ -f ~/.ssh/id_ecdsa.tpm ] || ssh-tpm-keygen -f ~/.ssh/id_ecdsa -C "$(hostname) TPM"
-    systemctl --user try-restart ssh-tpm-agent.service
-    cat ~/.ssh/id_ecdsa.pub
-    read -rp "Add this key to GitHub? [y/N] " answer
-    [[ $answer == [yY]* ]] || exit 0
-    gh api -i user | grep -iE '^x-oauth-scopes:.*(admin|write):public_key' >/dev/null ||
-        gh auth refresh -h github.com -s admin:public_key
-    gh api user/keys --jq '.[].key' | grep -qF "$(cut -d' ' -f2 ~/.ssh/id_ecdsa.pub)" ||
-        gh ssh-key add ~/.ssh/id_ecdsa.pub -t "$(hostname) TPM"
+    "{{ lookPath "bash" }}" "{{ .chezmoi.workingTree }}/scripts/setup-tpm-ssh.sh"
 
 {{ end -}}
 # Generate age key from SSH key for sops/mise
