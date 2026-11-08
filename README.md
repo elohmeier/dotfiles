@@ -128,6 +128,9 @@ after installing Ruby executables when the installer has not already done so.
 Fish universal defaults and Ghostty terminfo are updated only when their inputs
 change.
 
+Chezmoi adds [GitHub's official SSH host keys](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints)
+to `~/.ssh/known_hosts`, preserving existing entries without adding duplicates.
+
 Password-store recipient public keys live in
 `home/private_dot_gnupg/pass-recipients.asc`.
 `home/.chezmoiscripts/run_onchange_after_import-pass-recipients.sh.tmpl` imports
