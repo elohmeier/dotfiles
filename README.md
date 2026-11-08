@@ -148,9 +148,21 @@ gpg --armor --export FINGERPRINT... > home/private_dot_gnupg/pass-recipients.asc
 Keep `.gpg-id` in the password-store repository. Private keys and GPG ownertrust
 are provisioned separately.
 
-Neovim uses Ruff for Python linting and ty for type checking. To use basedpyright
-in a project, set `NVIM_PYTHON_LSP = "basedpyright"` in its mise `[env]` table
-before starting Neovim.
+`djust install-nvim` installs Neovim, Tree-sitter CLI, Git, and ripgrep for code
+browsing, skipping commands already in `PATH`. Tree-sitter parser installation
+also needs a C compiler, curl, and tar on the system.
+
+`djust install-nvim-extras` adds language servers, formatters, notebook conversion,
+and images. Neovim activates language servers, notebook conversion, and images
+when their executables are available; format-on-save skips buffers without an
+available formatter. Run `chezmoi apply` after installing extras to enable Git's
+notebook diff settings, then restart Neovim. `djust install-extras` includes only
+the basic Neovim setup; agent CLIs remain in `djust install-npm-tools`.
+
+The Neovim extras use Ruff for Python linting and ty for type checking. To use
+basedpyright in a project, install it separately with `brew install basedpyright`
+and set `NVIM_PYTHON_LSP = "basedpyright"` in its mise `[env]` table before starting
+Neovim.
 
 macOS application config links under `~/Library` are managed directly by chezmoi.
 Move any existing directories at those link paths aside before the first apply.

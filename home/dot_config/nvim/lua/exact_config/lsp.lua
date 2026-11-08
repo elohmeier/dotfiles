@@ -1,4 +1,4 @@
-vim.lsp.enable({
+for _, name in ipairs({
   vim.env.NVIM_PYTHON_LSP or "ty",
   "bashls",
   "helm_ls",
@@ -13,7 +13,11 @@ vim.lsp.enable({
   "tinymist",
   "tsserver",
   "yamlls",
-})
+}) do
+  if vim.fn.executable(vim.lsp.config[name].cmd[1]) == 1 then
+    vim.lsp.enable(name)
+  end
+end
 
 vim.diagnostic.config({ virtual_lines = { current_line = true } })
 

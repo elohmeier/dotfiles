@@ -81,7 +81,7 @@ install-grafana-tools:
 # Install or update global npm tools
 install-npm-tools:
     "{{ lookPath "mkdir" }}" -p "$HOME/.local/lib"
-    "{{ lookPath "npm" | default "npm" }}" install --global --no-audit --no-fund --allow-scripts=@anthropic-ai/claude-code,@google/genai,esbuild,protobufjs @anthropic-ai/claude-code@latest @earendil-works/pi-coding-agent@latest hunkdiff@latest markdownlint-cli@latest svelte-language-server@latest
+    "{{ lookPath "npm" | default "npm" }}" install --global --no-audit --no-fund --allow-scripts=@anthropic-ai/claude-code,@google/genai,esbuild,protobufjs @anthropic-ai/claude-code@latest @earendil-works/pi-coding-agent@latest hunkdiff@latest markdownlint-cli@latest
 
 # Check global npm tools and clean the package cache
 npm-maintain:
@@ -89,42 +89,41 @@ npm-maintain:
     "{{ lookPath "npm" | default "npm" }}" cache verify
     -"{{ lookPath "npm" | default "npm" }}" doctor
 
-# Install Neovim and its language tooling
+# Install Neovim and Tree-sitter support for browsing code
 install-nvim:
+    #!/bin/sh
+    set -eu
+    set --
+    for package in neovim:nvim tree-sitter-cli:tree-sitter git:git ripgrep:rg; do
+        command -v "${package#*:}" >/dev/null 2>&1 || set -- "$@" "${package%:*}"
+    done
+    [ "$#" -eq 0 ] || "{{ lookPath "/opt/workbrew/bin/brew" | default (lookPath "brew") | default "brew" }}" install "$@"
+
+# Install optional language servers, formatters, notebooks, and images
+install-nvim-extras: install-nvim
     #!/bin/bash
     set -eufo pipefail
 
-    if ! command -v brew &> /dev/null; then
-        echo "Homebrew not found. Skipping package installation."
-        exit 1
-    fi
-
-    brew trust --tap elohmeier/tap hashicorp/tap
-    brew bundle --file=/dev/stdin <<'EOF'
+    brew="{{ lookPath "/opt/workbrew/bin/brew" | default (lookPath "brew") | default "brew" }}"
+    "$brew" trust --tap elohmeier/tap hashicorp/tap
+    "$brew" bundle --file=/dev/stdin <<'EOF'
     tap "elohmeier/tap"
     tap "hashicorp/tap"
-    brew "basedpyright"
     brew "bash-language-server"
-    brew "cargo-sweep"
     brew "clang-format"
     brew "dprint"
     brew "elohmeier/tap/jsonnet-language-server"
-    brew "fd"
-    brew "git"
     brew "go-jsonnet"
     brew "hashicorp/tap/packer"
     brew "helm"
     brew "helm-ls"
     brew "imagemagick"
-    brew "just"
     brew "lazygit"
     brew "libxml2"
     brew "lua-language-server"
-    brew "neovim"
     brew "nixfmt"
     brew "node"
     brew "opentofu"
-    brew "ripgrep"
     brew "ruby-lsp"
     brew "ruff"
     brew "rustup"
@@ -134,7 +133,6 @@ install-nvim:
     brew "taplo"
     brew "terraform-ls"
     brew "tinymist"
-    brew "tree-sitter-cli"
     brew "ty"
     brew "typescript-language-server"
     brew "typst"
@@ -143,12 +141,12 @@ install-nvim:
     brew "yaml-language-server"
     EOF
 
-    "{{ lookPath "just" | default "just" }}" --justfile {{"{{"}} justfile() {{"}}"}} install-npm-tools
-    uv tool install --upgrade djade
-    uv tool install --upgrade jupytext
-    uv tool install --upgrade rumdl
-    "$(brew --prefix ruby)/bin/gem" install --user-install --bindir "$HOME/.local/bin" rubocop
-    rustup_bin="$(brew --prefix rustup)/bin"
+    "{{ lookPath "npm" | default "npm" }}" install --global --no-audit --no-fund svelte-language-server@latest
+    "{{ lookPath "uv" | default "uv" }}" tool install --upgrade djade
+    "{{ lookPath "uv" | default "uv" }}" tool install --upgrade jupytext
+    "{{ lookPath "uv" | default "uv" }}" tool install --upgrade rumdl
+    "$("$brew" --prefix ruby)/bin/gem" install --user-install --bindir "$HOME/.local/bin" rubocop
+    rustup_bin="$("$brew" --prefix rustup)/bin"
     export PATH="$rustup_bin:$PATH"
     "$rustup_bin/rustup" default stable
     "$rustup_bin/rustup" component add rust-analyzer
@@ -169,6 +167,7 @@ install-extras: install-nvim
     brew bundle --file=/dev/stdin <<'EOF'
     tap "elohmeier/tap"
     brew "atuin"
+    brew "cargo-sweep"
 {{- if not (lookPath "bat") }}
     brew "bat"
 {{- end }}

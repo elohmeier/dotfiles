@@ -40,8 +40,11 @@ colorMoved = "plain"
 mnemonicPrefix = true
 renames = true
 
+{{ with lookPath "jupytext" -}}
 [diff "jupytext"]
-textconv = "jupytext --to=markdown --output=-"
+textconv = {{ printf "%s --to=markdown --output=-" (. | quote) | quote }}
+
+{{ end -}}
 
 [fetch]
 all = true
