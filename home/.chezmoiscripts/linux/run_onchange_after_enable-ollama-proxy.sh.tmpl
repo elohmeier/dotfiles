@@ -1,0 +1,7 @@
+#!/bin/sh
+# Caddyfile: {{ include "dot_config/ollama-proxy/Caddyfile" | sha256sum }}
+# run: {{ include "dot_config/ollama-proxy/executable_run" | sha256sum }}
+# ollama-proxy.service: {{ include "dot_config/systemd/user/ollama-proxy.service" | sha256sum }}
+systemctl --user daemon-reload
+systemctl --user enable ollama-proxy.service
+systemctl --user restart ollama-proxy.service

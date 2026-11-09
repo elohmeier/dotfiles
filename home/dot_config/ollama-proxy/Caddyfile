@@ -1,0 +1,14 @@
+# Ollama Cloud proxy that adds the API key, so Lima VMs (http://192.168.5.2:11435)
+# and local tools never hold it. Run by ~/.config/systemd/user/ollama-proxy.service.
+{
+	admin off
+	auto_https off
+}
+
+:11435 {
+	bind 127.0.0.1
+	reverse_proxy https://ollama.com {
+		header_up Host {upstream_hostport}
+		header_up Authorization "Bearer {env.OLLAMA_API_KEY}"
+	}
+}

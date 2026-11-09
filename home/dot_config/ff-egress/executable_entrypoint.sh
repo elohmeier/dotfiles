@@ -77,6 +77,11 @@ if [[ -n "${ingress_in}" ]]; then
 	ip route replace default dev "${uplink_if}" scope link table "${FF_INGRESS_TABLE:-100}"
 	ip -6 route replace default dev "${uplink_if}" table "${FF_INGRESS_TABLE:-100}" 2>/dev/null || true
 fi
+# TCP destinations (ip:port) reachable via the uplink outside the tunnel, e.g. a host proxy.
+uplink_allow="${FF_UPLINK_ALLOW:-}"
+for dest in ${uplink_allow//,/ }; do
+	ingress_out+="    oifname \"${uplink_if}\" ip daddr ${dest%:*} tcp dport ${dest##*:} accept"$'\n'
+done
 
 peer_set=$(printf '%s, ' "${peer_ips[@]}")
 peer_set="${peer_set%, }"

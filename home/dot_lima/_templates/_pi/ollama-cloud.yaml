@@ -1,0 +1,47 @@
+# Mixin: point pi at Ollama Cloud (DeepSeek) through the host's ollama-proxy
+# (~/.config/ollama-proxy), which adds the API key: no secret ever enters the VM.
+minimumLimaVersion: 2.0.0
+provision:
+- mode: yq
+  path: "{{.Home}}/.pi/agent/models.json"
+  owner: "{{.User}}"
+  expression: |
+    .providers."ollama-cloud" = {
+      "name": "Ollama Cloud",
+      "baseUrl": "http://192.168.5.2:11435/v1",
+      "api": "openai-completions",
+      "apiKey": "added-by-host-proxy",
+      "compat": {
+        "supportsStore": false,
+        "supportsDeveloperRole": false,
+        "supportsReasoningEffort": true,
+        "supportsUsageInStreaming": true,
+        "maxTokensField": "max_tokens",
+        "supportsStrictMode": false
+      },
+      "models": [
+        {
+          "id": "deepseek-v4.1-flash:1017",
+          "name": "DeepSeek V4.1 Flash (2026-10-17, Ollama Cloud)",
+          "reasoning": true,
+          "thinkingLevelMap": {"off": "none", "minimal": "low", "low": "low", "medium": "medium", "high": "high", "xhigh": "high"},
+          "input": ["text", "image"],
+          "contextWindow": 1048576,
+          "maxTokens": 65536
+        },
+        {
+          "id": "deepseek-v4-pro:0813",
+          "name": "DeepSeek V4 Pro (2025-08-13, Ollama Cloud)",
+          "reasoning": true,
+          "thinkingLevelMap": {"off": "none", "minimal": "low", "low": "low", "medium": "medium", "high": "high", "xhigh": "high"},
+          "input": ["text"],
+          "contextWindow": 1048576,
+          "maxTokens": 65536
+        }
+      ]
+    }
+- mode: yq
+  path: "{{.Home}}/.pi/agent/settings.json"
+  owner: "{{.User}}"
+  expression: |
+    with(select(.defaultModel == null); .defaultProvider = "ollama-cloud" | .defaultModel = "deepseek-v4.1-flash:1017")

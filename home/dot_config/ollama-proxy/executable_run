@@ -1,0 +1,4 @@
+#!/bin/sh
+OLLAMA_API_KEY=$(sops -d --extract '["OLLAMA_API_KEY"]' "$HOME/repos/github.com/elohmeier/hf40/env.enc.yaml") || exit 1
+export OLLAMA_API_KEY
+exec caddy run --config "$HOME/.config/ollama-proxy/Caddyfile" --adapter caddyfile

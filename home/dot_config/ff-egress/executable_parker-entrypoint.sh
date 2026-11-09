@@ -9,6 +9,8 @@ state="/state/${profile}"
 # which leaves the namespace inbound-closed. Defined here rather than inside
 # the nftables heredoc because that runs in a pipeline subshell.
 ingress_tcp_ports="${FF_INGRESS_TCP_PORTS:-}"
+# TCP destinations (ip:port) reachable via the uplink outside the tunnel, e.g. a host proxy.
+uplink_allow="${FF_UPLINK_ALLOW:-}"
 # Routing table holding the reply route for those ports.
 FF_INGRESS_TABLE="${FF_INGRESS_TABLE:-100}"
 mkdir -p "${state}"
@@ -94,6 +96,9 @@ done < <(jq -r '.concentrators[] | [.id,.endpoint,.address4,.address6] | @tsv' "
 	# established conntrack state, so no new outbound can take this path.
 	for port in ${ingress_tcp_ports//,/ }; do
 		printf '    oifname "%s" tcp sport %s ct state established accept\n' "${uplink_if}" "${port}"
+	done
+	for dest in ${uplink_allow//,/ }; do
+		printf '    oifname "%s" ip daddr %s tcp dport %s accept\n' "${uplink_if}" "${dest%:*}" "${dest##*:}"
 	done
 	echo '  }'
 	echo '}'

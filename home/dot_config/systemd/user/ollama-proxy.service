@@ -1,0 +1,15 @@
+[Unit]
+Description=Ollama Cloud proxy adding the API key (Lima VMs: http://192.168.5.2:11435)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Environment=PATH=%h/.local/share/mise/shims:/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin
+WorkingDirectory=%h
+ExecStart=%h/.config/ollama-proxy/run
+Restart=on-failure
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

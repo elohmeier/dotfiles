@@ -4,7 +4,8 @@ Wants=network-online.target
 After=network-online.target
 
 [Service]
-Environment=FF_PROFILE=%i FF_INGRESS_TCP_PORTS=22
+# 192.168.5.2:11435 is the host's ollama-proxy (see template:_pi/ollama-cloud).
+Environment=FF_PROFILE=%i FF_INGRESS_TCP_PORTS=22 FF_UPLINK_ALLOW=192.168.5.2:11435
 ExecStartPre=/usr/local/sbin/ff-egress-down
 ExecStartPre=/bin/sh -c 'ip -j -4 route show default | jq -r ".[0].dev // empty" >/run/ff-egress-uplink'
 ExecStart=/usr/local/bin/entrypoint.sh

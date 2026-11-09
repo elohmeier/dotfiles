@@ -42,7 +42,9 @@ so fastd can open `/dev/net/tun`; the unprivileged workload keeps its label.
 The same scripts route a whole Lima VM through Freifunk via the
 `template:_ff/egress` mixin (`~/.lima/_templates/_ff/`), which runs them as
 `ff-egress@<profile>.service` with `FF_INGRESS_TCP_PORTS=22` so Lima's SSH
-stays reachable. All three entrypoints honour `FF_INGRESS_TCP_PORTS`.
+stays reachable, and `FF_UPLINK_ALLOW=192.168.5.2:11435` so pi reaches the host's
+Ollama Cloud proxy (`~/.config/ollama-proxy`) outside the tunnel. All three
+entrypoints honour `FF_INGRESS_TCP_PORTS` and `FF_UPLINK_ALLOW` (TCP `ip:port` list).
 
 ```sh
 limactl create --name=pentest-ffbs template:pentest-ffbs
