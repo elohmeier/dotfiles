@@ -64,6 +64,20 @@ for ip in "${peer_ips[@]}"; do
 	fi
 done
 
+# Ports opened inward for a workload sharing this namespace (empty: inbound-closed),
+# with replies routed back out of the uplink. Mirrors parker-entrypoint.sh.
+ingress_tcp_ports="${FF_INGRESS_TCP_PORTS:-}" ingress_in="" ingress_out=""
+for port in ${ingress_tcp_ports//,/ }; do
+	ingress_in+="    tcp dport ${port} accept"$'\n'
+	ingress_out+="    oifname \"${uplink_if}\" tcp sport ${port} ct state established accept"$'\n'
+	ip rule add ipproto 6 sport "${port}" lookup "${FF_INGRESS_TABLE:-100}" priority 100
+	ip -6 rule add ipproto 6 sport "${port}" lookup "${FF_INGRESS_TABLE:-100}" priority 100 2>/dev/null || true
+done
+if [[ -n "${ingress_in}" ]]; then
+	ip route replace default dev "${uplink_if}" scope link table "${FF_INGRESS_TABLE:-100}"
+	ip -6 route replace default dev "${uplink_if}" table "${FF_INGRESS_TABLE:-100}" 2>/dev/null || true
+fi
+
 peer_set=$(printf '%s, ' "${peer_ips[@]}")
 peer_set="${peer_set%, }"
 nft -f - <<EOF
@@ -75,13 +89,13 @@ table inet ff_egress {
     ct state established,related accept
     iifname "${FF_CLIENT_INTERFACE}" udp sport 67 udp dport 68 accept
     iifname "${FF_CLIENT_INTERFACE}" meta l4proto 58 accept
-  }
+${ingress_in}  }
   chain output {
     type filter hook output priority filter; policy drop;
     oifname "lo" accept
     oifname "${FF_CLIENT_INTERFACE}" accept
     oifname "${uplink_if}" ip daddr @fastd4 udp dport ${FF_FASTD_PORT} accept
-  }
+${ingress_out}  }
 }
 EOF
 

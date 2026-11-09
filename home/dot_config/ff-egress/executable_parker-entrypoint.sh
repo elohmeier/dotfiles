@@ -115,6 +115,11 @@ for i in "${!interfaces[@]}"; do
 	ip link set "${interface}" up
 done
 
+# Handshakes can take a while after the links come up, longer for a freshly registered key.
+for _ in $(seq 1 60); do
+	wg show all latest-handshakes | awk '$3 > 0 {found = 1} END {exit !found}' && break
+	sleep 1
+done
 candidates="${state}/candidates"
 : >"${candidates}"
 for i in "${!interfaces[@]}"; do
@@ -132,10 +137,12 @@ for i in "${!interfaces[@]}"; do
 done
 selected=${selected:-$(sort -n "${candidates}" | head -n 1 | cut -f2)}
 interface=${interfaces[selected]}
-ip route flush default
-ip -6 route flush default
-ip route add default dev "${interface}"
-ip -6 route add default dev "${interface}"
+# Delete one by one: flush rejects routes using nexthop objects (systemd-networkd).
+# Metric 1 keeps the tunnel ahead of uplink defaults re-added by DHCP or RAs.
+while ip route del default 2>/dev/null; do :; done
+while ip -6 route del default 2>/dev/null; do :; done
+ip route add default dev "${interface}" metric 1
+ip -6 route add default dev "${interface}" metric 1
 # Replies to published ports must leave through the uplink, not the tunnel.
 # The default route points into WireGuard, so without this an inbound
 # connection is accepted and its reply is routed into the tunnel and lost — the
@@ -168,8 +175,8 @@ while true; do
 		handshake=$(wg show "${interfaces[i]}" latest-handshakes | awk '{print $2}')
 		if (( $(date +%s) - ${handshake:-0} < 180 )); then
 			interface=${interfaces[i]}
-			ip route replace default dev "${interface}"
-			ip -6 route replace default dev "${interface}"
+			ip route replace default dev "${interface}" metric 1
+			ip -6 route replace default dev "${interface}" metric 1
 			printf '%s\n' "${interface}" >"${state}/selected"
 			break
 		fi

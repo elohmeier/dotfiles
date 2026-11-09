@@ -1,0 +1,13 @@
+[Unit]
+Description=Block egress until ff-egress is up
+DefaultDependencies=no
+Before=network-pre.target
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/nft -f /etc/ff-egress/killswitch.nft
+
+[Install]
+WantedBy=sysinit.target

@@ -1,0 +1,11 @@
+[Unit]
+Description=apt-cacher-ng for Lima VMs (guests reach it at 192.168.5.2:3142)
+
+[Service]
+ExecStartPre={{ lookPath "podman" }} build --quiet --tag localhost/apt-cacher-ng %h/.config/apt-cacher-ng
+ExecStart={{ lookPath "podman" }} run --rm --replace --name apt-cacher-ng --publish 127.0.0.1:3142:3142 --volume apt-cacher-ng:/var/cache/apt-cacher-ng localhost/apt-cacher-ng
+ExecStop={{ lookPath "podman" }} stop apt-cacher-ng
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

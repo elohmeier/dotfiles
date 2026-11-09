@@ -1,0 +1,62 @@
+# Mixin: route all guest traffic through a Freifunk community using the
+# ff-egress scripts (~/.config/ff-egress), with their nftables kill switch.
+# Compose it in front of any template so its provisioning runs last:
+#   base: [template:_ff/egress, template:pentest]
+#   param: {FF_PROFILE: ffbs}
+# fastd/tunneldigger profiles (ffhb, ffnw) need batman_adv, which cloud kernels lack:
+# combine them with a generic-kernel image such as template:freifunk.
+minimumLimaVersion: 2.0.0
+param:
+  FF_PROFILE: ffbs
+  FF_TUNNELDIGGER_COMMIT: {{ include "dot_config/ff-egress/Dockerfile" | regexFind "checkout [0-9a-f]{40}" | trimPrefix "checkout " }}
+provision:
+- mode: data
+  path: /usr/local/bin/entrypoint.sh
+  permissions: 755
+  content: |
+{{ include "dot_config/ff-egress/executable_entrypoint.sh" | indent 4 }}
+- mode: data
+  path: /usr/local/bin/parker-entrypoint.sh
+  permissions: 755
+  content: |
+{{ include "dot_config/ff-egress/executable_parker-entrypoint.sh" | indent 4 }}
+- mode: data
+  path: /usr/local/bin/tunneldigger-entrypoint.sh
+  permissions: 755
+  content: |
+{{ include "dot_config/ff-egress/executable_tunneldigger-entrypoint.sh" | indent 4 }}
+- mode: data
+  path: /usr/local/bin/udhcpc-script
+  permissions: 755
+  content: |
+{{ include "dot_config/ff-egress/executable_udhcpc-script" | indent 4 }}
+- mode: data
+  path: /profiles/ffbs/profile
+  content: |
+{{ include "dot_config/ff-egress/profiles/ffbs/profile" | indent 4 }}
+- mode: data
+  path: /profiles/ffhb/profile
+  content: |
+{{ include "dot_config/ff-egress/profiles/ffhb/profile" | indent 4 }}
+- mode: data
+  path: /profiles/ffnw/profile
+  content: |
+{{ include "dot_config/ff-egress/profiles/ffnw/profile" | indent 4 }}
+- mode: data
+  path: /etc/systemd/system/ff-egress@.service
+  file: ff-egress.service
+- mode: data
+  path: /etc/systemd/networkd.conf.d/ff-egress.conf
+  file: networkd.conf
+- mode: data
+  path: /etc/ff-egress/killswitch.nft
+  file: killswitch.nft
+- mode: data
+  path: /etc/systemd/system/ff-egress-killswitch.service
+  file: ff-egress-killswitch.service
+- mode: data
+  path: /usr/local/sbin/ff-egress-down
+  permissions: 755
+  file: ff-egress-down.sh
+- mode: system
+  file: egress.sh

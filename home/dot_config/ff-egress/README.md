@@ -36,3 +36,19 @@ Nordwest additionally requires `l2tp_core`, `l2tp_netlink`, and `l2tp_eth`.
 Load them with `sudo modprobe -a l2tp_core l2tp_netlink l2tp_eth`.
 On rootless Podman, SELinux labeling is disabled only for the gateway container
 so fastd can open `/dev/net/tun`; the unprivileged workload keeps its label.
+
+## Lima VMs
+
+The same scripts route a whole Lima VM through Freifunk via the
+`template:_ff/egress` mixin (`~/.lima/_templates/_ff/`), which runs them as
+`ff-egress@<profile>.service` with `FF_INGRESS_TCP_PORTS=22` so Lima's SSH
+stays reachable. All three entrypoints honour `FF_INGRESS_TCP_PORTS`.
+
+```sh
+limactl create --name=pentest-ffbs template:pentest-ffbs
+printf 'base: [template:_ff/egress, template:freifunk]\nparam: {FF_PROFILE: ffhb}\n' |
+	limactl create --name=ffhb -
+```
+
+`ffhb` and `ffnw` need `batman_adv`, which cloud kernels lack; combine them
+with a generic-kernel template such as `template:freifunk`.

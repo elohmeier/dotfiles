@@ -1,0 +1,12 @@
+# Block all egress except Lima's user-mode network (DHCP, host DNS, SSH replies)
+# until ff-egress replaces this table with its own.
+table inet ff_killswitch
+delete table inet ff_killswitch
+table inet ff_killswitch {
+  chain output {
+    type filter hook output priority filter; policy drop;
+    oifname "lo" accept
+    ip daddr 192.168.5.0/24 accept
+    udp sport 68 udp dport 67 accept
+  }
+}
