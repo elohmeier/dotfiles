@@ -4,6 +4,7 @@ import signal
 import sys
 import time
 from pathlib import Path
+from urllib.parse import urlencode
 
 import questionary
 import rich_click as click
@@ -11,6 +12,7 @@ import yaml
 from rich.console import Group
 from rich.live import Live
 from rich.table import Table
+from rich.text import Text
 
 from scripts.glab_ship import FINISHED, api, git, osc, show
 
@@ -74,6 +76,30 @@ def jobs(project, pipeline_id: int) -> list[dict]:
     return api(f"{base}/jobs?per_page=100") + api(f"{base}/bridges?per_page=100")
 
 
+def approval(pipeline: dict) -> dict | None:
+    """Find the approval MR belonging to this exact deployment pipeline."""
+    if not any(j["name"] == "wait_for_merge_request" for j in pipeline["jobs"]):
+        return None
+    if not (tag := re.fullmatch(r"[^/]+/([^/]+)/(\d+)", pipeline["ref"])):
+        return None
+    env, build = tag.groups()
+    query = urlencode(
+        {
+            "scope": "all",
+            "source_branch": f"{env}-{build}-staging",
+            "target_branch": f"{env}-approved",
+        }
+    )
+    return next(
+        (
+            mr
+            for mr in api(f"projects/{pipeline['project_id']}/merge_requests?{query}")
+            if f"<!-- @@@{pipeline['id']}@@@" in (mr["description"] or "")
+        ),
+        None,
+    )
+
+
 def choose(
     label: str, options: list[str], given: tuple[str, ...], default, all_: bool
 ) -> list[str]:
@@ -122,6 +148,7 @@ class Run:
                     f"projects/{ds['project_id']}/pipelines/{ds['id']}"
                 )
                 j["downstream"]["jobs"] = jobs(ds["project_id"], ds["id"])
+                j["downstream"]["approval"] = approval(j["downstream"])
         mine = [
             j for j in self.jobs if self.targets is None or j["name"] in self.targets
         ]
@@ -146,7 +173,7 @@ class Run:
             all_jobs
         )
 
-    def render(self) -> Table:
+    def render(self) -> Group:
         p = self.pipeline
         t = Table(
             title=f"{ICONS.get(p['status'], '?')} [bold]{self.label}[/] {p['status']} [link={p['web_url']}]#{p['id']}[/]",
@@ -155,6 +182,7 @@ class Run:
             box=None,
             padding=(0, 1),
         )
+        approvals = []
         for j in sorted(self.jobs, key=lambda j: j["id"]):
             row = [
                 f"  {ICONS.get(j['status'], '?')}",
@@ -169,8 +197,19 @@ class Run:
                     f" → [link={ds['web_url']}]{name} #{ds['id']}[/]"
                     f" {ds['status']} ({done}/{len(ds['jobs'])})"
                 )
+                if mr := ds.get("approval"):
+                    status = {
+                        "opened": "[yellow]Waiting for deployment approval / merge[/]",
+                        "merged": "[green]Deployment approval MR merged[/]",
+                        "closed": "[red]Deployment approval MR closed[/]",
+                    }.get(mr["state"], f"Deployment approval MR {mr['state']}")
+                    approvals.append(
+                        Text.from_markup(
+                            f"  {status}: [link={mr['web_url']}]{mr['web_url']}[/]"
+                        )
+                    )
             t.add_row(*row)
-        return t
+        return Group(t, *approvals)
 
 
 def watch(runs: list[Run]):
@@ -216,7 +255,9 @@ def main(envs: tuple[str, ...], ref: str | None, all_: bool, yes: bool):
     starts one web pipeline per selected environment in parallel, an array
     input starts one pipeline with all selected environments. Without inputs,
     the manual jobs of the latest pipeline on the ref are played instead.
-    Downstream deploy pipelines are watched as well.
+    Downstream deploy pipelines are watched as well. Deployment approval
+    MRs are linked while waiting for approval and merge, then the
+    deployment continues to be watched until completion.
     """
     # turn kill/closed tab into SystemExit so the progress bar shows the error
     for sig in (signal.SIGTERM, signal.SIGHUP):
