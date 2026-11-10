@@ -1,6 +1,0 @@
-#!/bin/sh
-# Dockerfile: {{ include "dot_config/apt-cacher-ng/Dockerfile" | sha256sum }}
-# apt-cacher-ng.service: {{ includeTemplate "dot_config/systemd/user/apt-cacher-ng.service.tmpl" . | sha256sum }}
-systemctl --user daemon-reload
-systemctl --user enable apt-cacher-ng.service
-systemctl --user restart apt-cacher-ng.service

@@ -1,5 +1,6 @@
 # Mixin: point pi at Ollama Cloud (DeepSeek) through the host's ollama-proxy
 # (~/.config/ollama-proxy), which adds the API key: no secret ever enters the VM.
+# Opt in on the host: systemctl --user enable --now ollama-proxy
 minimumLimaVersion: 2.0.0
 provision:
 - mode: yq

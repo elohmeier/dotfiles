@@ -1,6 +1,7 @@
 # Mixin: faster apt for throwaway VMs. Uses the host's apt-cacher-ng
 # (~/.config/apt-cacher-ng) when it answers at 192.168.5.2:3142, else goes direct,
 # e.g. once ff-egress blocks the uplink. Skips fsyncs and man-db index rebuilds.
+# Opt in on the host: systemctl --user enable --now apt-cacher-ng
 minimumLimaVersion: 2.0.0
 provision:
 - mode: data
