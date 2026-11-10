@@ -1,22 +1,22 @@
 # Freifunk gateway/dev box on Debian 13: limactl create --name=freifunk template:freifunk
 minimumLimaVersion: 2.0.0
 base:
-- template:_default/mounts
-- template:_apt/fast
-- template:_pi/ollama-cloud
-# generic (not genericcloud) kernel, which ships the batman-adv module
+  - template:_default/mounts
+  - template:_apt/fast
+  - template:_pi/ollama-cloud
+  # generic (not genericcloud) kernel, which ships the batman-adv module
 images:
-- location: https://cloud.debian.org/images/cloud/trixie/latest/debian-13-generic-amd64.qcow2
-  arch: x86_64
-- location: https://cloud.debian.org/images/cloud/trixie/latest/debian-13-generic-arm64.qcow2
-  arch: aarch64
+  - location: https://cloud.debian.org/images/cloud/trixie/latest/debian-13-generic-amd64.qcow2
+    arch: x86_64
+  - location: https://cloud.debian.org/images/cloud/trixie/latest/debian-13-generic-arm64.qcow2
+    arch: aarch64
 cpus: 4
 containerd:
   system: false
   user: false
 memory: 4GiB
 provision:
-- mode: system
-  file: freifunk/provision.sh
-- mode: system
-  file: common/coding-agents.sh
+  - mode: system
+    file: freifunk/provision.sh
+  - mode: system
+    file: common/coding-agents.sh

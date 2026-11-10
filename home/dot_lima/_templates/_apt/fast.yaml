@@ -4,25 +4,25 @@
 # Opt in on the host: systemctl --user enable --now apt-cacher-ng
 minimumLimaVersion: 2.0.0
 provision:
-- mode: data
-  path: /etc/apt/apt.conf.d/01lima-proxy
-  content: |
-    Acquire::http::Proxy-Auto-Detect "/usr/local/bin/lima-apt-proxy";
-- mode: data
-  path: /usr/local/bin/lima-apt-proxy
-  permissions: 755
-  content: |
-    #!/bin/bash
-    if timeout 1 bash -c '</dev/tcp/192.168.5.2/3142' 2>/dev/null; then
-    	echo http://192.168.5.2:3142
-    else
-    	echo DIRECT
-    fi
-- mode: data
-  path: /etc/dpkg/dpkg.cfg.d/lima-unsafe-io
-  content: |
-    force-unsafe-io
-- mode: system
-  script: |
-    #!/bin/sh
-    rm -f /var/lib/man-db/auto-update
+  - mode: data
+    path: /etc/apt/apt.conf.d/01lima-proxy
+    content: |
+      Acquire::http::Proxy-Auto-Detect "/usr/local/bin/lima-apt-proxy";
+  - mode: data
+    path: /usr/local/bin/lima-apt-proxy
+    permissions: 755
+    content: |
+      #!/bin/bash
+      if timeout 1 bash -c '</dev/tcp/192.168.5.2/3142' 2>/dev/null; then
+      	echo http://192.168.5.2:3142
+      else
+      	echo DIRECT
+      fi
+  - mode: data
+    path: /etc/dpkg/dpkg.cfg.d/lima-unsafe-io
+    content: |
+      force-unsafe-io
+  - mode: system
+    script: |
+      #!/bin/sh
+      rm -f /var/lib/man-db/auto-update
