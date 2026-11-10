@@ -291,6 +291,17 @@ for review, and completes subcommands, options, destinations and current-directo
 session references. The CLI is installed by
 `home/.chezmoiscripts/run_onchange_after_install-uv-tools.sh.tmpl`.
 
+`agent-session serve` opens a web explorer on `http://127.0.0.1:8065`. Pick up
+shows the latest session of every workspace (repository, including worktrees,
+or directory). Workspace and search views list sessions with forks under their
+parent; a session shows its transcript with tool calls folded, opened at the
+last exchange or at the search match, and its resume command. `/` focuses
+search, `j`/`k` move through the list and `y` copies the command. The UI is a
+SvelteKit/shadcn-svelte app in `tools/agent-session-ui`; the install script
+builds it into `scripts/agent_session_ui/` before installing the CLI. For UI
+work, run `agent-session serve` and `pnpm dev` in `tools/agent-session-ui`,
+which proxies `/api` to it.
+
 ### Btrfs home snapshots (Fedora Atomic / Bluefin)
 
 Enable 30 daily read-only snapshots of the `/home` subvolume:

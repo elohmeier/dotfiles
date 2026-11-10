@@ -1509,6 +1509,16 @@ def reindex() -> None:
         console.print(f"Indexed {len(index.sessions())} sessions.")
 
 
+@main.command("serve")
+@click.option("--host", default="127.0.0.1", show_default=True)
+@click.option("--port", default=8065, show_default=True)
+def serve_command(host: str, port: int) -> None:
+    """Browse sessions in a web UI."""
+    from scripts.agent_session_web import serve
+
+    serve(host, port)
+
+
 def message_page(
     messages: list[Message],
     start: int = 0,

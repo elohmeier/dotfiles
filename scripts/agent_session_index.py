@@ -91,7 +91,8 @@ def searchable(content: list[app.Record]) -> str:
 def metadata(meta: app.Record, row: app.Record, store: app.Store) -> None:
     data = row.get("payload", row)
     kind = row.get("type")
-    if data.get("cwd"):
+    # Agents resume from the directory a session started in, not where it later cd'd.
+    if data.get("cwd") and not meta.get("cwd"):
         meta["cwd"] = data["cwd"]
     if kind in {"session", "session_meta"}:
         meta["id"] = data.get("id", meta.get("id", ""))
@@ -138,9 +139,9 @@ class Index:
         self.db = sqlite3.connect(path, timeout=30)
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA journal_mode=WAL")
-        if self.db.execute("PRAGMA user_version").fetchone()[0] != 1:
+        if self.db.execute("PRAGMA user_version").fetchone()[0] != 2:
             self.db.executescript(
-                "DROP TABLE IF EXISTS search_fts; DROP TABLE IF EXISTS documents; DROP TABLE IF EXISTS sources; PRAGMA user_version=1;"
+                "DROP TABLE IF EXISTS search_fts; DROP TABLE IF EXISTS documents; DROP TABLE IF EXISTS sources; PRAGMA user_version=2;"
             )
         self.db.executescript("""
             CREATE TABLE IF NOT EXISTS sources (
@@ -359,7 +360,11 @@ class Index:
         return sorted(sessions, key=lambda s: s.updated, reverse=True)
 
     def search(
-        self, query: str, sessions: list[app.Session], limit: int = 50
+        self,
+        query: str,
+        sessions: list[app.Session],
+        limit: int = 50,
+        marks: tuple[str, str] = ("[", "]"),
     ) -> list[app.Record]:
         by_path = {f"{s.store.name}:{s.path}": s for s in sessions}
         tokens = re.findall(r'"([^"]*)"|(\S+)', query)
@@ -383,8 +388,8 @@ class Index:
         result = []
         seen = set()
         for row in self.db.execute(
-            "SELECT source, position, snippet(search_fts, 3, '[', ']', ' … ', 28) AS snippet FROM search_fts WHERE search_fts MATCH ? ORDER BY bm25(search_fts, 0, 0, 5, 1)",
-            (expression,),
+            "SELECT source, position, snippet(search_fts, 3, ?, ?, ' … ', 28) AS snippet FROM search_fts WHERE search_fts MATCH ? ORDER BY bm25(search_fts, 0, 0, 5, 1)",
+            (*marks, expression),
         ):
             session = by_path.get(row["source"])
             if session and session.ref not in seen:
