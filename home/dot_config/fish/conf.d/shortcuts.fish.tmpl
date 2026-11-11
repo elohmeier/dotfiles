@@ -28,6 +28,9 @@ abbr --add -- gst 'git status'
     abbr --add -- nfu 'nix flake update'
     abbr --add -- nr 'nix run'
 {{- end }}
+{{- if and (not (lookPath "pass")) (lookPath "passage") }}
+    abbr --add -- pass passage
+{{- end }}
 {{- if lookPath "ruff" }}
     abbr --add -- rc 'ruff check .'
     abbr --add -- rcu 'ruff check . --unsafe-fixes'
