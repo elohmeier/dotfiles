@@ -1,0 +1,5 @@
+{{- $lock := lookPath "flock" -}}
+{{- if eq .chezmoi.os "darwin" -}}{{- $lock = lookPath "lockf" -}}{{- end -}}
+{{- if and $lock (lookPath "task") (lookPath "git") (lookPath "jq") (lookPath "sqlite3") -}}
+enabled
+{{- end -}}

@@ -48,6 +48,12 @@ Library/**
 .codex/**
 {{- end -}}
 
+{{ if not (includeTemplate "taskwarrior-backup" .) }}
+.local/bin/taskwarrior-backup
+Library/LaunchAgents/de.enno.taskwarrior-backup.plist
+.config/systemd/user/taskwarrior-backup.*
+{{- end }}
+
 {{ if not (and (index . "pushoverUserKey") (index . "pushoverApiToken")) }}
 .local/bin/agent-pushover-notify
 .pi/agent/extensions/pushover.ts

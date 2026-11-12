@@ -1,0 +1,8 @@
+{{- if includeTemplate "taskwarrior-backup" . -}}
+#!/bin/sh
+# service hash: {{ include "dot_config/systemd/user/taskwarrior-backup.service" | sha256sum }}
+# timer hash: {{ include "dot_config/systemd/user/taskwarrior-backup.timer" | sha256sum }}
+set -eu
+systemctl --user daemon-reload
+systemctl --user enable --now taskwarrior-backup.timer
+{{ end -}}

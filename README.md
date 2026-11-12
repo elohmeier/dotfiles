@@ -302,6 +302,43 @@ builds it into `scripts/agent_session_ui/` before installing the CLI. For UI
 work, run `agent-session serve` and `pnpm dev` in `tools/agent-session-ui`,
 which proxies `/api` to it.
 
+### Taskwarrior backups
+
+With Taskwarrior 3, Git, jq, and sqlite3 installed, `chezmoi apply` enables hourly
+backups through launchd on macOS or a systemd user timer on Linux. Run
+`taskwarrior-backup` to back up immediately. Set `TASKWARRIOR_BACKUP_DIR` to
+override the default `~/backups/taskwarrior` directory for a manual run.
+
+The backup directory contains a Git repository tracking `tasks.json`, sorted by
+UUID with derived `id` and `urgency` fields removed. Each run commits only when
+the exported tasks change. `snapshots/` holds one complete SQLite backup per
+calendar day, excluded from Git and retained indefinitely. Exports read a
+consistent SQLite snapshot with hooks, recurrence generation, and garbage
+collection disabled, leaving the live task database unchanged.
+
+Backups stay local; no remote is configured and the script does not push.
+You can later push the JSON repository to a private remote and include
+`snapshots/` in an off-device backup separately.
+The main `~/.taskrc` is already managed here; back up any additional configuration
+includes and custom hooks separately.
+
+On macOS, inspect `~/Library/Logs/taskwarrior-backup.log`. On Linux, use
+`journalctl --user -u taskwarrior-backup.service` or
+`systemctl --user list-timers taskwarrior-backup.timer`.
+
+To test recovery from JSON without touching your live tasks:
+
+```sh
+mkdir -p /tmp/taskwarrior-restore
+TASKDATA=/tmp/taskwarrior-restore task rc.hooks=off rc.recurrence=off import ~/backups/taskwarrior/tasks.json
+TASKDATA=/tmp/taskwarrior-restore task count
+```
+
+For a full database restore, stop the backup job and all Taskwarrior clients,
+move the current database **and its `-wal`/`-shm` files** aside, and copy the chosen
+snapshot into the task data directory as `taskchampion.sqlite3`. Restart clients
+only after the replacement is complete.
+
 ### Btrfs home snapshots (Fedora Atomic / Bluefin)
 
 Enable 30 daily read-only snapshots of the `/home` subvolume:

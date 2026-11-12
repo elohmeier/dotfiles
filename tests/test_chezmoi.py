@@ -1,5 +1,6 @@
 import json
 import os
+import plistlib
 import re
 import shutil
 import subprocess
@@ -29,7 +30,7 @@ def render(tmp_path):
     bin_dir.mkdir()
     for name in (
         "fish nvim bat fzf vivid uv mise rbenv starship zoxide atuin tmux "
-        "claude codex brew apk lbu tic"
+        "claude codex brew apk lbu tic task git sqlite3 lockf flock"
     ).split():
         binary = bin_dir / name
         binary.write_text("#!/bin/sh\nexit 0\n")
@@ -110,6 +111,13 @@ def render(tmp_path):
 def test_rendered_configuration(render, platform, theme):
     entries, tools = render(platform, theme)
     assert ".config/fish/config.fish" in entries
+    assert ".local/bin/taskwarrior-backup" in entries
+    assert ("Library/LaunchAgents/de.enno.taskwarrior-backup.plist" in entries) == (
+        platform == "darwin"
+    )
+    assert (".config/systemd/user/taskwarrior-backup.timer" in entries) == (
+        platform != "darwin"
+    )
     assert ("Library/Application Support/k9s" in entries) == (platform == "darwin")
     assert any(".chezmoiscripts/wsl/" in name for name in entries) == (
         platform == "wsl"
@@ -128,6 +136,8 @@ def test_rendered_configuration(render, platform, theme):
         suffix = Path(name).suffix
         if suffix == ".json":
             json.loads(contents)
+        elif suffix == ".plist":
+            plistlib.loads(contents.encode())
         elif suffix == ".toml":
             tomllib.loads(contents)
         elif suffix in (".yaml", ".yml"):

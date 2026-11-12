@@ -1,0 +1,7 @@
+[Unit]
+Description=Back up Taskwarrior tasks and database
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/taskwarrior-backup
+UMask=0077

@@ -1,0 +1,47 @@
+#!/bin/bash
+set -euo pipefail
+umask 077
+
+task={{ lookPath "task" | quote }}
+git={{ lookPath "git" | quote }}
+jq={{ lookPath "jq" | quote }}
+sqlite3={{ lookPath "sqlite3" | quote }}
+backup_dir="${TASKWARRIOR_BACKUP_DIR:-$HOME/backups/taskwarrior}"
+data_dir=$("$task" rc.hooks=off rc.verbose=nothing _get rc.data.location)
+[[ -f "$data_dir/taskchampion.sqlite3" ]]
+
+mkdir -p "$backup_dir/snapshots"
+exec 9>"$backup_dir/.lock"
+{{ if eq .chezmoi.os "darwin" -}}
+{{ lookPath "lockf" | quote }} -s -t 0 9 || exit 0
+{{ else -}}
+{{ lookPath "flock" | quote }} -n 9 || exit 0
+{{ end -}}
+staging=$(mktemp -d "$backup_dir/.backup.XXXXXX")
+trap 'rm -rf "$staging"' EXIT
+mkdir "$staging/data"
+
+# Read through SQLite so committed WAL contents are included in the snapshot.
+"$sqlite3" -readonly -cmd '.timeout 5000' "$data_dir/taskchampion.sqlite3" \
+    ".backup '$staging/data/taskchampion.sqlite3'"
+
+# Export the snapshot, with hooks and automatic task changes disabled.
+TASKDATA="$staging/data" "$task" rc.hooks=off rc.recurrence=off rc.gc=off \
+    rc.json.array=on rc.verbose=nothing export |
+    "$jq" -S 'sort_by(.uuid) | map(del(.id, .urgency))' >"$staging/tasks.json"
+
+snapshot="$backup_dir/snapshots/taskchampion-$(date +%F).sqlite3"
+if [[ ! -f "$snapshot" ]]; then
+    cp "$staging/data/taskchampion.sqlite3" "$snapshot.tmp"
+    mv "$snapshot.tmp" "$snapshot"
+fi
+mv "$staging/tasks.json" "$backup_dir/tasks.json"
+printf '%s\n' '/snapshots/' '/.backup.*/' '/.lock' >"$backup_dir/.gitignore"
+
+if [[ ! -d "$backup_dir/.git" ]]; then
+    "$git" -C "$backup_dir" init --quiet --initial-branch=main
+fi
+"$git" -C "$backup_dir" add -- .gitignore tasks.json
+if ! "$git" -C "$backup_dir" diff --cached --quiet; then
+    "$git" -C "$backup_dir" commit --quiet -m "Taskwarrior backup $(date -u +%FT%TZ)"
+fi
