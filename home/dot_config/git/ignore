@@ -1,4 +1,8 @@
 **/.claude/settings.local.json
+**/.mise/config.*.local.toml
+**/.mise/config.local.toml
+**/mise/config.*.local.toml
+**/mise/config.local.toml
 *.pyc
 *.sqlite3-journal
 *.swp
@@ -9,4 +13,8 @@
 .direnv/
 .gradle-home/
 .ipynb_checkpoints/
+.mise.*.local.toml
+.mise.local.toml
+mise.*.local.toml
+mise.local.toml
 ~$*
