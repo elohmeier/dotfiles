@@ -11,7 +11,7 @@
 	import Menu from '@lucide/svelte/icons/menu';
 	import Copy from '@lucide/svelte/icons/copy';
 	import ChartColumn from '@lucide/svelte/icons/chart-column';
-	import { compare, date, dateLabel, matches, normalize, relations, sources, text, type Snapshot } from '#lib/tasks.js';
+	import { compare, date, dateLabel, shortDateLabel, matches, normalize, relations, sources, text, type Snapshot } from '#lib/tasks.js';
 
 	let snapshot = $state<Snapshot>({ tasks: [], exportedAt: null, error: '' });
 	let loading = $state(true);
@@ -195,7 +195,7 @@
 						<button id="task-{task.uuid}" data-task={task.uuid} class="task-row" class:selected={selected === task.uuid} aria-pressed={selected === task.uuid} onclick={() => nav({ task: task.uuid })}>
 							<span class="row-title">{task.title}</span>
 							<span class="row-meta">{#each task.sources as source}<span class="badge source {source.toLowerCase()}">{source}</span>{/each}<span class="row-project">{task.project || 'No project'}</span>{#if task.status !== 'pending'}<span class="row-status">{label(task.status)}</span>{/if}</span>
-							{#if task.raw.due}<span class="row-due" class:overdue={task.status === 'pending' && (date(task.raw.due)?.getTime() ?? Infinity) < Date.now()}>Due {date(task.raw.due)?.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>{/if}
+							{#if task.raw.due}<span class="row-due" class:overdue={task.status === 'pending' && (date(task.raw.due)?.getTime() ?? Infinity) < Date.now()}>Due {shortDateLabel(task.raw.due)}</span>{/if}
 						</button>
 					{/each}{/if}
 				</div>

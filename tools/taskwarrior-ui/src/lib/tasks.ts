@@ -63,6 +63,14 @@ export function dateLabel(value: unknown): string {
 	return date(value)?.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) ?? '—';
 }
 
+export function shortDateLabel(value: unknown, now = new Date(), precision: 'day' | 'month' = 'day'): string {
+	const when = value instanceof Date ? value : date(value);
+	return when?.toLocaleDateString(undefined, {
+		month: 'short', day: precision === 'day' ? 'numeric' : undefined,
+		year: when.getFullYear() === now.getFullYear() ? undefined : 'numeric'
+	}) ?? '—';
+}
+
 export function matches(task: Task, filters: Record<string, string>) {
 	return (!filters.status || filters.status === 'all' || task.status === filters.status)
 		&& (!filters.source || task.sources.includes(filters.source))

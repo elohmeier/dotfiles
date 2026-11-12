@@ -5,7 +5,7 @@
 	import ChartColumn from '@lucide/svelte/icons/chart-column';
 	import Choice from './choice.svelte';
 	import { activity, type Grain, type Range } from '#lib/activity.js';
-	import { dateLabel, type Task } from '#lib/tasks.js';
+	import { dateLabel, shortDateLabel, type Task } from '#lib/tasks.js';
 
 	let { tasks, now, params, pages, onchange, onopen }: {
 		tasks: Task[]; now: Date; params: Pick<URLSearchParams, 'get'>; pages: string[];
@@ -31,7 +31,7 @@
 
 	function tickLabel(key: string) {
 		const value = new Date(`${key}T12:00:00`);
-		return value.toLocaleDateString(undefined, grain === 'month' ? { month: 'short', year: '2-digit' } : { month: 'short', day: 'numeric' });
+		return shortDateLabel(value, now, grain === 'month' ? 'month' : 'day');
 	}
 </script>
 
