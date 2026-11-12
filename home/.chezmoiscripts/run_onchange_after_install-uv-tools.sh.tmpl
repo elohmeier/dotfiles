@@ -4,15 +4,20 @@
 {{ range glob (joinPath .chezmoi.sourceDir "../scripts/**/*.py") -}}
 # {{ base . }}: {{ include . | sha256sum }}
 {{ end -}}
-{{ $ui := joinPath .chezmoi.sourceDir "../tools/agent-session-ui" -}}
+{{ range $name := list "agent-session-ui" "taskwarrior-ui" -}}
+{{ $ui := joinPath $.chezmoi.sourceDir "../tools" $name -}}
 {{ $sources := "" }}{{ range glob (joinPath $ui "{package.json,pnpm-lock.yaml,vite.config.ts,src/**/*.{svelte,ts,css,html}}") }}{{ $sources = print $sources (include .) }}{{ end -}}
-# agent-session-ui: {{ $sources | sha256sum }}
+# {{ $name }}: {{ $sources | sha256sum }}
+{{ end -}}
 # metadata: {{ include "../pyproject.toml" | sha256sum }} {{ include "../uv.lock" | sha256sum }}
 
 set -e
 {{ if lookPath "pnpm" -}}
+{{ range $name := list "agent-session-ui" "taskwarrior-ui" -}}
+{{ $ui := joinPath $.chezmoi.sourceDir "../tools" $name -}}
 "{{ lookPath "pnpm" }}" --dir "{{ $ui }}" install --frozen-lockfile --silent
 "{{ lookPath "pnpm" }}" --dir "{{ $ui }}" build >/dev/null
+{{ end -}}
 {{ end -}}
 uv="{{ lookPath "uv" }}"
 requirements="$("{{ lookPath "mktemp" }}")"

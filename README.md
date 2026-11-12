@@ -302,6 +302,54 @@ builds it into `scripts/agent_session_ui/` before installing the CLI. For UI
 work, run `agent-session serve` and `pnpm dev` in `tools/agent-session-ui`,
 which proxies `/api` to it.
 
+### Taskwarrior viewer
+
+`taskwarrior-viewer` serves a read-only Svelte task browser at
+`http://127.0.0.1:8066` (`--host` and `--port` override the bind address).
+It uses the active Taskwarrior configuration, including `TASKRC` and `TASKDATA`.
+Search titles, notes, source IDs and metadata; filter by status, source,
+project or Logseq page; and select a task to inspect its annotations, source
+links, dates, related tasks and original attributes. Filters and selected task
+UUIDs are saved in the URL. `/` focuses search, `j`/`k` navigate tasks, and
+Escape closes the details.
+
+The **Activity** tab shows LayerChart charts of completed tasks over time and
+by project, plus counts, completions per week, days with completions and tasks
+open now. Choose the last 30, 90 or 365 days, or all time; group by day, week
+or month. Select a bar or a period to inspect its tasks and open their details.
+Source, project, page and search filters apply to the statistics, independently
+of the Tasks tab's status filter. Dates use the browser's timezone, weeks start
+Monday, and periods with zero completions remain visible. Controls and selected
+periods are saved in the URL, and charts update from the same live snapshots.
+
+Activity counts tasks currently marked completed using Taskwarrior's `end`
+date. Deleted tasks and invalid or missing completion dates are excluded.
+Imports and bulk changes can create spikes; a snapshot cannot reconstruct
+previous completions of reopened tasks or measure time spent. Weekly averages
+include all calendar days in the selected range; open-task counts cover all
+dates. The chart code loads only when opening Activity.
+
+CLI changes appear automatically through a watcher on the Taskwarrior database
+and WAL, debounced exports and Server-Sent Events. The server also re-exports
+every 15 seconds; the browser refreshes every 30 seconds while visible and
+when returning to the tab. Updates preserve selection and list position. Failed
+exports retain the last successful snapshot and show a stale-data message.
+Snapshot times describe local reads, not the freshness of upstream imports.
+
+The server only exposes GET endpoints and runs `task export` with hooks,
+recurrence generation and garbage collection disabled. It performs no task
+edits, imports or synchronization. Taskwarrior status and imported source
+status are displayed separately; records with several sources retain each
+source link. Descriptions are rendered as text.
+
+The frontend lives in `tools/taskwarrior-ui`; the existing
+`home/.chezmoiscripts/run_onchange_after_install-uv-tools.sh.tmpl` builds it into
+`scripts/taskwarrior_ui/` and installs the CLI. For development, run
+`uv run taskwarrior-viewer`, then `pnpm dev` in `tools/taskwarrior-ui` (its `/api`
+proxy uses port 8066). Validate with `pnpm check`, `pnpm test`, `pnpm build`,
+and `uv run pytest -q tests/test_taskwarrior_viewer.py`. The backend tests use
+isolated Taskwarrior data, never the live task database.
+
 ### Taskwarrior backups
 
 With Taskwarrior 3, Git, jq, and sqlite3 installed, `chezmoi apply` enables hourly

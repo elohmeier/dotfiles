@@ -9,3 +9,4 @@ tools/**/node_modules/
 tools/**/dist/
 tools/grafana-inspect/grafana-version.json
 scripts/agent_session_ui/
+scripts/taskwarrior_ui/
