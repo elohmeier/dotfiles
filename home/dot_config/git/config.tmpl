@@ -3,12 +3,6 @@
 [branch]
 sort = "-committerdate"
 
-[branch "main"]
-rebase = true
-
-[branch "master"]
-rebase = true
-
 [column]
 ui = "auto"
 
@@ -49,7 +43,7 @@ textconv = {{ printf "%s --to=markdown --output=-" (. | quote) | quote }}
 [fetch]
 all = true
 prune = true
-pruneTags = true
+pruneTags = false
 
 [filter "lfs"]
 clean = "git-lfs clean -- %f"
@@ -86,10 +80,11 @@ followTags = true
 [rebase]
 autoSquash = true
 autoStash = true
+missingCommitsCheck = "error"
 updateRefs = true
 
 [rerere]
-autoupdate = true
+autoupdate = false
 enabled = true
 
 [tag]
