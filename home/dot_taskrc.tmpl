@@ -42,6 +42,10 @@ uda.logseqdeadline.type=date
 uda.logseqdeadline.label=Logseq Deadline
 uda.logseqpage.type=string
 uda.logseqpage.label=Logseq Page
+uda.logseqcontext.type=string
+uda.logseqcontext.label=Logseq Context
+uda.logseqproject.type=string
+uda.logseqproject.label=Source Project
 uda.appleremindersnamespace.type=string
 uda.appleremindersnamespace.label=Reminders Namespace
 uda.appleremindersid.type=string
@@ -99,3 +103,44 @@ uda.todoistsource.type=string
 uda.todoistsource.label=Todoist Metadata Source
 
 news.version=3.5.0
+
+# Local action workflow; source identities remain in the service UDAs above.
+uda.waitingfor.type=string
+uda.waitingfor.label=Waiting For
+uda.outcome.type=string
+uda.outcome.label=Outcome
+uda.outcome.values=done,dropped,merged,
+uda.mergedinto.type=string
+uda.mergedinto.label=Merged Into
+urgency.user.tag.next.coefficient=15
+
+context.debeka.read=project:Debeka
+context.debeka.write=project:Debeka
+context.convexio.read=project:Convexio
+context.convexio.write=project:Convexio
+context.family.read=project:Family
+context.family.write=project:Family
+context.housing.read=project:Housing
+context.housing.write=project:Housing
+context.personal.read=project:Personal
+context.personal.write=project:Personal
+context.nerdworks.read=project:Nerdworks
+context.nerdworks.write=project:Nerdworks
+context.fraam.read=project:Fraam
+context.fraam.write=project:Fraam
+context.inbox.read=project:Inbox
+context.inbox.write=project:Inbox
+
+report.inbox.description=Unclassified actions with their source context
+report.inbox.columns=id,logseqpage,logseqcontext,description
+report.inbox.labels=ID,Source Page,Context,Action
+report.inbox.filter=project:Inbox ( +PENDING or +WAITING )
+report.inbox.sort=entry+
+report.inbox.context=0
+
+report.delegated.description=Follow-ups for work handled by someone else
+report.delegated.columns=id,project,waitingfor,wait,scheduled,description
+report.delegated.labels=ID,Project,Waiting For,Hidden Until,Follow Up,Action
+report.delegated.filter=+delegated ( +PENDING or +WAITING )
+report.delegated.sort=scheduled+,project+
+report.delegated.context=0
