@@ -1,6 +1,7 @@
 for _, name in ipairs({
   vim.env.NVIM_PYTHON_LSP or "ty",
   "bashls",
+  "harper_ls",
   "helm_ls",
   "jsonnet_ls",
   "luals",
