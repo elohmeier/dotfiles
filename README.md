@@ -248,6 +248,20 @@ macOS notifications or `notify-send` when available, plus a terminal bell.
 when available. It detects completion but cannot recover another process's exit
 status. Use Fish's `timer 10m &` to run a timer in the background.
 
+### Git worktrees
+
+```fish
+wt                       # choose a worktree with fzf
+wt feature/my-branch     # enter the worktree for this branch
+wt '/path/to/work tree'  # select a worktree by its full path
+```
+
+`wt` starts a Fish subshell in a worktree of the current repository, including
+when called from a linked worktree or a subdirectory. Tab completes checked-out
+branch names with their paths shown as descriptions; detached worktrees complete
+by full path. Press Ctrl-D on an empty command line or run `exit` to return to
+the original shell and directory, just like `tempe`.
+
 ### Agent sessions
 
 `agent-session` searches Claude Code, Pi and Codex sessions across host and sandbox
