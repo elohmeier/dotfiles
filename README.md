@@ -205,6 +205,49 @@ container instead of prompting.
 Fish completes options and available media devices. These commands are installed
 by `home/.chezmoiscripts/run_onchange_after_install-uv-tools.sh.tmpl`.
 
+### Shell helpers and URL inspection
+
+```fish
+mkcd 'new project'  # create missing parents and enter the directory
+tempe              # start a Fish subshell in a new temporary directory
+scratch            # open a temporary file using $EDITOR
+cpwd               # copy the current directory using clip
+url 'https://example.com/path?tag=one&tag=two&empty=#section'
+ocr screenshot.png # macOS: extract image text using Apple Vision
+getsubs 'https://www.youtube.com/watch?v=VIDEO_ID' > transcript.txt
+getsubs --lang de 'https://www.youtube.com/watch?v=VIDEO_ID'
+theme              # show the current theme
+theme cyberdream   # switch themed dotfiles and refresh Fish/tmux
+theme --dry-run tokyonight_day
+timer 10m          # ring and notify after ten minutes
+waitfor --notify 1234 # wait for a process, then notify
+```
+
+The Fish helpers are managed by chezmoi. In `tempe`, press Ctrl-D on an empty
+command line or run `exit` to return to the original shell and directory.
+Temporary files and directories remain available after use and follow the
+system's temporary-file cleanup policy.
+`url` prints URL components and decoded query parameters, preserving repeated
+keys and empty values, without making a network request. It is installed through
+the existing uv tools hook in `home/.chezmoiscripts/`.
+
+`ocr` requires Swift and is installed only on macOS. `getsubs` requires `yt-dlp`,
+prefers official subtitles, and falls back to automatic captions. It prints plain
+text with timestamps, markup, and consecutive duplicate lines removed.
+
+`theme` accepts `tokyonight_day`, `tokyonight_night`, `cyberdream_light`, or
+`cyberdream`. It preserves other chezmoi settings and applies only managed
+templates that reference themes, including their reload hooks. The Fish function
+also refreshes the current shell's colors. Reload Ghostty's configuration and
+restart existing editors to pick up the change there.
+
+`timer` accepts seconds or a number followed by `s`, `m`, or `h`. Timers and
+`waitfor --notify` use the existing Pushover helper when configured, otherwise
+macOS notifications or `notify-send` when available, plus a terminal bell.
+`waitfor` inhibits sleep using `caffeinate` on macOS or `systemd-inhibit` on Linux
+when available. It detects completion but cannot recover another process's exit
+status. Use Fish's `timer 10m &` to run a timer in the background.
+
 ### Agent sessions
 
 `agent-session` searches Claude Code, Pi and Codex sessions across host and sandbox

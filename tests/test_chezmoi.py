@@ -112,6 +112,7 @@ def test_rendered_configuration(render, platform, theme):
     entries, tools = render(platform, theme)
     assert ".config/fish/config.fish" in entries
     assert ".local/bin/taskwarrior-backup" in entries
+    assert (".local/bin/ocr" in entries) == (platform == "darwin")
     assert ("Library/LaunchAgents/de.enno.taskwarrior-backup.plist" in entries) == (
         platform == "darwin"
     )

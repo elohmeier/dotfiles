@@ -58,6 +58,11 @@ umount-media = "scripts.media:main"
 syncthing-status = "scripts.syncthing_status:main"
 secret-entry = "scripts.secret_entry:entrypoint"
 kanboard = "scripts.kanboard:main"
+url = "scripts.url:main"
+getsubs = "scripts.getsubs:main"
+theme = "scripts.theme:main"
+timer = "scripts.timing:timer"
+waitfor = "scripts.timing:waitfor"
 
 [build-system]
 requires = ["uv_build>=0.13.0,<0.14.0"]

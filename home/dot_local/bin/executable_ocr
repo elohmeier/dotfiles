@@ -1,0 +1,28 @@
+#!/usr/bin/env swift
+import Foundation
+import Vision
+
+if CommandLine.arguments.count == 1 || CommandLine.arguments.contains("--help") {
+    fputs("Usage: ocr IMAGE [IMAGE ...]\n", stderr)
+    exit(CommandLine.arguments.count == 1 ? 2 : 0)
+}
+
+for (index, path) in CommandLine.arguments.dropFirst().enumerated() {
+    let request = VNRecognizeTextRequest()
+    request.recognitionLevel = .accurate
+    request.automaticallyDetectsLanguage = true
+    request.usesLanguageCorrection = true
+    let handler = VNImageRequestHandler(url: URL(fileURLWithPath: path))
+    do {
+        try handler.perform([request])
+    } catch {
+        fputs("ocr: \(path): \(error.localizedDescription)\n", stderr)
+        exit(1)
+    }
+    if index > 0 { print() }
+    for observation in request.results ?? [] {
+        if let text = observation.topCandidates(1).first?.string {
+            print(text)
+        }
+    }
+}
