@@ -9,7 +9,11 @@ import rich_click as click
 
 
 def api(path: str, *args: str):
-    return json.loads(subprocess.check_output(["glab", "api", *args, path]))
+    return json.loads(
+        subprocess.check_output(
+            ["glab", "api", *args, path], stderr=subprocess.PIPE, text=True
+        )
+    )
 
 
 def git(*args: str) -> str:
@@ -121,12 +125,14 @@ def main(squash: bool | None, title: str | None, wait: bool):
         ship(squash, title, wait)
     except BaseException as e:
         osc("9;4;0" if isinstance(e, (KeyboardInterrupt, click.Abort)) else "9;4;2")
+        if isinstance(e, subprocess.CalledProcessError):
+            raise click.ClickException((e.stderr or e.output or str(e)).strip()) from e
         raise
     osc("9;4;0")
 
 
 def create_mr(branch: str, target: str, title: str, fields: list[str]) -> dict:
-    """Open the MR, retrying while GitLab still processes the push of a new branch."""
+    """Wait up to 60 seconds for GitLab to see a newly pushed source branch."""
     args = (
         "projects/:id/merge_requests",
         "-X",
@@ -141,12 +147,29 @@ def create_mr(branch: str, target: str, title: str, fields: list[str]) -> dict:
         "remove_source_branch=true",
         *fields,
     )
-    for _ in range(4):
+    for attempt in range(31):
         try:
             return api(*args)
-        except subprocess.CalledProcessError:
+        except subprocess.CalledProcessError as e:
+            try:
+                message = json.loads(e.output or "{}").get("message")
+            except json.JSONDecodeError:
+                raise e
+            if message != {"source_branch": ["does not exist"]}:
+                raise
+            if attempt == 30:
+                break
+            if attempt == 0:
+                click.echo(
+                    f"GitLab cannot see pushed branch '{branch}' yet; retrying for up to 60s.",
+                    err=True,
+                )
+            show(f"waiting for GitLab to see {branch}")
             time.sleep(2)
-    return api(*args)
+    raise click.ClickException(
+        f"GitLab still cannot see pushed branch '{branch}' after 60s. "
+        "The push succeeded; rerun glab-ship to resume."
+    )
 
 
 def merge(

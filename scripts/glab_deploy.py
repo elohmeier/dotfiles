@@ -1,6 +1,7 @@
 import json
 import re
 import signal
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -272,6 +273,8 @@ def main(envs: tuple[str, ...], ref: str | None, all_: bool, yes: bool):
         deploy(envs, ref, all_, yes)
     except BaseException as e:
         osc("9;4;0" if isinstance(e, (KeyboardInterrupt, click.Abort)) else "9;4;2")
+        if isinstance(e, subprocess.CalledProcessError):
+            raise click.ClickException((e.stderr or e.output or str(e)).strip()) from e
         raise
     osc("9;4;0")
 

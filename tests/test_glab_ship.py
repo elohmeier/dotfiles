@@ -1,8 +1,104 @@
+import json
 import subprocess
 
 import pytest
+from click.testing import CliRunner
 
 from scripts import glab_deploy, glab_ship
+
+
+@pytest.mark.parametrize("failures", [0, 7, 31])
+def test_create_mr_waits_for_source_branch(monkeypatch, capsys, failures):
+    calls = []
+    sleeps = []
+    mr = {"iid": 71, "web_url": "https://gitlab.example/merge_requests/71"}
+
+    def api(*args):
+        calls.append(args)
+        if len(calls) <= failures:
+            raise subprocess.CalledProcessError(
+                1,
+                ["glab", "api"],
+                output=json.dumps({"message": {"source_branch": ["does not exist"]}}),
+                stderr="glab: source_branch does not exist",
+            )
+        return mr
+
+    monkeypatch.setattr(glab_ship, "api", api)
+    monkeypatch.setattr(glab_ship.time, "sleep", sleeps.append)
+
+    if failures == 31:
+        with pytest.raises(glab_ship.click.ClickException, match="rerun glab-ship"):
+            glab_ship.create_mr("fixes", "main", "fixes", ["-F", "squash=false"])
+    else:
+        assert (
+            glab_ship.create_mr("fixes", "main", "fixes", ["-F", "squash=false"]) == mr
+        )
+
+    assert len(calls) == min(failures + 1, 31)
+    assert sleeps == [2] * min(failures, 30)
+    assert all(call == calls[0] for call in calls)
+    assert capsys.readouterr().err.count("retrying") == bool(failures)
+
+
+@pytest.mark.parametrize(
+    "output",
+    [
+        '{"message":{"title":["cannot be blank"]}}',
+        '{"message":"403 Forbidden"}',
+        '{"message":{"target_branch":["does not exist"]}}',
+        "Bad Gateway",
+        "",
+    ],
+)
+def test_create_mr_does_not_retry_other_errors(monkeypatch, output):
+    error = subprocess.CalledProcessError(1, ["glab", "api"], output=output)
+
+    def api(*args):
+        raise error
+
+    monkeypatch.setattr(glab_ship, "api", api)
+    monkeypatch.setattr(
+        glab_ship.time, "sleep", lambda _: pytest.fail("unexpected retry")
+    )
+    with pytest.raises(subprocess.CalledProcessError) as exc:
+        glab_ship.create_mr("fixes", "main", "fixes", [])
+    assert exc.value is error
+
+
+@pytest.mark.parametrize("cli, action", [(glab_ship, "ship"), (glab_deploy, "deploy")])
+def test_cli_reports_api_error_without_traceback(monkeypatch, cli, action):
+    def fail(*args):
+        raise subprocess.CalledProcessError(
+            1, ["glab", "api"], stderr="glab: 403 Forbidden"
+        )
+
+    monkeypatch.setattr(cli, action, fail)
+    monkeypatch.setattr(cli.signal, "signal", lambda *args: None)
+    result = CliRunner().invoke(cli.main)
+
+    assert result.exit_code == 1
+    assert "403 Forbidden" in result.output
+    assert "Traceback" not in result.output
+
+
+@pytest.mark.parametrize("error", [glab_ship.click.ClickException, KeyboardInterrupt])
+def test_merge_restores_approval_rules_when_creation_stops(monkeypatch, error):
+    rules = {11289: 1}
+    updates = []
+
+    def create(*args):
+        raise error("stopped")
+
+    monkeypatch.setattr(glab_ship.subprocess, "check_call", lambda *args: None)
+    monkeypatch.setattr(glab_ship, "approval_rules", lambda target: rules)
+    monkeypatch.setattr(glab_ship, "set_rules", updates.append)
+    monkeypatch.setattr(glab_ship, "create_mr", create)
+
+    with pytest.raises(error):
+        glab_ship.merge("fixes", "main", None, False, "fixes")
+
+    assert updates == [{11289: 0}, rules]
 
 
 @pytest.mark.parametrize("status", ["success", "failed", "canceled", "skipped"])
