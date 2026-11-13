@@ -2,7 +2,82 @@ import subprocess
 
 import pytest
 
-from scripts import glab_ship
+from scripts import glab_deploy, glab_ship
+
+
+@pytest.mark.parametrize("status", ["success", "failed", "canceled", "skipped"])
+def test_wait_pipeline_follows_approval_through_rollout(monkeypatch, capsys, status):
+    source = {
+        "id": 1099492,
+        "status": "running",
+        "web_url": "https://gitlab.example/logstash-filter/-/pipelines/1099492",
+    }
+    downstream = {
+        "id": 1099504,
+        "project_id": 459,
+        "ref": "309b8a11/obsp/349",
+        "status": "running",
+        "web_url": "https://gitlab.example/elastic-deploy/-/pipelines/1099504",
+    }
+    bridge = {
+        "id": 3370212,
+        "name": "deploy_obsp",
+        "stage": "obsp",
+        "status": "running",
+        "downstream_pipeline": downstream,
+    }
+    gate = {"id": 3370260, "name": "wait_for_merge_request", "status": "manual"}
+    mr = {
+        "state": "opened",
+        "description": "<!-- @@@1099504@@@349@@@309b8a11/obsp/349@@@elastic -->",
+        "web_url": "https://gitlab.example/elastic-deploy/-/merge_requests/371",
+    }
+    responses = {
+        "projects/:id/pipelines?sha=309b8a11&ref=main": [source],
+        "projects/:id/pipelines/1099492": source,
+        "projects/:id/pipelines/1099492/jobs?per_page=100": [],
+        "projects/:id/pipelines/1099492/bridges?per_page=100": [bridge],
+        "projects/459/pipelines/1099504": downstream,
+        "projects/459/pipelines/1099504/jobs?per_page=100": [
+            {"name": "create_merge_request", "status": "failed", "allow_failure": True},
+            gate,
+        ],
+        "projects/459/pipelines/1099504/bridges?per_page=100": [],
+        "projects/459/merge_requests?scope=all&source_branch=obsp-349-staging&target_branch=obsp-approved": [
+            mr
+        ],
+    }
+    states = [
+        ("opened", "manual", "manual", "manual"),
+        ("merged", "manual", "manual", "manual"),
+        ("merged", "running", "running", "running"),
+        ("merged", status, status, status),
+    ]
+    seen = []
+
+    def api(path):
+        if path == "projects/:id/pipelines/1099492":
+            state = states[len(seen)]
+            seen.append(state)
+            mr["state"], gate["status"], downstream["status"], source["status"] = state
+            bridge["status"] = downstream["status"]
+        return responses[path]
+
+    monkeypatch.setattr(glab_ship, "api", api)
+    monkeypatch.setattr(glab_deploy, "api", api)
+    monkeypatch.setattr(glab_deploy.time, "sleep", lambda _: None)
+
+    if status == "success":
+        glab_ship.wait_pipeline("309b8a11", "main")
+    else:
+        with pytest.raises(glab_ship.click.ClickException, match="main pipeline"):
+            glab_ship.wait_pipeline("309b8a11", "main")
+
+    assert seen == states
+    output = capsys.readouterr().out
+    assert mr["web_url"] in output
+    assert "Deployment approval MR merged" in output
+    assert ("main pipeline: success" in output) == (status == "success")
 
 
 @pytest.mark.parametrize(

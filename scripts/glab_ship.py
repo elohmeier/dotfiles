@@ -73,21 +73,17 @@ def set_rules(rules: dict[int, int]):
 
 
 def wait_pipeline(sha: str, ref: str):
+    # glab-deploy imports the CLI helpers above.
+    from scripts.glab_deploy import Run, watch
+
     show(f"waiting for {ref} pipeline")
     pipeline = poll(
         lambda: next(iter(api(f"projects/:id/pipelines?sha={sha}&ref={ref}")), None), 5
     )
     click.echo(f"{ref} pipeline: {pipeline['web_url']}")
 
-    def finished():
-        show_pipeline(f"{ref} pipeline", pipeline["id"])
-        s = api(f"projects/:id/pipelines/{pipeline['id']}")["status"]
-        return s if s in FINISHED else None
-
-    status = poll(finished)
-    if status != "success":
-        raise click.ClickException(f"{ref} pipeline {status}")
-    click.echo(f"{ref} pipeline: success")
+    watch([Run(f"{ref} pipeline", pipeline)])
+    click.echo(f"\n{ref} pipeline: success")
 
 
 @click.command()
@@ -104,13 +100,14 @@ def wait_pipeline(sha: str, ref: str):
 @click.option(
     "--wait/--no-wait",
     default=True,
-    help="Wait for the pipeline on the merged target branch.",
+    help="Wait for the merged target pipeline, including deployment approvals and rollout.",
 )
 def main(squash: bool | None, title: str | None, wait: bool):
     """Push the current branch, reuse its open MR or open one titled after the
     last commit, auto-merge it with approvals temporarily disabled, switch back
     to the target branch, deleting the local branch if fully merged, then wait
-    for the pipeline on the merged target branch.
+    for the pipeline on the merged target branch. Downstream deployment
+    approval MRs are linked while waiting for approval, merge and rollout.
 
     In a linked worktree the branch stays checked out.
 

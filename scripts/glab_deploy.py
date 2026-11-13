@@ -226,7 +226,6 @@ def watch(runs: list[Run]):
     failed = [r.label for r in runs if not r.ok()]
     if failed:
         raise click.ClickException(f"failed: {', '.join(failed)}")
-    show(f"✓ deployed {', '.join(r.label for r in runs)}", 1, 1)
 
 
 @click.command()
@@ -247,7 +246,13 @@ def watch(runs: list[Run]):
 @click.option(
     "-a", "--all", "all_", is_flag=True, help="Deploy all environments/manual jobs."
 )
-@click.option("-y", "--yes", is_flag=True, help="Skip the confirmation.")
+@click.option(
+    "-y",
+    "--yes/--confirm",
+    default=True,
+    show_default=True,
+    help="Skip the confirmation.",
+)
 def main(envs: tuple[str, ...], ref: str | None, all_: bool, yes: bool):
     """Deploy the current GitLab project and watch the pipelines.
 
@@ -255,6 +260,7 @@ def main(envs: tuple[str, ...], ref: str | None, all_: bool, yes: bool):
     starts one web pipeline per selected environment in parallel, an array
     input starts one pipeline with all selected environments. Without inputs,
     the manual jobs of the latest pipeline on the ref are played instead.
+    Starts the selection immediately; use --confirm to ask before starting.
     Downstream deploy pipelines are watched as well. Deployment approval
     MRs are linked while waiting for approval and merge, then the
     deployment continues to be watched until completion.
@@ -320,6 +326,7 @@ def deploy(envs: tuple[str, ...], ref: str | None, all_: bool, yes: bool):
             api(f"projects/:id/jobs/{manual[j]['id']}/play", "-X", "POST")
         runs = [Run(ref, pipeline, set(picked))]
     watch(runs)
+    show(f"✓ deployed {', '.join(r.label for r in runs)}", 1, 1)
 
 
 if __name__ == "__main__":
