@@ -313,17 +313,42 @@ links, dates, related tasks and original attributes. Filters and selected task
 UUIDs are saved in the URL. `/` focuses search, `j`/`k` navigate tasks, and
 Escape closes the details.
 
-The **Activity** tab shows LayerChart charts of completed tasks over time and
-by project, plus counts, completions per week, days with completions and tasks
-open now. Choose the last 30, 90 or 365 days, or all time; group by day, week
-or month. Select a bar or a period to inspect its tasks and open their details.
-Source, project, page and search filters apply to the statistics, independently
+Project and Logseq-page pickers support text search. Active search/source/project/
+page filters appear as removable chips in both tabs, with a shared clear action;
+the search field also has a clear button. On desktop, drag or keyboard-resize the
+divider between the task list and details; its width is remembered locally.
+On mobile, filters open in a sheet with keyboard focus containment and restoration.
+
+The default **Ready** view excludes future wait dates, future scheduled dates
+and unresolved dependencies. **All open**, **Hidden until**, **Scheduled** and
+**Blocked** views expose the other workflow states independently of the raw
+exported status. Inbox review shows open Inbox actions with source page/list,
+Logseq ancestor context, priority and age, initially sorted oldest first.
+
+Sources include Apple Reminders, with original lists kept separate from curated
+projects. Area filters and project filters include subprojects; disable
+**Include subprojects** for an exact match. Tag filters and workflow shortcuts
+cover `next`, `delegated`, `verify` and `steuer`. Follow-up sorting uses scheduled
+or wait dates; details show `waitingfor`, source context, closure outcomes and
+merge links in both directions. Reminders all-day due dates retain their source
+calendar date when the local due timestamp still matches the source value.
+
+The **Activity** tab shows LayerChart charts of task closures over time and
+by area or project, plus counts, closures per week, days with closures and tasks
+open now. Choose the last 30, 90 or 365 days, this year, last year, all time, or
+a custom inclusive date range ending today or earlier. The date picker supports
+calendar selection and typed dates; Apply commits the range and Cancel discards
+it. Group by day, week or month. Select a bar or a period to inspect its tasks
+and open their details.
+Source, area, project, page, Reminders-list, tag and search filters apply to the statistics, independently
 of the Tasks tab's status filter. Dates use the browser's timezone, weeks start
 Monday, and periods with zero completions remain visible. Controls and selected
 periods are saved in the URL, and charts update from the same live snapshots.
 
 Activity counts tasks currently marked completed using Taskwarrior's `end`
-date. Deleted tasks and invalid or missing completion dates are excluded.
+date. Stacked bars distinguish `done`, `dropped`, `merged` and unspecified
+outcomes. Outcome filtering scopes the closure charts while open-task counts
+retain the other filters. Deleted tasks and invalid or missing closure dates are excluded.
 Imports and bulk changes can create spikes; a snapshot cannot reconstruct
 previous completions of reopened tasks or measure time spent. Weekly averages
 include all calendar days in the selected range; open-task counts cover all

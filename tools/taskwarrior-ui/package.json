@@ -15,6 +15,7 @@
   },
   "devDependencies": {
     "@fontsource-variable/geist": "^5.3.0",
+    "@internationalized/date": "^3.12.4",
     "@lucide/svelte": "^1.70.0",
     "@sveltejs/adapter-static": "^4.0.0",
     "@sveltejs/kit": "^3.0.0",
@@ -22,6 +23,7 @@
     "@types/node": "^26.0.0",
     "bits-ui": "^2.21.0",
     "layerchart": "^2.10.0",
+    "paneforge": "^1.0.2",
     "svelte": "^5.57.2",
     "svelte-check": "^4.6.0",
     "typescript": "^6.0.3",

@@ -10,6 +10,9 @@ importers:
       "@fontsource-variable/geist":
         specifier: ^5.3.0
         version: 5.3.0
+      "@internationalized/date":
+        specifier: ^3.12.4
+        version: 3.12.4
       "@lucide/svelte":
         specifier: ^1.70.0
         version: 1.72.0(svelte@5.57.3)
@@ -31,6 +34,9 @@ importers:
       layerchart:
         specifier: ^2.10.0
         version: 2.10.0(svelte@5.57.3)
+      paneforge:
+        specifier: ^1.0.2
+        version: 1.0.2(svelte@5.57.3)
       svelte:
         specifier: ^5.57.2
         version: 5.57.3
@@ -868,6 +874,13 @@ packages:
     }
     engines: { node: ">=12.20.0" }
 
+  paneforge@1.0.2:
+    resolution: {
+      integrity: sha512-KzmIXQH1wCfwZ4RsMohD/IUtEjVhteR+c+ulb/CHYJHX8SuDXoJmChtsc/Xs5Wl8NHS4L5Q7cxL8MG40gSU1bA==,
+    }
+    peerDependencies:
+      svelte: ^5.29.0
+
   picocolors@1.1.1:
     resolution: {
       integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==,
@@ -902,6 +915,20 @@ packages:
     }
     engines: { node: ^20.19.0 || >=22.12.0 }
     hasBin: true
+
+  runed@0.23.4:
+    resolution: {
+      integrity: sha512-9q8oUiBYeXIDLWNK5DfCWlkL0EW3oGbk845VdKlPeia28l751VpfesaB/+7pI6rnbx1I6rqoZ2fZxptOJLxILA==,
+    }
+    peerDependencies:
+      svelte: ^5.7.0
+
+  runed@0.29.2:
+    resolution: {
+      integrity: sha512-0cq6cA6sYGZwl/FvVqjx9YN+1xEBu9sDDyuWdDW1yWX7JF2wmvmVKfH+hVCZs+csW+P3ARH92MjI3H9QTagOQA==,
+    }
+    peerDependencies:
+      svelte: ^5.7.0
 
   runed@0.35.1:
     resolution: {
@@ -960,6 +987,14 @@ packages:
   svelte-toolbelt@0.10.7:
     resolution: {
       integrity: sha512-gjuUVEEpo38UJCeI1ssE3NxG31tYENczPTcTGTXf4338qAQNdR9I1oAEbQY0KQFmbdUojNIhHuRNix7ThwFNxQ==,
+    }
+    engines: { node: ">=18", pnpm: ">=8.7.0" }
+    peerDependencies:
+      svelte: ^5.30.2
+
+  svelte-toolbelt@0.9.3:
+    resolution: {
+      integrity: sha512-HCSWxCtVmv+c6g1ACb8LTwHVbDqLKJvHpo6J8TaqwUme2hj9ATJCpjCPNISR1OCq2Q4U1KT41if9ON0isINQZw==,
     }
     engines: { node: ">=18", pnpm: ">=8.7.0" }
     peerDependencies:
@@ -1571,6 +1606,12 @@ snapshots:
 
   obug@2.2.1: {}
 
+  paneforge@1.0.2(svelte@5.57.3):
+    dependencies:
+      runed: 0.23.4(svelte@5.57.3)
+      svelte: 5.57.3
+      svelte-toolbelt: 0.9.3(svelte@5.57.3)
+
   picocolors@1.1.1: {}
 
   picomatch@4.0.7: {}
@@ -1606,6 +1647,16 @@ snapshots:
       "@rolldown/binding-wasm32-wasi": 1.2.19
       "@rolldown/binding-win32-arm64-msvc": 1.2.19
       "@rolldown/binding-win32-x64-msvc": 1.2.19
+
+  runed@0.23.4(svelte@5.57.3):
+    dependencies:
+      esm-env: 1.2.2
+      svelte: 5.57.3
+
+  runed@0.29.2(svelte@5.57.3):
+    dependencies:
+      esm-env: 1.2.2
+      svelte: 5.57.3
 
   runed@0.35.1(@sveltejs/kit@3.2.0(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.3)(vite@8.3.8(@types/node@26.6.6)))(svelte@5.57.3)(typescript@6.0.3)(vite@8.3.8(@types/node@26.6.6)))(svelte@5.57.3):
     dependencies:
@@ -1657,6 +1708,13 @@ snapshots:
       svelte: 5.57.3
     transitivePeerDependencies:
       - "@sveltejs/kit"
+
+  svelte-toolbelt@0.9.3(svelte@5.57.3):
+    dependencies:
+      clsx: 2.1.1
+      runed: 0.29.2(svelte@5.57.3)
+      style-to-object: 1.0.14
+      svelte: 5.57.3
 
   svelte@5.57.3:
     dependencies:
