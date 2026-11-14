@@ -15,7 +15,7 @@ concurrency:
 
 env:
   # renovate: datasource=github-releases depName=astral-sh/uv
-  UV_VERSION: 0.13.6
+  UV_VERSION: 0.13.8
   # renovate: datasource=npm depName=renovate
   RENOVATE_VERSION: 44.239.0
   # renovate: datasource=npm depName=dprint
