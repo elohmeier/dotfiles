@@ -12,12 +12,19 @@ Library/**
 {{ if ne .chezmoi.os "linux" }}
 .chezmoiscripts/linux/**
 .config/systemd/**
+.config/user-tmpfiles.d/**
+.local/bin/dev-cleanup
 .config/apt-cacher-ng/**
 .config/ff-egress/**
 .config/ollama-proxy/**
 .config/mise/tasks/ff/**
 .config/fish/completions/mount-media.fish
 .config/fish/completions/umount-media.fish
+{{ end -}}
+
+{{ if not (and (lookPath "systemctl") (lookPath "flock")) }}
+.local/bin/dev-cleanup
+.config/systemd/user/dev-cleanup.*
 {{ end -}}
 
 {{ if not .isWSL }}

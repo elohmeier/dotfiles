@@ -1,0 +1,11 @@
+[Unit]
+Description=Limit development build caches and remove old unused containers
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/dev-cleanup
+Nice=19
+IOSchedulingClass=idle
+CPUWeight=10
+IOWeight=10
+TimeoutStartSec=2h

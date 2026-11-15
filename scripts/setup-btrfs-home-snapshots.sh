@@ -81,5 +81,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now btrfs-home-snapshot.timer
 sudo systemctl start btrfs-home-snapshot.service
 
+"$(dirname -- "${BASH_SOURCE[0]}")/setup-btrfs-cache-subvolumes.sh"
+
 echo "Keeping the latest $keep /home snapshots on the '$calendar' schedule."
 sudo btrfs subvolume list -ro "$directory"

@@ -1,0 +1,61 @@
+#!{{ lookPath "bash" }}
+set -euo pipefail
+
+case ${1:-} in
+    '') dry_run=false ;;
+    --dry-run) dry_run=true ;;
+    *) echo "Usage: dev-cleanup [--dry-run]" >&2; exit 2 ;;
+esac
+
+run() {
+    printf ' %s' "$@"
+    printf '\n'
+    if [ "$dry_run" = false ]; then
+        "$@"
+    fi
+}
+
+if [ "$dry_run" = false ]; then
+    mkdir -p "${XDG_CACHE_HOME:-$HOME/.cache}"
+    exec 9>"${XDG_CACHE_HOME:-$HOME/.cache}/dev-cleanup.lock"
+    "{{ lookPath "flock" }}" -n 9 || exit 0
+fi
+
+{{ if and (lookPath "cargo-sweep") (lookPath "cargo") (lookPath "jq") -}}
+export PATH="{{ dir (lookPath "cargo") }}:$PATH"
+for manifest in "$HOME"/repos/*/*/*/Cargo.toml \
+    "$HOME"/repos/*/*/*/.claude/worktrees/*/Cargo.toml \
+    "${XDG_CACHE_HOME:-$HOME/.cache}"/*/Cargo.toml; do
+    [ -f "$manifest" ] || continue
+    (
+        cd "$(dirname "$manifest")"
+        target=$("{{ lookPath "cargo" }}" metadata --frozen --no-deps --format-version 1 \
+            | "{{ lookPath "jq" }}" -r .target_directory) || exit 0
+        [ -d "$target" ] || exit 0
+        if [ "$dry_run" = false ]; then
+            # Respect Cargo's profile locks; skip projects with active builds.
+            for lock_file in "$target"/*/.cargo-{lock,build-lock,artifact-lock} \
+                "$target"/*/*/.cargo-{lock,build-lock,artifact-lock}; do
+                [ -f "$lock_file" ] || continue
+                exec {build_lock_fd}<>"$lock_file"
+                "{{ lookPath "flock" }}" -n "$build_lock_fd" || exit 0
+            done
+        fi
+        run "{{ lookPath "cargo-sweep" }}" sweep --maxsize 40GB "$PWD"
+    )
+done
+{{ end -}}
+
+{{ with lookPath "docker" -}}
+if "{{ . }}" --host unix:///var/run/docker.sock info >/dev/null 2>&1; then
+    run "{{ . }}" --host unix:///var/run/docker.sock builder prune --all --force --max-used-space 40GB
+    run "{{ . }}" --host unix:///var/run/docker.sock container prune --force --filter until=168h
+    run "{{ . }}" --host unix:///var/run/docker.sock image prune --all --force --filter until=168h
+fi
+{{ end -}}
+
+{{ with lookPath "podman" -}}
+if "{{ . }}" --remote=false info >/dev/null 2>&1; then
+    run "{{ . }}" --remote=false system prune --all --force --filter until=168h
+fi
+{{ end -}}

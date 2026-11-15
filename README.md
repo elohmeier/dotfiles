@@ -469,6 +469,33 @@ move the current database **and its `-wal`/`-shm` files** aside, and copy the ch
 snapshot into the task data directory as `taskchampion.sqlite3`. Restart clients
 only after the replacement is complete.
 
+### Development cache cleanup (Linux)
+
+`chezmoi apply` enables a weekly `dev-cleanup.timer` and the daily
+`systemd-tmpfiles-clean.timer`. Preview commands with `dev-cleanup --dry-run`, or
+run `dev-cleanup` to clean immediately. The weekly job runs on Sunday evenings
+at low CPU and I/O priority:
+
+- `cargo-sweep` applies its 40 GB cache limit to Rust projects in ghq workspace
+  roots, Claude worktrees and cache checkout roots. Cargo's profile locks are
+  held during cleanup; projects with active builds are skipped.
+- The local Docker builder retains up to 40 GB of cache. Unused images and
+  stopped containers created more than seven days ago are pruned.
+- Local Podman removes unused images and stopped containers created more than
+  seven days ago. Persistent volumes are kept by the recurring cleanup.
+
+Daily tmpfiles cleanup expires Trash, Director64 build output and `~/.cache/*-target`
+contents after 30 days without activity, and known Rust/TLA+ temporary caches
+after seven days. Other temporary files follow the operating system's policy.
+Inspect or preview the rules with:
+
+```sh
+systemd-tmpfiles --user --cat-config
+systemd-tmpfiles --user --clean --dry-run
+systemctl --user list-timers dev-cleanup.timer systemd-tmpfiles-clean.timer
+journalctl --user -u dev-cleanup.service
+```
+
 ### Btrfs home snapshots (Fedora Atomic / Bluefin)
 
 Enable 30 daily read-only snapshots of the `/home` subvolume:
@@ -480,6 +507,38 @@ Enable 30 daily read-only snapshots of the `/home` subvolume:
 Set `SNAPSHOT_CALENDAR` and `SNAPSHOT_KEEP` to change the schedule and retention.
 Snapshots live in the root-only `/home/.snapshots` subvolume and do not replace
 an off-device backup.
+
+Setup also enables cache migration before the user manager starts at the next
+boot. To add this to an existing snapshot installation, run:
+
+```sh
+./scripts/setup-btrfs-cache-subvolumes.sh
+```
+
+The migration preserves data, ownership, permissions and internal hardlinks with
+`cp -a --reflink=always`, then atomically exchanges the directories. It requires
+GNU coreutils with `mv --exchange --no-copy` and runs before user applications
+start, since moving a cache while writers are active can lose updates. A failed
+copy leaves the original directory in place; an interrupted migration leaves a
+`.chezmoi-subvolume` sibling for inspection before retrying.
+
+Separate Btrfs subvolumes exclude these generated files from future home
+snapshots: `~/.cache`, npm's download cache, Gradle caches, Cargo registry/Git
+caches, pnpm's store, Go's module cache, Rust `target/` directories in ghq
+workspace roots and Claude worktrees, and Director64's `build/` directory.
+Existing Rust targets must have `CACHEDIR.TAG` to qualify. Repositories under
+`~/repos`, installed tools and Podman storage (including persistent volumes) stay
+in the home snapshots. Ordinary cleanup commands can remove empty cache subvolumes;
+rerun the migration after a cleanup recreates a target as a regular directory.
+
+Btrfs snapshots do not recursively capture nested subvolumes. Excluded caches
+therefore need to be recreated or downloaded after restoring a home snapshot.
+Existing snapshots still retain their old cached data until the configured
+retention removes them; changing the layout does not reclaim that history.
+
+Inspect migration status with
+`systemctl status btrfs-cache-subvolumes@$(id -u).service` and
+`journalctl -u btrfs-cache-subvolumes@$(id -u).service`.
 
 ### OOM protection for remote access (Linux)
 
