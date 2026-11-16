@@ -3,6 +3,11 @@ status is-interactive; or exit
 {{- if eq .chezmoi.os "darwin" }}
 # Use the launchd ssh-agent; Secure Enclave keys via ssh-keychain.dylib (djust setup-se-ssh)
 set -gx SSH_SK_PROVIDER /usr/lib/ssh-keychain.dylib
+{{ lookPath "ssh-add" }} -l >/dev/null 2>&1
+if test $status -eq 2
+    set -l ssh_auth_sock ({{ lookPath "launchctl" }} print gui/({{ lookPath "id" }} -u) 2>/dev/null | {{ lookPath "awk" }} '$1 == "SSH_AUTH_SOCK" && $2 == "=>" { print $3 }')
+    test -S "$ssh_auth_sock"; and set -gx SSH_AUTH_SOCK "$ssh_auth_sock"
+end
 {{- else if includeTemplate "ssh-tpm-agent" . }}
 # TPM-backed keys via ssh-tpm-agent (djust setup-tpm-ssh); in SSH sessions keep a reachable forwarded agent
 if test -z "$SSH_CONNECTION"; or begin; ssh-add -l >/dev/null 2>&1; test $status -eq 2; end
