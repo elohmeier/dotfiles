@@ -1,13 +1,15 @@
 ---
 name: secret-entry
-description: Request a credential (token, password, API key) from the user without it passing through chat, tool calls, arguments, or logs. Use whenever a task needs a secret the user must supply or rotate, when checking whether a secret is already stored in a repository's SOPS env file (env.enc.yaml) or the pass/passage password store, or when a repository's instructions mention `secret-entry` or `secrets:request`.
+description: Request a credential or generate a memorable passphrase without it passing through chat, tool calls, arguments, or logs. Use when supplying or rotating secrets, checking repository SOPS or pass/passage storage, or working with `secret-entry` or `secrets:request`.
 ---
 
 # Secret Entry
 
 `secret-entry` is installed on PATH by the dotfiles (`elohmeier/dotfiles`,
 `scripts/secret_entry.py`). It prompts with hidden input in the user's own
-terminal and writes straight to encrypted storage. It never prints values.
+terminal or generates a passphrase and writes straight to encrypted storage.
+Values stay hidden unless the user explicitly requests `--generate --show`
+in their own terminal.
 
 ## Backends
 
@@ -69,12 +71,38 @@ If the repository defines its own wrapper task (for example
 `mise run secrets:request -- KEY` that also delivers values into Kubernetes
 Secrets), use that wrapper; its own instructions take precedence.
 
+## Generate a memorable password
+
+Use `request --generate` when a new password is needed; tokens issued by a
+service still need the hidden prompt. Generation uses Python's `secrets`
+module and the bundled EFF short word list #1, with hyphens between words.
+It works with every backend and does not need a network connection.
+
+```sh
+secret-entry request --generate --pass accounts/example
+secret-entry request --generate --words 6 --show --pass accounts/example
+```
+
+The default is eight words (82.7 bits of entropy, about 43 characters).
+`--words` accepts six or more; six words give 62.0 bits, about 32 characters.
+`--words` and `--show` require `--generate`. Running again replaces the
+stored value, just like prompted entry; storage does not change the password
+at the service that will use it.
+
+Without `--show`, generation prints only status and can run without a terminal
+when the user has authorized creating or rotating the stored password.
+For memorization, give the user the `--show` command to run in their own terminal.
+It refuses redirected input or output and reveals the phrase only after a
+successful save. The phrase remains in terminal scrollback. Never run `--show`
+in an agent-owned terminal or capture its output.
+
 ## Rules
 
 - Never ask for secret values in chat, clarification tools, screenshots,
   command arguments, shell history, or plaintext files.
 - Never print secrets: no `sops decrypt` of whole files, no `pass show`/`passage show`
-  in an agent tool call, no `env` dumps.
+  in an agent tool call, no `env` dumps. The explicit `--generate --show`
+  workflow above reveals only to the user in their own terminal.
 - Consume a stored value inside the process that needs it (mise env loading,
   `sops decrypt` piped into a program, `pass show`/`passage show`
   captured by a program) and

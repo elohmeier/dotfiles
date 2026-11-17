@@ -4,12 +4,14 @@ import fcntl
 import json
 import os
 import pty
+import re
 import select
 import shutil
 import subprocess
 import sys
 import tempfile
 import time
+from importlib.resources import files
 from pathlib import Path
 from uuid import uuid4
 
@@ -73,7 +75,7 @@ def no_staging(path):
     return not list(path.parent.glob(".secret-env-*.enc.yaml"))
 
 
-def run_in_terminal(argv, value, env=None):
+def run_in_terminal(argv, value=None, env=None):
     """Answer the hidden prompt through a real PTY and return the output."""
     master, slave = pty.openpty()
     code = "import sys; from scripts import secret_entry; sys.exit(secret_entry.main(sys.argv[1:]))"
@@ -99,10 +101,10 @@ def run_in_terminal(argv, value, env=None):
                 if not chunk:
                     break
                 output += chunk
-            if b"(hidden): " in output and not entered:
+            if value is not None and b"(hidden): " in output and not entered:
                 os.write(master, value + b"\n")
                 entered = True
-        assert entered, "The hidden prompt never appeared"
+        assert value is None or entered, "The hidden prompt never appeared"
         assert process.wait(timeout=5) == 0, output
         return output
     finally:
@@ -110,6 +112,147 @@ def run_in_terminal(argv, value, env=None):
             process.kill()
         process.wait()
         os.close(master)
+
+
+def test_bundled_wordlist_is_complete_and_unique():
+    words = [
+        line.split()[1]
+        for line in files("scripts")
+        .joinpath("data/eff-short-wordlist-1.txt")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    assert len(words) == len(set(words)) == 1296
+    assert all(re.fullmatch(r"[a-z-]{3,5}", word) for word in words)
+    assert "yo-yo" in words
+
+
+def test_generation_preserves_repeated_and_hyphenated_words(monkeypatch):
+    def choose(words):
+        assert len(words) == 1296
+        return "yo-yo"
+
+    monkeypatch.setattr(secret_entry.secrets, "choice", choose)
+    assert secret_entry.generate_passphrase(6) == "-".join(["yo-yo"] * 6)
+
+
+@needs_sops
+def test_generated_passphrases_save_and_rotate_without_revealing(
+    env, monkeypatch, capsys
+):
+    generated = []
+    generate = secret_entry.generate_passphrase
+
+    def collect(count):
+        value = generate(count)
+        generated.append((count, value))
+        return value
+
+    monkeypatch.setattr(secret_entry, "generate_passphrase", collect)
+    monkeypatch.setattr(
+        secret_entry, "prompt_secret", lambda name: pytest.fail("prompted for a secret")
+    )
+    for options, count in [([], 8), (["--words", "6"], 6)]:
+        assert secret_entry.main(["request", "--generate", *options, "NEW_TOKEN"]) == 0
+        assert generated[-1][0] == count
+        value = generated[-1][1]
+        assert secret_entry.decrypt(env, env.read_bytes()) == {
+            **INITIAL,
+            "NEW_TOKEN": value,
+        }
+        assert value.encode() not in env.read_bytes()
+    assert secret_entry.main(["status", "NEW_TOKEN"]) == 0
+    out, err = capsys.readouterr()
+    assert all(value not in out + err for _, value in generated)
+    assert "82.7 bits" in out and "62.0 bits" in out
+    assert "Replace NEW_TOKEN" in out
+
+
+@pytest.mark.parametrize(
+    "options",
+    [["--words", "6"], ["--show"], ["--generate", "--words", "5"]],
+)
+def test_invalid_generation_options_do_not_access_storage(options, monkeypatch):
+    monkeypatch.setattr(
+        secret_entry, "pass_contains", lambda name: pytest.fail("accessed storage")
+    )
+    assert secret_entry.main(["request", "--pass", *options, "team/token"]) == 2
+
+
+@pytest.mark.parametrize("redirected", ["stdin", "stdout", "stderr"])
+def test_show_refuses_redirected_streams_before_accessing_storage(
+    redirected, monkeypatch, capsys
+):
+    for stream in ["stdin", "stdout", "stderr"]:
+        monkeypatch.setattr(
+            getattr(secret_entry.sys, stream),
+            "isatty",
+            lambda stream=stream: stream != redirected,
+        )
+    monkeypatch.setattr(
+        secret_entry, "pass_contains", lambda name: pytest.fail("accessed storage")
+    )
+    assert (
+        secret_entry.main(["request", "--generate", "--show", "--pass", "team/token"])
+        == 2
+    )
+    assert "own terminal" in capsys.readouterr().err
+
+
+def test_failed_save_does_not_show_generated_phrase(monkeypatch, capsys):
+    value = "-".join(["apple"] * 8)
+    for stream in (sys.stdin, sys.stdout, sys.stderr):
+        monkeypatch.setattr(stream, "isatty", lambda: True)
+    monkeypatch.setattr(secret_entry, "generate_passphrase", lambda count: value)
+    monkeypatch.setattr(secret_entry, "pass_contains", lambda name: False)
+
+    def fail(name, supplied):
+        assert supplied == value
+        raise secret_entry.SecretError("Storage failed.")
+
+    monkeypatch.setattr(secret_entry, "pass_save", fail)
+    assert (
+        secret_entry.main(["request", "--generate", "--show", "--pass", "team/token"])
+        == 2
+    )
+    out, err = capsys.readouterr()
+    assert value not in out + err
+    assert "Storage failed" in err
+
+
+@needs_sops
+def test_generated_phrase_is_shown_in_real_terminal_only_after_save(env):
+    output = run_in_terminal(
+        ["request", "--generate", "--show", "--file", str(env), "NEW_TOKEN"]
+    )
+    value = secret_entry.decrypt(env, env.read_bytes())["NEW_TOKEN"].encode()
+    assert output.index(b"saved and encryption verified") < output.index(value)
+    assert b"(hidden):" not in output
+
+
+@pytest.mark.parametrize(
+    "platform,option", [("linux", "--tpm"), ("linux", "--host"), ("darwin", "--host")]
+)
+def test_generated_passphrase_uses_host_backend(platform, option, monkeypatch, capsys):
+    stored = {}
+    value = "-".join(["apple"] * 8)
+
+    def keychain(name, value=None):
+        if value is not None:
+            stored[name] = value
+        return stored.get(name)
+
+    monkeypatch.setattr(secret_entry.sys, "platform", platform)
+    monkeypatch.setattr(secret_entry, "keychain_secret", keychain)
+    monkeypatch.setattr(secret_entry, "check_tpm", lambda: None)
+    monkeypatch.setattr(secret_entry, "tpm_contains", lambda name: name in stored)
+    monkeypatch.setattr(
+        secret_entry, "tpm_save", lambda name, value: stored.update({name: value})
+    )
+    monkeypatch.setattr(secret_entry, "generate_passphrase", lambda count: value)
+    assert secret_entry.main(["request", "--generate", option, "DUMMY_TOKEN"]) == 0
+    assert stored == {"DUMMY_TOKEN": value}
+    assert value not in "".join(capsys.readouterr())
 
 
 @needs_sops
@@ -377,10 +520,18 @@ def test_tpm_refuses_non_linux_before_prompt(command, monkeypatch, capsys):
 
 @pytest.mark.parametrize("unavailable", [True, False])
 @pytest.mark.parametrize("option", ["--tpm", "--host"])
-def test_tpm_preflight_failure_before_prompt(unavailable, option, monkeypatch, capsys):
+@pytest.mark.parametrize("options", [[], ["--generate"]])
+def test_tpm_preflight_failure_before_prompt(
+    unavailable, option, options, monkeypatch, capsys
+):
     monkeypatch.setattr(secret_entry.sys, "platform", "linux")
     monkeypatch.setattr(
         secret_entry, "prompt_secret", lambda name: pytest.fail("prompted for a secret")
+    )
+    monkeypatch.setattr(
+        secret_entry,
+        "generate_passphrase",
+        lambda count: pytest.fail("generated before checking the backend"),
     )
 
     def fail(command, **kwargs):
@@ -391,7 +542,7 @@ def test_tpm_preflight_failure_before_prompt(unavailable, option, monkeypatch, c
         return subprocess.CompletedProcess(command, 1, b"", b"private diagnostics")
 
     monkeypatch.setattr(secret_entry.subprocess, "run", fail)
-    assert secret_entry.main(["request", option, "DUMMY_TOKEN"]) == 2
+    assert secret_entry.main(["request", *options, option, "DUMMY_TOKEN"]) == 2
     out, err = capsys.readouterr()
     assert not out
     assert "systemd-creds" in err
@@ -587,3 +738,17 @@ def test_passage_used_once_store_has_age_recipients(age_store, capsys):
     out, err = capsys.readouterr()
     assert "present in passage store" in out
     assert "dummy-value" not in out + err
+
+
+@needs_passage
+def test_generated_passphrase_is_saved_in_passage(age_store, capsys):
+    assert secret_entry.main(["request", "--generate", "--pass", "team/token"]) == 0
+    value = subprocess.run(
+        ["passage", "show", "team/token"],
+        env={**os.environ, "PASSAGE_DIR": str(age_store)},
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    assert value and value.encode() not in (age_store / "team/token.age").read_bytes()
+    assert value not in "".join(capsys.readouterr())

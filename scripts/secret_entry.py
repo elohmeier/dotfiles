@@ -1,22 +1,27 @@
-"""Collect a secret in the user's own terminal and store it without echoing it.
+"""Collect or generate a secret and store it without echoing it by default.
 
 Agents hand users `secret-entry request ...`; values never pass through chat,
 arguments, or logs. Backends: a flat SOPS env file (default `env.enc.yaml` at
 the git root), the pass or passage password store, or `--host`: macOS Keychain or Linux
 systemd-creds bound to this host's TPM2 chip, its host key and the current
 user. Tools consume host credentials with `secret-entry read NAME`.
+Use `request --generate` for an EFF short-list passphrase; add `--show` to
+reveal it in your own terminal after saving.
 """
 
 import fcntl
 import getpass
 import json
+import math
 import os
 import re
+import secrets
 import stat
 import subprocess
 import sys
 import tempfile
 import warnings
+from importlib.resources import files
 from pathlib import Path
 
 import click
@@ -378,6 +383,17 @@ def prompt_secret(label: str) -> str:
             ) from None
 
 
+def generate_passphrase(count: int) -> str:
+    words = [
+        line.split()[1]
+        for line in files("scripts")
+        .joinpath("data/eff-short-wordlist-1.txt")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    return "-".join(secrets.choice(words) for _ in range(count))
+
+
 def env_file(file: str | None) -> Path:
     if file:
         return Path(file).absolute()
@@ -434,46 +450,79 @@ def cli():
     pass
 
 
-@cli.command(help="Prompt privately and store NAME; run it again to rotate.")
+@cli.command(help="Prompt privately or generate and store NAME; run again to rotate.")
 @target
 @file_option
 @pass_option
 @tpm_option
 @host_option
+@click.option("--generate", is_flag=True, help="Generate an EFF short-list passphrase.")
+@click.option(
+    "--words",
+    type=click.IntRange(min=6),
+    help="Generated word count (default: 8, minimum: 6); requires --generate.",
+)
+@click.option(
+    "--show",
+    is_flag=True,
+    help="Reveal the generated phrase in your terminal after saving; requires --generate.",
+)
 def request(
-    name: str, file: str | None, use_pass: bool, use_tpm: bool, use_host: bool
+    name: str,
+    file: str | None,
+    use_pass: bool,
+    use_tpm: bool,
+    use_host: bool,
+    generate: bool,
+    words: int | None,
+    show: bool,
 ) -> int:
     check_options(file, use_pass, use_tpm, use_host)
+    if not generate and (words is not None or show):
+        raise SecretError("--words and --show require --generate.")
+    if show and not all(
+        stream.isatty() for stream in (sys.stdin, sys.stdout, sys.stderr)
+    ):
+        raise SecretError("Run --show in your own terminal without redirected output.")
+
+    path = None
     if use_host and sys.platform == "darwin":
         present = keychain_secret(name) is not None
-        print(f"{'Replace' if present else 'Add'} {name} in {host_storage()}.")
-        value = prompt_secret(name)
-        if keychain_secret(name, value) != value:
-            raise SecretError("The stored credential failed verification.")
-        print(f"{name}: saved in macOS Keychain, read verified.")
-        return 0
-    if use_host or use_tpm:
+        where = host_storage()
+    elif use_host or use_tpm:
         validate_key(name)
         check_tpm()
-        where = f"host credentials {tpm_dir()}"
-        print(f"{'Replace' if tpm_contains(name) else 'Add'} {name} in {where}.")
-        tpm_save(name, prompt_secret(name))
-        print(f"{name}: sealed to this host and user, decryption verified.")
-        return 0
-    if use_pass:
+        present, where = tpm_contains(name), f"host credentials {tpm_dir()}"
+    elif use_pass:
         validate_pass_name(name)
-        where = f"{pass_tool()} store {pass_store()}"
-        print(f"{'Replace' if pass_contains(name) else 'Add'} {name} in {where}.")
-        pass_save(name, prompt_secret(name))
-        print(f"{name}: saved in {where}.")
-        return 0
-    path = env_file(file)
-    present = sops_contains(path, name)
-    print(f"{'Replace' if present else 'Add'} {name} in {shown(path)}.")
-    changed = sops_save(path, name, prompt_secret(name))
-    print(
-        f"{name}: {'saved and encryption verified' if changed else 'already stored'}."
-    )
+        present, where = pass_contains(name), f"{pass_tool()} store {pass_store()}"
+    else:
+        path = env_file(file)
+        present, where = sops_contains(path, name), shown(path)
+    print(f"{'Replace' if present else 'Add'} {name} in {where}.")
+
+    count = words if words is not None else 8
+    value = generate_passphrase(count) if generate else prompt_secret(name)
+    if generate:
+        print(
+            f"Generated {count} words ({count * math.log2(1296):.1f} bits of entropy)."
+        )
+    message = f"saved in {where}"
+    if use_host and sys.platform == "darwin":
+        if keychain_secret(name, value) != value:
+            raise SecretError("The stored credential failed verification.")
+        message = "saved in macOS Keychain, read verified"
+    elif use_host or use_tpm:
+        tpm_save(name, value)
+        message = "sealed to this host and user, decryption verified"
+    elif use_pass:
+        pass_save(name, value)
+    elif path is not None:
+        changed = sops_save(path, name, value)
+        message = "saved and encryption verified" if changed else "already stored"
+    print(f"{name}: {message}.")
+    if show:
+        print(value)
     return 0
 
 
