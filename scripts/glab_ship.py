@@ -4,6 +4,7 @@ import signal
 import subprocess
 import sys
 import time
+from urllib.parse import urlencode
 
 import rich_click as click
 
@@ -80,10 +81,34 @@ def wait_pipeline(sha: str, ref: str):
     # glab-deploy imports the CLI helpers above.
     from scripts.glab_deploy import Run, watch
 
+    query = urlencode({"sha": sha, "ref": ref, "source": "push"})
+
+    def find():
+        return next(iter(api(f"projects/:id/pipelines?{query}")), None)
+
     show(f"waiting for {ref} pipeline")
-    pipeline = poll(
-        lambda: next(iter(api(f"projects/:id/pipelines?sha={sha}&ref={ref}")), None), 5
-    )
+    pipeline = find()
+    if pipeline is None:
+        # CI Lint simulates a push, resolving includes and rules on GitLab.
+        lint_query = urlencode(
+            {"content_ref": sha, "dry_run": "true", "dry_run_ref": ref}
+        )
+        lint = api(f"projects/:id/ci/lint?{lint_query}")
+        if not lint["valid"]:
+            errors = lint["errors"]
+            if errors and all(
+                e.startswith(
+                    (
+                        "The resulting pipeline would have been empty.",
+                        "Pipeline filtered out by workflow rules.",
+                    )
+                )
+                for e in errors
+            ):
+                click.echo(f"{ref} pipeline: not expected (push excluded by CI rules)")
+                return
+            raise click.ClickException(f"{ref} pipeline: {'; '.join(errors)}")
+        pipeline = poll(find, 5)
     click.echo(f"{ref} pipeline: {pipeline['web_url']}")
 
     watch([Run(f"{ref} pipeline", pipeline)])
@@ -104,13 +129,14 @@ def wait_pipeline(sha: str, ref: str):
 @click.option(
     "--wait/--no-wait",
     default=True,
-    help="Wait for the merged target pipeline, including deployment approvals and rollout.",
+    help="Wait for the merged target's push pipeline when CI rules allow one, including deployment approvals and rollout.",
 )
 def main(squash: bool | None, title: str | None, wait: bool):
     """Push the current branch, reuse its open MR or open one titled after the
     last commit, auto-merge it with approvals temporarily disabled, switch back
     to the target branch, deleting the local branch if fully merged, then wait
-    for the pipeline on the merged target branch. Downstream deployment
+    for the push pipeline on the merged target branch when CI rules allow one.
+    Downstream deployment
     approval MRs are linked while waiting for approval, merge and rollout.
 
     In a linked worktree the branch stays checked out.

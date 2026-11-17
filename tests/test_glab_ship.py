@@ -129,7 +129,7 @@ def test_wait_pipeline_follows_approval_through_rollout(monkeypatch, capsys, sta
         "web_url": "https://gitlab.example/elastic-deploy/-/merge_requests/371",
     }
     responses = {
-        "projects/:id/pipelines?sha=309b8a11&ref=main": [source],
+        "projects/:id/pipelines?sha=309b8a11&ref=main&source=push": [source],
         "projects/:id/pipelines/1099492": source,
         "projects/:id/pipelines/1099492/jobs?per_page=100": [],
         "projects/:id/pipelines/1099492/bridges?per_page=100": [bridge],
@@ -174,6 +174,76 @@ def test_wait_pipeline_follows_approval_through_rollout(monkeypatch, capsys, sta
     assert mr["web_url"] in output
     assert "Deployment approval MR merged" in output
     assert ("main pipeline: success" in output) == (status == "success")
+
+
+@pytest.mark.parametrize(
+    "errors, excluded",
+    [
+        (
+            [
+                "The resulting pipeline would have been empty. Review the rules configuration."
+            ],
+            True,
+        ),
+        (["Pipeline filtered out by workflow rules."], True),
+        (["jobs:build config contains unknown keys: typo"], False),
+        (["Pipeline filtered out by workflow rules.", "include file not found"], False),
+    ],
+)
+def test_wait_pipeline_checks_rules_when_push_pipeline_is_absent(
+    monkeypatch, capsys, errors, excluded
+):
+    responses = {
+        "projects/:id/pipelines?sha=merged-sha&ref=release%2Fnext&source=push": [],
+        "projects/:id/ci/lint?content_ref=merged-sha&dry_run=true&dry_run_ref=release%2Fnext": {
+            "valid": False,
+            "errors": errors,
+        },
+    }
+    monkeypatch.setattr(glab_ship, "api", lambda path: responses.pop(path))
+    monkeypatch.setattr(
+        glab_ship.time, "sleep", lambda _: pytest.fail("unexpected wait")
+    )
+    monkeypatch.setattr(
+        glab_deploy, "watch", lambda _: pytest.fail("unexpected pipeline watch")
+    )
+
+    if excluded:
+        glab_ship.wait_pipeline("merged-sha", "release/next")
+        assert "push excluded by CI rules" in capsys.readouterr().out
+    else:
+        with pytest.raises(glab_ship.click.ClickException, match=errors[-1]):
+            glab_ship.wait_pipeline("merged-sha", "release/next")
+        assert "push excluded" not in capsys.readouterr().out
+    assert not responses
+
+
+def test_wait_pipeline_waits_for_expected_push_pipeline(monkeypatch, capsys):
+    pipeline = {"id": 42, "web_url": "https://gitlab.example/-/pipelines/42"}
+    pending = iter([[], [], [pipeline]])
+    calls = []
+    sleeps = []
+    watched = []
+
+    def api(path):
+        calls.append(path)
+        if path == "projects/:id/pipelines?sha=merged-sha&ref=main&source=push":
+            return next(pending)
+        assert path == (
+            "projects/:id/ci/lint?content_ref=merged-sha&dry_run=true&dry_run_ref=main"
+        )
+        return {"valid": True, "errors": []}
+
+    monkeypatch.setattr(glab_ship, "api", api)
+    monkeypatch.setattr(glab_ship.time, "sleep", sleeps.append)
+    monkeypatch.setattr(glab_deploy, "watch", watched.extend)
+
+    glab_ship.wait_pipeline("merged-sha", "main")
+
+    assert sum("ci/lint" in path for path in calls) == 1
+    assert sleeps == [5]
+    assert [run.pipeline for run in watched] == [pipeline]
+    assert "main pipeline: success" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize(
