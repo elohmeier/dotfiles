@@ -74,8 +74,10 @@ Library/LaunchAgents/de.enno.age-plugin-se-agent.plist
 
 {{ if not (includeTemplate "ssh-tpm-agent" .) }}
 .config/systemd/user/ssh-tpm-agent.*
+.local/bin/ssh-tpm-askpass
+.local/bin/ssh-tpm-unlock
 {{- end }}
 
-{{ if not (and (includeTemplate "ssh-tpm-agent" .) (lookPath "pinentry-gnome3")) }}
-.local/bin/ssh-tpm-askpass
+{{ if not (lookPath "tmux") }}
+.local/bin/ssh-tpm-unlock
 {{- end }}

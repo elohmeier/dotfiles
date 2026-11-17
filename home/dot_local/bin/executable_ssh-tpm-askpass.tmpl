@@ -1,11 +1,59 @@
 #!{{ lookPath "bash" }}
 set -euo pipefail
+umask 077
 
+# The popup has a terminal; the systemd agent does not. Only the FIFO carries the answer.
+if [[ ${1:-} == --terminal ]]; then
+    reply=$2
+    result=1
+    password=
+    trap 'printf "%s\0%s\0" "$result" "$password" >"$reply"' EXIT
+    trap 'exit 1' HUP INT TERM
+    case $3 in
+        confirm)
+            if read -r -t 60 -p "$4 [y/N] " answer && [[ $answer == [yY] ]]; then result=0; fi ;;
+        none)
+            if read -r -t 60 -p "$4 [Enter] " answer; then result=0; fi ;;
+        *)
+            if IFS= read -r -s -t 60 -p "$4" password; then result=0; fi ;;
+    esac
+    exit "$result"
+fi
+
+{{ if lookPath "tmux" -}}
+request=$XDG_RUNTIME_DIR/ssh-tpm-unlock
+if [[ -f $request/target ]] && ! "{{ lookPath "flock" }}" -n "$request/lock" true; then
+    mapfile -t target <"$request/target"
+    reply_dir=$(mktemp -d "$XDG_RUNTIME_DIR/ssh-tpm-askpass.XXXXXX")
+    mkfifo -m 600 "$reply_dir/reply"
+    exec 3<>"$reply_dir/reply"
+    trap 'rm -rf "$reply_dir"
+        kill "$popup" 2>/dev/null || true
+        wait "$popup" 2>/dev/null || true' EXIT
+    trap 'exit 1' HUP INT TERM
+    "{{ lookPath "timeout" }}" 65 "{{ lookPath "tmux" }}" -S "${target[0]}" display-popup -c "${target[1]}" -E -w 80% -h 12 -T 'Unlock TPM SSH key' \
+        "$0" --terminal "$reply_dir/reply" "${SSH_ASKPASS_PROMPT:-}" "$1" 3>&- >/dev/null &
+    popup=$!
+    until IFS= read -r -d '' -t 1 result <&3; do
+        kill -0 "$popup" 2>/dev/null || exit 1
+    done
+    IFS= read -r -d '' -t 1 password <&3
+    [[ $result == 0 ]] || exit 1
+    printf '%s' "$password"
+    exit
+fi
+{{ end -}}
+if [[ -z ${DISPLAY:-} && -z ${WAYLAND_DISPLAY:-} ]]; then
+    "{{ lookPath "logger" }}" --stderr -t ssh-tpm-askpass 'TPM SSH key needs unlocking; run ssh-tpm-unlock inside an attached tmux session.'
+    exit 1
+fi
+
+{{ if lookPath "pinentry-gnome3" -}}
 prompt=${1//%/%25}
 prompt=${prompt//$'\r'/%0D}
 prompt=${prompt//$'\n'/%0A}
 prompt=${prompt//\\/%5C}
-{
+password=$({
     printf 'SETTITLE SSH key\nSETDESC %s\n' "$prompt"
     case ${SSH_ASKPASS_PROMPT:-} in
         confirm) printf 'CONFIRM\n' ;;
@@ -13,7 +61,7 @@ prompt=${prompt//\\/%5C}
         *) printf 'GETPIN\n' ;;
     esac
     printf 'BYE\n'
-} | "{{ lookPath "pinentry-gnome3" }}" | {
+} | "{{ lookPath "timeout" }}" 60 "{{ lookPath "pinentry-gnome3" }}" | {
     password=
     while IFS= read -r line; do
         case $line in
@@ -25,4 +73,11 @@ prompt=${prompt//\\/%5C}
     password=${password//%0A/$'\n'}
     password=${password//%25/%}
     printf '%s' "$password"
-}
+})
+printf '%s' "$password"
+{{ else if or (lookPath "ssh-askpass") (lookPath "/usr/libexec/openssh/gnome-ssh-askpass") -}}
+exec "{{ lookPath "timeout" }}" 60 "{{ or (lookPath "ssh-askpass") (lookPath "/usr/libexec/openssh/gnome-ssh-askpass") }}" "$1"
+{{ else -}}
+"{{ lookPath "logger" }}" --stderr -t ssh-tpm-askpass 'No graphical askpass found; run ssh-tpm-unlock inside an attached tmux session.'
+exit 1
+{{ end -}}

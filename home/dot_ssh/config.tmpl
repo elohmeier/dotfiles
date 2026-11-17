@@ -15,6 +15,9 @@ Host *psmp*
 Host *
     ForwardAgent no
     AddKeysToAgent yes
+    ConnectTimeout 10
+    ServerAliveInterval 15
+    ServerAliveCountMax 3
     ControlMaster auto
     ControlPath ~/.ssh/cm-%C
     ControlPersist 10m

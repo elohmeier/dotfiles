@@ -106,12 +106,12 @@ an existing TPM key and refuses to overwrite an existing software key. The TPM
 private key is bound to this machine; copying the `.tpm` file to another machine
 does not make it usable there.
 
-For passphrase-protected keys, chezmoi sets `SSH_ASKPASS` in the agent service
-using a standalone `ssh-askpass` or, when `pinentry-gnome3` is installed, the
-managed `~/.local/bin/ssh-tpm-askpass` adapter. GCR's internal `gcr*-ssh-askpass`
-programs require a private GCR socket and cannot be used directly.
-The Linux hook reloads systemd and restarts a running TPM agent when the rendered
-service configuration changes.
+For passphrase-protected keys, the agent service uses the managed
+`~/.local/bin/ssh-tpm-askpass` adapter with `SSH_ASKPASS_REQUIRE=force`.
+On a desktop it uses `pinentry-gnome3` or a standalone `ssh-askpass`, with a
+60-second timeout. GCR's internal `gcr*-ssh-askpass` programs require a private
+GCR socket and cannot be used directly. The hook in `home/.chezmoiscripts/linux/`
+reloads systemd and restarts a running TPM agent when its service changes.
 
 Open a new terminal after setup and run `ssh-add -l`. Fish selects the TPM agent
 for local sessions and preserves forwarded agents over SSH. To check this
@@ -119,6 +119,35 @@ machine's TPM agent explicitly, including over SSH:
 
 ```sh
 env SSH_AUTH_SOCK="$XDG_RUNTIME_DIR/ssh-tpm-agent.sock" ssh-add -l
+```
+
+Listing keys does not test signing or unlock a protected key. Over SSH, run this
+inside an attached tmux session before starting Git or detached jobs:
+
+```sh
+ssh-tpm-unlock                         # ~/.ssh/id_ecdsa.pub
+ssh-tpm-unlock ~/.ssh/another-key.pub  # choose a different TPM key
+```
+
+The command tests signing against this machine's TPM agent, including when
+`SSH_AUTH_SOCK` points to a forwarded agent. If a passphrase is needed, a popup
+appears on the most recently active client attached to the command's tmux session.
+The answer travels through a private FIFO under `$XDG_RUNTIME_DIR`; it is not
+written to a file or passed in command arguments. Concurrent unlocks are rejected,
+Ctrl+C cancels the popup, prompts expire after 60 seconds, and the signing check
+is limited to 75 seconds.
+An already usable key succeeds without a popup. The agent caches the passphrase
+until it restarts; `ssh-tpm-add` only registers keys and does not unlock them.
+Without a desktop or an explicit unlock in progress, passphrase requests fail
+immediately and log instructions to run `ssh-tpm-unlock` in the agent's journal.
+
+SSH connections use a 10-second connection timeout and keepalives that disconnect
+unresponsive connections after roughly 45 seconds. These apply to new connections.
+If Git is already stuck reusing an old SSH master after a network change, bypass
+it for the next operation:
+
+```sh
+git -c core.sshCommand='ssh -o ControlPath=none' pull
 ```
 
 If setup fails:

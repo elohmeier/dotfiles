@@ -1,0 +1,33 @@
+#!{{ lookPath "bash" }}
+set -euo pipefail
+umask 077
+
+if [[ ${1:-} == --help ]]; then
+    echo 'Usage: ssh-tpm-unlock [public-key] (default: ~/.ssh/id_ecdsa.pub)'
+    exit
+fi
+if [[ -z ${TMUX:-} || -z ${TMUX_PANE:-} ]]; then
+    echo 'Run ssh-tpm-unlock inside an attached tmux session.' >&2
+    exit 1
+fi
+client=$("{{ lookPath "tmux" }}" list-clients -t "$TMUX_PANE" -O activity -F '#{client_name}' | head -n 1)
+if [[ -z $client ]]; then
+    echo 'Attach a client to this tmux session before unlocking.' >&2
+    exit 1
+fi
+
+request=$XDG_RUNTIME_DIR/ssh-tpm-unlock
+mkdir -p "$request"
+exec 9>"$request/lock"
+if ! "{{ lookPath "flock" }}" -n 9; then
+    echo 'Another ssh-tpm-unlock is already running.' >&2
+    exit 1
+fi
+trap 'rm -f "$request/target"' EXIT
+trap 'exit 1' HUP INT TERM
+printf '%s\n%s\n' "${TMUX%%,*}" "$client" >"$request/target"
+if ! SSH_AUTH_SOCK="$XDG_RUNTIME_DIR/ssh-tpm-agent.sock" "{{ lookPath "timeout" }}" 75 "{{ lookPath "ssh-add" }}" -T "${1:-$HOME/.ssh/id_ecdsa.pub}"; then
+    echo 'TPM signing failed or timed out; retry ssh-tpm-unlock and check journalctl --user -u ssh-tpm-agent.service.' >&2
+    exit 1
+fi
+echo 'TPM SSH key is ready for signing.'
