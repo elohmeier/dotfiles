@@ -14,12 +14,14 @@ from collections.abc import Generator, Iterator
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
+from io import BufferedReader
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO
 from uuid import uuid4
 
 import questionary
 import rich_click as click
+import zstandard as zstd
 from click.shell_completion import CompletionItem
 from rich.console import Console
 from rich.table import Table
@@ -146,8 +148,25 @@ def text_block(text: str) -> Record:
     return {"type": "text", "text": text}
 
 
+def transcript_path(path: Path) -> Path:
+    """Resolve a logical transcript path, preferring the plain file when both exist."""
+    if path.suffix == ".zst":
+        path = path.with_suffix("")
+    compressed = path.with_suffix(path.suffix + ".zst")
+    return compressed if not path.exists() and compressed.exists() else path
+
+
+def open_transcript(path: Path) -> BinaryIO:
+    path = transcript_path(path)
+    return (
+        BufferedReader(zstd.open(path, "rb"))
+        if path.suffix == ".zst"
+        else path.open("rb")
+    )
+
+
 def records(path: Path) -> Iterator[Record]:
-    with path.open() as file:
+    with open_transcript(path) as file:
         for line in file:
             try:
                 yield json.loads(line)
@@ -197,7 +216,10 @@ def candidates() -> Iterator[tuple[Store, Path, Record]]:
                 os.environ.get("PI_CODING_AGENT_SESSION_DIR", root)
             ).expanduser()
         pattern = "*/*.jsonl" if store.agent == "claude" else "**/*.jsonl"
-        for path in root.glob(pattern):
+        paths = set(root.glob(pattern))
+        if store.agent == "codex":
+            paths.update(p.with_suffix("") for p in root.rglob("*.jsonl.zst"))
+        for path in paths:
             yield store, path, {}
 
 
@@ -1340,6 +1362,7 @@ def pick_session(scope: str, agent: str, store: str, query: str) -> Session | No
                 "--bind",
                 ",".join(bindings),
             ],
+            check=False,
             input=picker_rows(rows),
             text=True,
             stdout=subprocess.PIPE,

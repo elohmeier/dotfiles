@@ -10,7 +10,7 @@ import sqlite3
 import subprocess
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Self
 
 from rich.console import Console
 
@@ -30,6 +30,7 @@ def repository(cwd: Path) -> str:
             "--path-format=absolute",
             "--git-common-dir",
         ],
+        check=False,
         capture_output=True,
         text=True,
     )
@@ -39,6 +40,7 @@ def repository(cwd: Path) -> str:
 def current_branch(cwd: Path) -> str:
     return subprocess.run(
         ["git", "-C", str(cwd), "symbolic-ref", "--quiet", "--short", "HEAD"],
+        check=False,
         capture_output=True,
         text=True,
     ).stdout.strip()
@@ -157,10 +159,10 @@ class Index:
             CREATE INDEX IF NOT EXISTS documents_source ON documents(source, position);
         """)
 
-    def __enter__(self) -> Index:
+    def __enter__(self) -> Self:
         return self
 
-    def __exit__(self, *_: Any) -> None:
+    def __exit__(self, *_: object) -> None:
         self.db.close()
 
     def remove(self, source: str, position: int | None = None) -> None:
@@ -204,7 +206,9 @@ class Index:
         self, key: str, store: app.Store, path: Path, overrides: app.Record
     ) -> None:
         old = self.db.execute("SELECT * FROM sources WHERE key=?", (key,)).fetchone()
-        stat = path.stat() if path.exists() else None
+        source = app.transcript_path(path)
+        compressed = source.suffix == ".zst"
+        stat = source.stat() if source.exists() else None
         stamp = (
             json.dumps([stat.st_dev, stat.st_ino, stat.st_mtime_ns, stat.st_size])
             if stat
@@ -213,11 +217,12 @@ class Index:
         meta = json.loads(old["meta"]) if old else {}
         if old and old["stamp"] == stamp and meta.get("_overrides", {}) == overrides:
             return
-        offset = old["offset"] if old else 0
+        # Changed compressed files are snapshots, not appendable byte streams.
+        offset = old["offset"] if old and not compressed else 0
         digest = ""
         rows = []
         if stat:
-            with path.open("rb") as file:
+            with app.open_transcript(source) as file:
                 if old and offset:
                     previous = json.loads(old["stamp"]) if old["stamp"] else []
                     file.seek(max(0, offset - 4096))
@@ -231,7 +236,8 @@ class Index:
                 if not offset:
                     meta = {}
                     self.remove(key)
-                file.seek(offset)
+                if not compressed:
+                    file.seek(offset)
                 while line := file.readline():
                     if not line.endswith(b"\n"):
                         break
@@ -240,8 +246,9 @@ class Index:
                         rows.append(json.loads(line))
                     except (ValueError, UnicodeDecodeError):
                         continue
-                file.seek(max(0, offset - 4096))
-                digest = hashlib.sha256(file.read(min(4096, offset))).hexdigest()
+                if not compressed:
+                    file.seek(max(0, offset - 4096))
+                    digest = hashlib.sha256(file.read(min(4096, offset))).hexdigest()
         elif old:
             self.remove(key)
             meta = {}
@@ -258,13 +265,7 @@ class Index:
             for r in rows
         )
         # New canonical user events supersede response-item copies, including older pages.
-        if (
-            has_events
-            and not meta.get("_user_events")
-            and old
-            and old["offset"]
-            and rows
-        ):
+        if has_events and not meta.get("_user_events") and meta.get("_lines") and rows:
             self.db.execute("DELETE FROM sources WHERE key=?", (key,))
             self.remove(key)
             self.update(key, store, path, overrides)

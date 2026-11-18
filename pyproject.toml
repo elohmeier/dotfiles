@@ -20,6 +20,7 @@ dependencies = [
   "watchdog",
   "tomlkit",
   "keyring; sys_platform == 'darwin'",
+  "zstandard>=0.25.0",
 ]
 
 [project.scripts]

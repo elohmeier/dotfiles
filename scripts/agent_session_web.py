@@ -174,7 +174,10 @@ def create() -> Flask:
         if not found:
             abort(404)
         session = found[0]
-        items = transcript(app.conversation(session, context=False))
+        try:
+            items = transcript(app.conversation(session, context=False))
+        except FileNotFoundError:
+            abort(404, description="Session transcript not found")
         line = request.args.get("line", type=int)
         focus = next(
             (i["id"] for i in items if line is not None and i["line_end"] >= line), None
