@@ -8,7 +8,9 @@
   "yaml": {
   },
   "excludes": [
-    "**/*-lock.json"
+    "**/*.lock*",
+    "**/*-lock.*",
+    "**/npm-shrinkwrap.json"
   ],
   "plugins": [
     "https://plugins.dprint.dev/json-0.25.2.wasm",
