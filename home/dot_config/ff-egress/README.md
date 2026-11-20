@@ -29,6 +29,12 @@ persistent identity is stored below `~/.local/state/ff-egress/ffbs`. Concentrato
 `FF_CONCENTRATOR=1` or `FF_CONCENTRATOR=2` when starting a stopped gateway.
 `ffnw` uses Nordwest's Bremen Tunneldigger/L2TP domain.
 
+The Parker gateway fails over when its selected WireGuard handshake is older
+than three minutes. If all peers are stale, it clears readiness and exits with
+failure so a systemd supervisor can recreate the uplink after host network
+changes. For a standalone gateway, the next `mise run ff` recreates it.
+Rebuild with `mise run ff:build` after changing an entrypoint.
+
 The Bremen profile requires `/dev/net/tun` and a loaded `batman_adv` module;
 Braunschweig requires WireGuard. Check with `mise run ff:health` or
 `FF_PROFILE=ffbs mise run ff:health`.

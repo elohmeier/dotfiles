@@ -172,18 +172,26 @@ printf '%s\n' "${interface}" >"${state}/selected"
 touch /run/ff-egress-ready
 trap 'kill "${sleep_pid:-}" 2>/dev/null; exit 0' TERM INT
 while true; do
-	sleep 15 & sleep_pid=$!
+	sleep 15 &
+	sleep_pid=$!
 	wait "${sleep_pid}"
 	handshake=$(wg show "${interface}" latest-handshakes | awk '{print $2}')
-	(( $(date +%s) - ${handshake:-0} < 180 )) && continue
+	(($(date +%s) - ${handshake:-0} < 180)) && continue
+	recovered=false
 	for i in "${!interfaces[@]}"; do
 		handshake=$(wg show "${interfaces[i]}" latest-handshakes | awk '{print $2}')
-		if (( $(date +%s) - ${handshake:-0} < 180 )); then
+		if (($(date +%s) - ${handshake:-0} < 180)); then
 			interface=${interfaces[i]}
 			ip route replace default dev "${interface}" metric 1
 			ip -6 route replace default dev "${interface}" metric 1
 			printf '%s\n' "${interface}" >"${state}/selected"
+			recovered=true
 			break
 		fi
 	done
+	${recovered} || {
+		echo 'all Parker handshakes are stale; restarting to refresh the uplink' >&2
+		rm -f /run/ff-egress-ready
+		exit 1
+	}
 done
