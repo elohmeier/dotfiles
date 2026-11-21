@@ -23,7 +23,7 @@ trust_level = "trusted"
 {{ if and (eq .chezmoi.os "darwin") (lookPath "uvx") (stat $freecadCmd) }}
 [mcp_servers.freecad]
 command = {{ lookPath "uvx" | toJson }}
-args = ["freecad-mcp@0.1.28", "--host", "127.0.0.1", "--freecadcmd", {{ $freecadCmd | toJson }}]
+args = ["freecad-mcp@0.1.32", "--host", "127.0.0.1", "--freecadcmd", {{ $freecadCmd | toJson }}]
 {{ end }}
 """
 
