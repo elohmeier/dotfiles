@@ -33,7 +33,7 @@ TMUX_V=v3.7b
 # renovate: datasource=github-releases depName=sxyazi/yazi
 YAZI_V=v26.9.1
 # renovate: datasource=github-releases depName=mikefarah/yq
-YQ_V=v4.54.1
+YQ_V=v4.54.3
 v="chezmoi-$CHEZMOI_V fish-$FISH_V fzf-$FZF_V k9s-$K9S_V tmux-$TMUX_V yazi-$YAZI_V yq-$YQ_V"
 if [ "$(cat $b/.dotfiles-bundle 2>/dev/null)" != "$v" ]; then
     rel "$1" twpayne/chezmoi "$CHEZMOI_V/chezmoi-linux-amd64-musl" >chezmoi
