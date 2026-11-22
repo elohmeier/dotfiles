@@ -6,7 +6,8 @@ the git root), the pass or passage password store, or `--host`: macOS Keychain o
 systemd-creds bound to this host's TPM2 chip, its host key and the current
 user. Tools consume host credentials with `secret-entry read NAME`.
 Use `request --generate` for an EFF short-list passphrase; add `--show` to
-reveal it in your own terminal after saving.
+reveal it in your own terminal after saving. A program that issues a token
+pipes it into `request --stdin`, so it is stored without being shown.
 """
 
 import fcntl
@@ -383,6 +384,22 @@ def prompt_secret(label: str) -> str:
             ) from None
 
 
+def read_piped_secret() -> str:
+    """One value from a pipe; a terminal would echo what is typed."""
+    if sys.stdin.isatty():
+        raise SecretError(
+            "--stdin reads a value piped from a program; omit it to type the value at the hidden prompt."
+        )
+    try:
+        value = sys.stdin.buffer.read().decode("utf-8")
+    except UnicodeDecodeError:
+        raise SecretError("A secret must be UTF-8 text.") from None
+    # The one line ending most programs append is not part of the value.
+    value = value.removesuffix("\n").removesuffix("\r")
+    validate_value(value)
+    return value
+
+
 def generate_passphrase(count: int) -> str:
     words = [
         line.split()[1]
@@ -450,13 +467,21 @@ def cli():
     pass
 
 
-@cli.command(help="Prompt privately or generate and store NAME; run again to rotate.")
+@cli.command(
+    help="Prompt privately, generate, or read from a pipe, and store NAME; run again to rotate."
+)
 @target
 @file_option
 @pass_option
 @tpm_option
 @host_option
 @click.option("--generate", is_flag=True, help="Generate an EFF short-list passphrase.")
+@click.option(
+    "--stdin",
+    "from_stdin",
+    is_flag=True,
+    help="Read the value from a pipe, for a program that issues it; refuses a terminal.",
+)
 @click.option(
     "--words",
     type=click.IntRange(min=6),
@@ -474,10 +499,13 @@ def request(
     use_tpm: bool,
     use_host: bool,
     generate: bool,
+    from_stdin: bool,
     words: int | None,
     show: bool,
 ) -> int:
     check_options(file, use_pass, use_tpm, use_host)
+    if generate and from_stdin:
+        raise SecretError("Choose only one of --generate and --stdin.")
     if not generate and (words is not None or show):
         raise SecretError("--words and --show require --generate.")
     if show and not all(
@@ -499,10 +527,15 @@ def request(
     else:
         path = env_file(file)
         present, where = sops_contains(path, name), shown(path)
+    # Read a piped value before any output, so a refused one changes nothing.
+    piped = read_piped_secret() if from_stdin else None
     print(f"{'Replace' if present else 'Add'} {name} in {where}.")
 
     count = words if words is not None else 8
-    value = generate_passphrase(count) if generate else prompt_secret(name)
+    if piped is not None:
+        value = piped
+    else:
+        value = generate_passphrase(count) if generate else prompt_secret(name)
     if generate:
         print(
             f"Generated {count} words ({count * math.log2(1296):.1f} bits of entropy)."

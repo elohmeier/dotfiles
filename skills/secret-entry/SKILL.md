@@ -71,10 +71,28 @@ If the repository defines its own wrapper task (for example
 `mise run secrets:request -- KEY` that also delivers values into Kubernetes
 Secrets), use that wrapper; its own instructions take precedence.
 
+## Store a value a program issues
+
+When a command issues the credential (a CLI that creates an API token), pipe
+it into `request --stdin`, so it goes from the program into encrypted storage
+without being shown:
+
+```sh
+some-cli token create ... | secret-entry request --stdin KEY
+```
+
+`--stdin` reads exactly one value from a pipe and drops one trailing line
+ending. It refuses a terminal, an empty or multiline value, and `--generate`,
+and prints only status. It works with every backend. Use it only for a value
+a program produces; a value the user holds still goes through the hidden
+prompt in their own terminal. Never build the pipe from a value you can see
+(`echo`, a here-string, a file you wrote): that passes the secret through a
+tool call.
+
 ## Generate a memorable password
 
 Use `request --generate` when a new password is needed; tokens issued by a
-service still need the hidden prompt. Generation uses Python's `secrets`
+service still need the hidden prompt, or `--stdin` when a program hands them over. Generation uses Python's `secrets`
 module and the bundled EFF short word list #1, with hyphens between words.
 It works with every backend and does not need a network connection.
 

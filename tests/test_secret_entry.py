@@ -1,6 +1,7 @@
 """Exercise real SOPS and pass updates with generated, disposable credentials."""
 
 import fcntl
+import io
 import json
 import os
 import pty
@@ -752,3 +753,52 @@ def test_generated_passphrase_is_saved_in_passage(age_store, capsys):
     ).stdout.strip()
     assert value and value.encode() not in (age_store / "team/token.age").read_bytes()
     assert value not in "".join(capsys.readouterr())
+
+
+def piped(monkeypatch, data: bytes):
+    """Make `data` what a program piped into the command."""
+    stream = io.TextIOWrapper(io.BytesIO(data), encoding="utf-8")
+    monkeypatch.setattr(secret_entry.sys, "stdin", stream)
+
+
+@needs_sops
+def test_stdin_stores_a_piped_value_without_showing_it(env, capsys, monkeypatch):
+    piped(monkeypatch, b"piped-dummy-value\n")
+    assert secret_entry.main(["request", "--stdin", "NEW_TOKEN"]) == 0
+    out, err = capsys.readouterr()
+    assert "piped-dummy-value" not in out + err
+    assert "saved and encryption verified" in out
+    assert secret_entry.decrypt(env, env.read_bytes()) == {
+        **INITIAL,
+        "NEW_TOKEN": "piped-dummy-value",
+    }
+    # Without the line ending a program may leave out, the value is the same.
+    piped(monkeypatch, b"piped-dummy-value")
+    assert secret_entry.main(["request", "--stdin", "NEW_TOKEN"]) == 0
+    assert "already stored" in capsys.readouterr().out
+
+
+@needs_sops
+@pytest.mark.parametrize(
+    "data",
+    [b"", b"\n", b"two\nlines\n", b"trailing-blank\n\n", b"nul\x00byte", b"\xff"],
+)
+def test_stdin_refuses_what_is_not_one_value(env, capsys, monkeypatch, data):
+    before = env.read_bytes()
+    piped(monkeypatch, data)
+    assert secret_entry.main(["request", "--stdin", "NEW_TOKEN"]) == 2
+    out, err = capsys.readouterr()
+    assert out == "" and "two" not in err and "nul" not in err
+    assert env.read_bytes() == before and no_staging(env)
+
+
+@needs_sops
+def test_stdin_refuses_a_terminal_and_generate(env, capsys, monkeypatch):
+    before = env.read_bytes()
+    monkeypatch.setattr(secret_entry.sys.stdin, "isatty", lambda: True)
+    assert secret_entry.main(["request", "--stdin", "NEW_TOKEN"]) == 2
+    assert "piped from a program" in capsys.readouterr().err
+    piped(monkeypatch, b"piped-dummy-value\n")
+    assert secret_entry.main(["request", "--stdin", "--generate", "NEW_TOKEN"]) == 2
+    assert "piped-dummy-value" not in "".join(capsys.readouterr())
+    assert env.read_bytes() == before
