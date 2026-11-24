@@ -2,6 +2,7 @@
 {{ if $enc -}}
 import { createCipheriv, createHmac, randomBytes } from "node:crypto";
 {{ end -}}
+import { execFileSync } from "node:child_process";
 import { basename } from "node:path";
 {{ if $enc -}}
 import { gzipSync } from "node:zlib";
@@ -21,21 +22,39 @@ function encrypt(text: string): string {
 }
 
 {{ end -}}
+const git = (...args: string[]) => {
+	try {
+		return execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+	} catch {
+		return "";
+	}
+};
+
+// Mirrors agent-pushover-notify: plain-text the markdown reply, keep line breaks.
+const plain = (text: string) =>
+	text
+		.replace(/\r/g, "")
+		.replace(/```[^\n]*\n?/g, "")
+		.replace(/\*\*|__|`/g, "")
+		.replace(/^#+[ \t]*/gm, "")
+		.replace(/^[ \t]*[-*+][ \t]+/gm, "• ")
+		.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+		.replace(/\n{3,}/g, "\n\n")
+		.trim();
+
 export default function (pi: ExtensionAPI) {
 	pi.on("agent_end", (event: AgentEndEvent) => {
 		try {
 			const last = event.messages.filter((m) => m.role === "assistant").at(-1);
-			let summary = "Finished work";
-			if (last && last.role === "assistant") {
-				const text = last.content
-					.flatMap((c) => (c.type === "text" ? [c.text] : []))
-					.join(" ")
-					.replace(/\s+/g, " ")
-					.trim();
-				if (text) summary = text.length > 240 ? `${text.slice(0, 237)}...` : text;
-			}
-			const title = "Pi finished";
-			const message = `${summary} in ${basename(process.cwd())} on {{ .chezmoi.username }}@{{ .chezmoi.hostname }}.`;
+			let summary =
+				last?.role === "assistant"
+					? plain(last.content.flatMap((c) => (c.type === "text" ? [c.text] : [])).join("\n"))
+					: "";
+			if (summary.length > 900) summary = `${summary.slice(0, 900).replace(/\s+\S*$/, "")} …`;
+			const repo = basename(git("rev-parse", "--path-format=absolute", "--git-common-dir").replace(/\/\.git$/, "")) || basename(process.cwd());
+			const branch = git("branch", "--show-current");
+			const title = `${repo}${branch ? ` (${branch})` : ""} · Pi`;
+			const message = `${summary || "Finished work"}\n— {{ .chezmoi.username }}@{{ .chezmoi.hostname }}`;
 			const form = new FormData();
 			form.set("token", {{ .pushoverApiToken | quote }});
 			form.set("user", {{ .pushoverUserKey | quote }});

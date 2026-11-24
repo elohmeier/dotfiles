@@ -1,5 +1,6 @@
 {{- $curl := lookPath "curl" -}}
 {{- $jq := lookPath "jq" -}}
+{{- $git := lookPath "git" -}}
 {{- $openssl := lookPath "openssl" -}}
 {{- $gzip := lookPath "gzip" -}}
 {{- $xxd := lookPath "xxd" -}}
@@ -8,16 +9,27 @@
 #!{{ lookPath "sh" }}
 agent=$1
 sound={{ index . "pushoverAgentSound" | default "classical" | quote }}
-summarize() {
-    {{ $jq }} -r '(.["last-assistant-message"] // .last_assistant_message // "Finished work") | gsub("\\s+"; " ") | if length > 240 then .[:237] + "..." else . end'
-}
 case $agent in
-    Codex) message=$([ "$#" -gt 1 ] && printf %s "$2" | summarize || summarize) ;;
-    Claude) message=$(summarize) ;;
+    Claude | Codex)
+        json=${2:-$(cat)}
+        cd "$(printf %s "$json" | {{ $jq }} -r '.cwd // "."')" 2>/dev/null
+        [ "$(printf %s "$json" | {{ $jq }} -r .hook_event_name)" = Notification ] && agent="$agent needs input"
+        # Plain-text the markdown reply: drop fences/emphasis/headings, unwrap links, keep line breaks.
+        message=$(printf %s "$json" | {{ $jq }} -r '.message // .["last-assistant-message"] // .last_assistant_message // "Finished work"
+            | gsub("\r"; "") | gsub("```[^\n]*\n?"; "") | gsub("\\*\\*|__|`"; "") | gsub("(?<p>^|\n)#+[ \t]*"; .p)
+            | gsub("(?<p>^|\n)[ \t]*[-*+][ \t]+"; "\(.p)• ") | gsub("\\[(?<t>[^\\]]+)\\]\\([^)]*\\)"; "\(.t)")
+            | gsub("\n{3,}"; "\n\n") | sub("^\\s+"; "") | sub("\\s+$"; "")
+            | if length > 900 then (.[:900] | sub("\\s+\\S*$"; "")) + " …" else . end')
+        ;;
     *) message=${2:-Finished work}; sound= ;;
 esac
-title="$agent finished"
-message="$message in ${PWD##*/} on {{ .chezmoi.username }}@{{ .chezmoi.hostname }}."
+repo=$({{ $git }} rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+repo=${repo%/.git}
+repo=${repo##*/}
+branch=$({{ $git }} branch --show-current 2>/dev/null)
+title="${repo:-${PWD##*/}}${branch:+ ($branch)} · $agent"
+message="$message
+— {{ .chezmoi.username }}@{{ .chezmoi.hostname }}"
 {{ if index . "pushoverEncryptionKey" -}}
 key={{ index . "pushoverEncryptionKey" | quote }}
 encrypt() {
@@ -34,6 +46,6 @@ message=$(encrypt "$message")
     --form-string 'user={{ .pushoverUserKey }}' \
     --form-string "title=$title" \
     --form-string "message=$message" \
-    --form-string "sound=$sound" \{{ if index . "pushoverEncryptionKey" }}
+    ${sound:+--form-string} ${sound:+"sound=$sound"} \{{ if index . "pushoverEncryptionKey" }}
     --form-string 'encrypted=1' \{{ end }}
     https://api.pushover.net/1/messages.json >/dev/null
