@@ -25,6 +25,7 @@ Library/**
 {{ if not (and (lookPath "systemctl") (lookPath "flock")) }}
 .local/bin/dev-cleanup
 .config/systemd/user/dev-cleanup.*
+.config/systemd/user/package-cache-cleanup.*
 {{ end -}}
 
 {{ if not .isWSL }}

@@ -3,8 +3,10 @@
 # script hash: {{ include "dot_local/bin/executable_dev-cleanup.tmpl" | sha256sum }}
 # service hash: {{ include "dot_config/systemd/user/dev-cleanup.service" | sha256sum }}
 # timer hash: {{ include "dot_config/systemd/user/dev-cleanup.timer" | sha256sum }}
+# package service hash: {{ include "dot_config/systemd/user/package-cache-cleanup.service" | sha256sum }}
+# package timer hash: {{ include "dot_config/systemd/user/package-cache-cleanup.timer" | sha256sum }}
 # tmpfiles hash: {{ include "dot_config/user-tmpfiles.d/dev-cleanup.conf" | sha256sum }}
 set -eu
 "{{ lookPath "systemctl" }}" --user daemon-reload
-"{{ lookPath "systemctl" }}" --user enable --now dev-cleanup.timer systemd-tmpfiles-clean.timer
+"{{ lookPath "systemctl" }}" --user enable --now dev-cleanup.timer package-cache-cleanup.timer systemd-tmpfiles-clean.timer
 {{ end -}}

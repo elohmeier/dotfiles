@@ -1,10 +1,16 @@
 #!{{ lookPath "bash" }}
 set -euo pipefail
 
+package_caches=false
+if [ "${1:-}" = --package-caches ]; then
+    package_caches=true
+    shift
+fi
+
 case ${1:-} in
     '') dry_run=false ;;
     --dry-run) dry_run=true ;;
-    *) echo "Usage: dev-cleanup [--dry-run]" >&2; exit 2 ;;
+    *) echo "Usage: dev-cleanup [--package-caches] [--dry-run]" >&2; exit 2 ;;
 esac
 
 run() {
@@ -21,16 +27,40 @@ if [ "$dry_run" = false ]; then
     "{{ lookPath "flock" }}" -n 9 || exit 0
 fi
 
+if [ "$package_caches" = true ]; then
+    cleanup_status=0
+    {{- with lookPath "brew" }}
+    export PATH="{{ dir . }}:$PATH"
+    {{- end }}
+    {{- with lookPath "uv" }}
+    run "{{ . }}" cache prune || cleanup_status=1
+    {{- end }}
+    {{- with lookPath "npm" }}
+    run "{{ . }}" cache verify || cleanup_status=1
+    {{- end }}
+    {{- with lookPath "pnpm" }}
+    run "{{ . }}" store prune || cleanup_status=1
+    {{- end }}
+    {{- with lookPath "brew" }}
+    run "{{ . }}" cleanup --prune=30 || cleanup_status=1
+    {{- end }}
+    exit "$cleanup_status"
+fi
+
 {{ if and (lookPath "cargo-sweep") (lookPath "cargo") (lookPath "jq") -}}
-export PATH="{{ dir (lookPath "cargo") }}:$PATH"
+export PATH="{{ dir (lookPath "cargo") }}:${CARGO_HOME:-$HOME/.cargo}/bin:$PATH"
+export RUSTUP_AUTO_INSTALL=0
 for manifest in "$HOME"/repos/*/*/*/Cargo.toml \
     "$HOME"/repos/*/*/*/.claude/worktrees/*/Cargo.toml \
     "${XDG_CACHE_HOME:-$HOME/.cache}"/*/Cargo.toml; do
     [ -f "$manifest" ] || continue
     (
         cd "$(dirname "$manifest")"
-        target=$("{{ lookPath "cargo" }}" metadata --frozen --no-deps --format-version 1 \
-            | "{{ lookPath "jq" }}" -r .target_directory) || exit 0
+        if ! target=$("{{ lookPath "cargo" }}" metadata --frozen --no-deps --format-version 1 \
+            | "{{ lookPath "jq" }}" -er .target_directory); then
+            printf 'Skipping Cargo sweep for %s because Cargo metadata failed\n' "$PWD" >&2
+            exit 0
+        fi
         [ -d "$target" ] || exit 0
         if [ "$dry_run" = false ]; then
             # Respect Cargo's profile locks; skip projects with active builds.
@@ -38,7 +68,10 @@ for manifest in "$HOME"/repos/*/*/*/Cargo.toml \
                 "$target"/*/*/.cargo-{lock,build-lock,artifact-lock}; do
                 [ -f "$lock_file" ] || continue
                 exec {build_lock_fd}<>"$lock_file"
-                "{{ lookPath "flock" }}" -n "$build_lock_fd" || exit 0
+                if ! "{{ lookPath "flock" }}" -n "$build_lock_fd"; then
+                    printf 'Skipping Cargo sweep for %s because the build lock is busy (%s)\n' "$PWD" "$lock_file" >&2
+                    exit 0
+                fi
             done
         fi
         run "{{ lookPath "cargo-sweep" }}" sweep --maxsize 40GB "$PWD"

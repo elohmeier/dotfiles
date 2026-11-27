@@ -32,7 +32,7 @@ convert() {
 		return 0
 	fi
 	btrfs subvolume create "$staging"
-	cp -a --reflink=always "$directory/." "$staging/"
+	cp -a --reflink=auto "$directory/." "$staging/"
 	mv --exchange --no-copy --no-target-directory "$directory" "$staging"
 	rm -rf -- "$staging"
 }

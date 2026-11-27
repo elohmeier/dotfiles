@@ -40,13 +40,21 @@ def render_cleanup(tools, tmp_path):
     chezmoi = shutil.which("chezmoi")
     if not chezmoi:
         pytest.skip("chezmoi required")
-    for name in ("cargo-sweep", "docker", "podman"):
+    for name in ("cargo-sweep", "docker", "podman", "uv", "npm", "pnpm", "brew"):
         stub(name, f'printf \'{name} %s\\n\' "$*" >> "$CLEANUP_LOG"')
     project = home / "repos/host/owner/project"
     (project / "target/debug").mkdir(parents=True)
     (project / "Cargo.toml").write_text("")
     (project / "target/debug/.cargo-lock").touch()
-    stub("cargo", f"printf '%s\\n' '{{\"target_directory\":\"{project}/target\"}}'")
+    env.pop("CARGO_HOME", None)
+    rustup_bin = home / ".cargo/bin"
+    rustup_bin.mkdir(parents=True)
+    rustup_cargo = rustup_bin / "rustup-cargo"
+    rustup_cargo.write_text(
+        f"#!/bin/sh\nprintf '%s\\n' '{{\"target_directory\":\"{project}/target\"}}'\n"
+    )
+    rustup_cargo.chmod(0o755)
+    stub("cargo", 'test "$RUSTUP_AUTO_INSTALL" = 0 && exec rustup-cargo "$@"')
     (home / ".cache").mkdir()
     source = tmp_path / "source"
     source.mkdir()
@@ -88,6 +96,27 @@ def test_cleanup_uses_local_stores_and_preserves_volumes(tools, tmp_path):
     assert all("--filter until=168h" in x for x in prunes[1:])
     assert all("--volumes" not in x and "volume prune" not in x for x in prunes)
     assert any("sweep --maxsize 40GB" in x for x in commands)
+    assert all(
+        not line.startswith(("uv ", "npm ", "pnpm ", "brew ")) for line in commands
+    )
+
+
+@pytest.mark.parametrize("npm_status", [0, 1])
+def test_package_cache_cleanup_runs_independently(tools, tmp_path, npm_status):
+    _home, log, env, stub = tools
+    script, _project = render_cleanup(tools, tmp_path)
+    stub("npm", f'printf \'npm %s\\n\' "$*" >> "$CLEANUP_LOG"\nexit {npm_status}')
+    command = ["bash", str(script), "--package-caches"]
+    subprocess.run([*command, "--dry-run"], env=env, check=True)
+    assert not log.exists()
+    result = subprocess.run(command, env=env, check=False)
+    assert result.returncode == npm_status
+    assert log.read_text().splitlines() == [
+        "uv cache prune",
+        "npm cache verify",
+        "pnpm store prune",
+        "brew cleanup --prune=30",
+    ]
 
 
 def test_cleanup_skips_a_busy_cargo_target(tools, tmp_path):
@@ -95,7 +124,27 @@ def test_cleanup_skips_a_busy_cargo_target(tools, tmp_path):
     script, project = render_cleanup(tools, tmp_path)
     with (project / "target/debug/.cargo-lock").open("r+") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        subprocess.run(["bash", str(script)], env=env, check=True)
+        result = subprocess.run(
+            ["bash", str(script)], env=env, check=True, capture_output=True, text=True
+        )
+    assert f"Skipping Cargo sweep for {project} because the build lock is busy" in (
+        result.stderr
+    )
+    commands = log.read_text()
+    assert "cargo-sweep" not in commands
+    assert "docker --host unix:///var/run/docker.sock builder prune" in commands
+
+
+def test_cleanup_logs_cargo_metadata_failures(tools, tmp_path):
+    _home, log, env, stub = tools
+    script, project = render_cleanup(tools, tmp_path)
+    stub("cargo", "exit 1")
+    result = subprocess.run(
+        ["bash", str(script)], env=env, check=True, capture_output=True, text=True
+    )
+    assert f"Skipping Cargo sweep for {project} because Cargo metadata failed" in (
+        result.stderr
+    )
     commands = log.read_text()
     assert "cargo-sweep" not in commands
     assert "docker --host unix:///var/run/docker.sock builder prune" in commands
@@ -119,7 +168,7 @@ def migration_tools(tools):
         'if [ "$2" = %i ] && [ -f "$3/.test-subvolume" ]; then echo 256; '
         f'else exec "{stat}" "$@"; fi',
     )
-    stub("cp", f'shift 2; exec "{cp}" -a "$@"')
+    stub("cp", f'test "$2" = --reflink=auto || exit 1; exec "{cp}" "$@"')
     return home, log, env
 
 

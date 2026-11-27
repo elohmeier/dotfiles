@@ -500,18 +500,23 @@ only after the replacement is complete.
 
 ### Development cache cleanup (Linux)
 
-`chezmoi apply` enables a weekly `dev-cleanup.timer` and the daily
-`systemd-tmpfiles-clean.timer`. Preview commands with `dev-cleanup --dry-run`, or
-run `dev-cleanup` to clean immediately. The weekly job runs on Sunday evenings
-at low CPU and I/O priority:
+`chezmoi apply` enables the weekly `dev-cleanup.timer`, the monthly
+`package-cache-cleanup.timer`, and the daily `systemd-tmpfiles-clean.timer`.
+Preview the weekly commands with `dev-cleanup --dry-run`. The weekly job runs on
+Sunday evenings at low CPU and I/O priority.
 
 - `cargo-sweep` applies its 40 GB cache limit to Rust projects in ghq workspace
-  roots, Claude worktrees and cache checkout roots. Cargo's profile locks are
-  held during cleanup; projects with active builds are skipped.
+  roots, Claude worktrees and cache checkout roots. The job makes installed
+  Rustup toolchains available to mise, holds Cargo's profile locks during
+  cleanup, and logs projects skipped for metadata errors or busy build locks.
 - The local Docker builder retains up to 40 GB of cache. Unused images and
   stopped containers created more than seven days ago are pruned.
 - Local Podman removes unused images and stopped containers created more than
   seven days ago. Persistent volumes are kept by the recurring cleanup.
+
+On the first of each month, the package cache job runs `uv cache prune`,
+`npm cache verify`, `pnpm store prune`, and `brew cleanup --prune=30` for the
+installed tools. Preview it with `dev-cleanup --package-caches --dry-run`.
 
 Daily tmpfiles cleanup expires Trash, Director64 build output and `~/.cache/*-target`
 contents after 30 days without activity, and known Rust/TLA+ temporary caches
@@ -521,8 +526,8 @@ Inspect or preview the rules with:
 ```sh
 systemd-tmpfiles --user --cat-config
 systemd-tmpfiles --user --clean --dry-run
-systemctl --user list-timers dev-cleanup.timer systemd-tmpfiles-clean.timer
-journalctl --user -u dev-cleanup.service
+systemctl --user list-timers dev-cleanup.timer package-cache-cleanup.timer systemd-tmpfiles-clean.timer
+journalctl --user -u dev-cleanup.service -u package-cache-cleanup.service
 ```
 
 ### Btrfs home snapshots (Fedora Atomic / Bluefin)
@@ -545,7 +550,9 @@ boot. To add this to an existing snapshot installation, run:
 ```
 
 The migration preserves data, ownership, permissions and internal hardlinks with
-`cp -a --reflink=always`, then atomically exchanges the directories. It requires
+`cp -a --reflink=auto`, then atomically exchanges the directories. Files Btrfs
+cannot reflink, such as NOCOW files copied into a regular subvolume, are copied
+normally and need temporary disk space. The migration requires
 GNU coreutils with `mv --exchange --no-copy` and runs before user applications
 start, since moving a cache while writers are active can lose updates. A failed
 copy leaves the original directory in place; an interrupted migration leaves a
