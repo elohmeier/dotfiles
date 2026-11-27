@@ -7,10 +7,10 @@ set -euo pipefail
 source "${MISE_TASK_DIR}/_runtime"
 image="${FF_IMAGE:-${FF_GATEWAY_IMAGE}}"
 
-"${FF_RUNTIME}" image inspect "${image}" >/dev/null 2>&1 || {
-	echo "image is not local: ${image} (pull it before entering the Freifunk network)" >&2
+if [[ "${image}" != "${FF_GATEWAY_IMAGE}" ]] && ! "${FF_RUNTIME}" image inspect "${image}" >/dev/null 2>&1; then
+	echo "workload image is not local: ${image} (pull or build it before running ff)" >&2
 	exit 1
-}
+fi
 ff_start
 
 flags=(

@@ -9,14 +9,16 @@ mise run ff -- curl https://ifconfig.co
 mise run ff -- rtorrent
 mise run ff:status
 mise run ff:stop
-FF_PROFILE=ffbs mise run ff -- curl https://ifconfig.co
+FF_PROFILE=ffbs mise run ff -- rtorrent
 FF_PROFILE=ffnw mise run ff -- curl https://ifconfig.co
 ```
 
 The workload has no capabilities and shares only the gateway's network
-namespace. Its image contains `curl` and `rtorrent`. Images are never pulled by
-the run task; build or pull them before starting the tunnel. To run a different
-local image, set `FF_IMAGE`:
+namespace. The bundled image contains `curl` and `rtorrent`. On first use or
+after image cleanup, `mise run ff` builds the missing image using the host's
+internet connection before starting the tunnel. Later runs reuse the local image.
+Run `mise run ff:build` to cache the image while its sources are reachable.
+Pull or build custom workload images before selecting them with `FF_IMAGE`:
 
 ```sh
 FF_IMAGE=alpine:latest mise run ff -- sh
