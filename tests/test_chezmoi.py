@@ -5,6 +5,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 import tomllib
 from pathlib import Path
 
@@ -28,10 +29,32 @@ def render(tmp_path):
     home.mkdir()
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
-    for name in (
-        "fish nvim bat fzf vivid uv mise rbenv starship zoxide atuin tmux "
-        "claude codex brew apk lbu tic task git sqlite3 lockf flock"
-    ).split():
+    for name in [
+        "fish",
+        "nvim",
+        "bat",
+        "fzf",
+        "vivid",
+        "uv",
+        "mise",
+        "rbenv",
+        "starship",
+        "zoxide",
+        "atuin",
+        "tmux",
+        "claude",
+        "codex",
+        "agy",
+        "brew",
+        "apk",
+        "lbu",
+        "tic",
+        "task",
+        "git",
+        "sqlite3",
+        "lockf",
+        "flock",
+    ]:
         binary = bin_dir / name
         binary.write_text("#!/bin/sh\nexit 0\n")
         binary.chmod(0o755)
@@ -53,7 +76,22 @@ def render(tmp_path):
         "XDG_DATA_HOME": str(home / ".local/share"),
     }
 
-    def run(platform, theme):
+    def run(platform, theme, extra_data=None):
+        override_data = {
+            "chezmoi": {
+                "os": "linux" if platform == "wsl" else platform,
+                "hostname": "test",
+                "homeDir": str(home),
+                "kernel": {
+                    "osrelease": "microsoft-standard-WSL2"
+                    if platform == "wsl"
+                    else platform
+                },
+            },
+            "isWSL": platform == "wsl",
+            "theme": theme,
+            **(extra_data or {}),
+        }
         args = [
             tools["chezmoi"],
             "--no-tty",
@@ -71,22 +109,7 @@ def render(tmp_path):
             "--cache",
             str(tmp_path / "cache"),
             "--override-data",
-            json.dumps(
-                {
-                    "chezmoi": {
-                        "os": "linux" if platform == "wsl" else platform,
-                        "hostname": "test",
-                        "homeDir": str(home),
-                        "kernel": {
-                            "osrelease": "microsoft-standard-WSL2"
-                            if platform == "wsl"
-                            else platform
-                        },
-                    },
-                    "isWSL": platform == "wsl",
-                    "theme": theme,
-                }
-            ),
+            json.dumps(override_data),
         ]
         subprocess.run(
             [*args, "init", "--data=false", "--promptDefaults"],
@@ -154,6 +177,7 @@ def test_rendered_configuration(render, platform, theme):
         if shell:
             checked = subprocess.run(
                 [tools.get(shell, shell), "-n"],
+                check=False,
                 input=contents,
                 capture_output=True,
                 text=True,
@@ -163,6 +187,7 @@ def test_rendered_configuration(render, platform, theme):
             body = contents.split("<<'FISH'\n", 1)[1].split("\nFISH", 1)[0]
             checked = subprocess.run(
                 [tools["fish"], "--no-config", "-n"],
+                check=False,
                 input=body,
                 capture_output=True,
                 text=True,
@@ -202,3 +227,170 @@ def test_bootstrap_detects_tools_installed_by_package_hook(tmp_path):
         capture_output=True,
     )
     assert (home / "tool").read_text() == "installed"
+
+
+def test_antigravity_pushover_plugin_and_notifier(render, tmp_path):
+    entries_off, _ = render("linux", "tokyonight_day")
+    assert ".gemini/config/plugins/pushover/plugin.json" not in entries_off
+    assert ".gemini/config/plugins/pushover/hooks.json" not in entries_off
+
+    entries, tools = render(
+        "linux",
+        "tokyonight_day",
+        extra_data={"pushoverUserKey": "user-key", "pushoverApiToken": "api-token"},
+    )
+    plugin = json.loads(
+        entries[".gemini/config/plugins/pushover/plugin.json"]["contents"]
+    )
+    hooks = json.loads(
+        entries[".gemini/config/plugins/pushover/hooks.json"]["contents"]
+    )
+    assert plugin["name"] == "pushover"
+    assert hooks["pushover"]["Stop"][0]["command"].endswith(
+        "/.local/bin/agent-pushover-notify Antigravity"
+    )
+    assert hooks["pushover"]["PreToolUse"][0]["matcher"] == "ask_question"
+
+    script_src = entries[".local/bin/agent-pushover-notify"]["contents"]
+    subprocess.run(
+        [tools.get("sh", "sh"), "-n"], input=script_src, text=True, check=True
+    )
+
+    encrypted_entries, _ = render(
+        "linux",
+        "tokyonight_day",
+        extra_data={
+            "pushoverUserKey": "user-key",
+            "pushoverApiToken": "api-token",
+            "pushoverEncryptionKey": "0" * 64,
+        },
+    )
+    subprocess.run(
+        [tools.get("sh", "sh"), "-n"],
+        input=encrypted_entries[".local/bin/agent-pushover-notify"]["contents"],
+        text=True,
+        check=True,
+    )
+
+    log = tmp_path / "curl.log"
+    fake_curl = tmp_path / "curl"
+    fake_curl.write_text(f"#!/bin/sh\nprintf '%s\\n' \"$@\" > '{log}'\n")
+    fake_curl.chmod(0o755)
+    script = tmp_path / "agent-pushover-notify"
+    script.write_text(re.sub(r"\S+/curl\b", str(fake_curl), script_src))
+    script.chmod(0o755)
+
+    project = tmp_path / "demo-repo"
+    project.mkdir()
+    transcript = tmp_path / "transcript.jsonl"
+    transcript.write_text(
+        "\n".join(
+            json.dumps(step)
+            for step in (
+                {"type": "USER_INPUT", "content": "old prompt"},
+                {"type": "PLANNER_RESPONSE", "content": "stale reply"},
+                {"type": "USER_INPUT", "content": "new prompt"},
+                {
+                    "type": "PLANNER_RESPONSE",
+                    "content": "**All** [tests](https://example.com) passed",
+                },
+            )
+        )
+        + "\n"
+    )
+
+    def wait_for_log():
+        for _ in range(50):
+            if log.exists() and log.stat().st_size > 0:
+                return log.read_text()
+            time.sleep(0.05)
+        raise AssertionError("curl was not invoked")
+
+    # 1. Stop (normal) reads latest PLANNER_RESPONSE after last USER_INPUT
+    res = subprocess.run(
+        [str(script), "Antigravity"],
+        input=json.dumps(
+            {
+                "hookEventName": "Stop",
+                "terminationReason": "NO_TOOL_CALL",
+                "cwd": str(project),
+                "transcriptPath": str(transcript),
+            }
+        ),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert json.loads(res.stdout) == {"decision": "stop"}
+    sent = wait_for_log()
+    assert "title=demo-repo · Antigravity" in sent
+    assert "message=All tests passed\n—" in sent
+    assert "sound=classical" in sent
+
+    # 2. Stop (USER_CANCELED) suppresses Pushover
+    log.unlink()
+    res = subprocess.run(
+        [str(script), "Antigravity"],
+        input=json.dumps(
+            {
+                "hookEventName": "Stop",
+                "terminationReason": "USER_CANCELED",
+                "cwd": str(project),
+                "transcriptPath": str(transcript),
+            }
+        ),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert json.loads(res.stdout) == {"decision": "stop"}
+    time.sleep(0.2)
+    assert not log.exists()
+
+    # 3. Stop (ERROR) surfaces error instead of stale reply
+    res = subprocess.run(
+        [str(script), "Antigravity"],
+        input=json.dumps(
+            {
+                "hookEventName": "Stop",
+                "terminationReason": "ERROR",
+                "error": "rate limit exceeded",
+                "cwd": str(project),
+                "transcriptPath": str(transcript),
+            }
+        ),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert json.loads(res.stdout) == {"decision": "stop"}
+    sent = wait_for_log()
+    assert "message=rate limit exceeded\n—" in sent
+
+    # 4. PreToolUse (ask_question) allows tool and notifies with questions
+    log.unlink()
+    res = subprocess.run(
+        [str(script), "Antigravity"],
+        input=json.dumps(
+            {
+                "hookEventName": "PreToolUse",
+                "cwd": str(project),
+                "toolCall": {
+                    "name": "ask_question",
+                    "args": {
+                        "questions": [
+                            {"question": "Deploy to prod?"},
+                            {"question": "Run migrations?"},
+                        ]
+                    },
+                },
+            }
+        ),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert json.loads(res.stdout) == {"decision": "allow"}
+    sent = wait_for_log()
+    assert "title=demo-repo · Antigravity needs input" in sent
+    assert "message=Deploy to prod?\nRun migrations?\n—" in sent

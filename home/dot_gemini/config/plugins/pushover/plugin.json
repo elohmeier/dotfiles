@@ -1,0 +1,4 @@
+{
+  "name": "pushover",
+  "description": "Send Pushover notifications when Antigravity finishes a turn or asks a question."
+}

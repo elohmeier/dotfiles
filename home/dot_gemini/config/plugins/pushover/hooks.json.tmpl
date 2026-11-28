@@ -1,0 +1,21 @@
+{
+  "pushover": {
+    "Stop": [
+      {
+        "type": "command",
+        "command": {{ printf "%s/.local/bin/agent-pushover-notify Antigravity" .chezmoi.homeDir | toJson }}
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "ask_question",
+        "hooks": [
+          {
+            "type": "command",
+            "command": {{ printf "%s/.local/bin/agent-pushover-notify Antigravity" .chezmoi.homeDir | toJson }}
+          }
+        ]
+      }
+    ]
+  }
+}

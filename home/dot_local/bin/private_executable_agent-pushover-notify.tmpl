@@ -9,27 +9,13 @@
 #!{{ lookPath "sh" }}
 agent=$1
 sound={{ index . "pushoverAgentSound" | default "classical" | quote }}
-case $agent in
-    Claude | Codex)
-        json=${2:-$(cat)}
-        cd "$(printf %s "$json" | {{ $jq }} -r '.cwd // "."')" 2>/dev/null
-        [ "$(printf %s "$json" | {{ $jq }} -r .hook_event_name)" = Notification ] && agent="$agent needs input"
-        # Plain-text the markdown reply: drop fences/emphasis/headings, unwrap links, keep line breaks.
-        message=$(printf %s "$json" | {{ $jq }} -r '.message // .["last-assistant-message"] // .last_assistant_message // "Finished work"
-            | gsub("\r"; "") | gsub("```[^\n]*\n?"; "") | gsub("\\*\\*|__|`"; "") | gsub("(?<p>^|\n)#+[ \t]*"; .p)
-            | gsub("(?<p>^|\n)[ \t]*[-*+][ \t]+"; "\(.p)• ") | gsub("\\[(?<t>[^\\]]+)\\]\\([^)]*\\)"; "\(.t)")
-            | gsub("\n{3,}"; "\n\n") | sub("^\\s+"; "") | sub("\\s+$"; "")
-            | if length > 900 then (.[:900] | sub("\\s+\\S*$"; "")) + " …" else . end')
-        ;;
-    *) message=${2:-Finished work}; sound= ;;
-esac
-repo=$({{ $git }} rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
-repo=${repo%/.git}
-repo=${repo##*/}
-branch=$({{ $git }} branch --show-current 2>/dev/null)
-title="${repo:-${PWD##*/}}${branch:+ ($branch)} · $agent"
-message="$message
-— {{ .chezmoi.username }}@{{ .chezmoi.hostname }}"
+# Plain-text the markdown reply: drop fences/emphasis/headings, unwrap links, keep line breaks.
+plain() {
+    {{ $jq }} -Rsr 'gsub("\r"; "") | gsub("```[^\n]*\n?"; "") | gsub("\\*\\*|__|`"; "") | gsub("(?<p>^|\n)#+[ \t]*"; .p)
+        | gsub("(?<p>^|\n)[ \t]*[-*+][ \t]+"; "\(.p)• ") | gsub("\\[(?<t>[^\\]]+)\\]\\([^)]*\\)"; "\(.t)")
+        | gsub("\n{3,}"; "\n\n") | sub("^\\s+"; "") | sub("\\s+$"; "")
+        | if length > 900 then (.[:900] | sub("\\s+\\S*$"; "")) + " …" else . end'
+}
 {{ if index . "pushoverEncryptionKey" -}}
 key={{ index . "pushoverEncryptionKey" | quote }}
 encrypt() {
@@ -38,14 +24,67 @@ encrypt() {
     hmac=$(printf %s "$iv$ciphertext" | {{ $xxd }} -r -p | {{ $openssl }} dgst -sha256 -mac HMAC -macopt "hexkey:$key" | {{ $awk }} '{print $NF}')
     printf %s "$iv$ciphertext$hmac" | {{ $xxd }} -r -p | {{ $openssl }} base64 -A
 }
-title=$(encrypt "$title")
-message=$(encrypt "$message")
 {{ end -}}
-{{ $curl }} -fsS \
-    --form-string 'token={{ .pushoverApiToken }}' \
-    --form-string 'user={{ .pushoverUserKey }}' \
-    --form-string "title=$title" \
-    --form-string "message=$message" \
-    ${sound:+--form-string} ${sound:+"sound=$sound"} \{{ if index . "pushoverEncryptionKey" }}
-    --form-string 'encrypted=1' \{{ end }}
-    https://api.pushover.net/1/messages.json >/dev/null
+send() {
+    repo=$({{ $git }} rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+    repo=${repo%/.git}
+    repo=${repo##*/}
+    branch=$({{ $git }} branch --show-current 2>/dev/null)
+    title="${repo:-${PWD##*/}}${branch:+ ($branch)} · $agent"
+    message="${message:-Finished work}
+— {{ .chezmoi.username }}@{{ .chezmoi.hostname }}"
+{{ if index . "pushoverEncryptionKey" -}}
+    title=$(encrypt "$title")
+    message=$(encrypt "$message")
+{{ end -}}
+    {{ $curl }} -fsS \
+        --form-string 'token={{ .pushoverApiToken }}' \
+        --form-string 'user={{ .pushoverUserKey }}' \
+        --form-string "title=$title" \
+        --form-string "message=$message" \
+        ${sound:+--form-string} ${sound:+"sound=$sound"} \{{ if index . "pushoverEncryptionKey" }}
+        --form-string 'encrypted=1' \{{ end }}
+        https://api.pushover.net/1/messages.json >/dev/null
+}
+case $agent in
+    Claude | Codex)
+        json=${2:-$(cat)}
+        cd "$(printf %s "$json" | {{ $jq }} -r '.cwd // "."')" 2>/dev/null
+        [ "$(printf %s "$json" | {{ $jq }} -r .hook_event_name)" = Notification ] && agent="$agent needs input"
+        message=$(printf %s "$json" | {{ $jq }} -r '.message // .["last-assistant-message"] // .last_assistant_message // "Finished work"' | plain)
+        send
+        ;;
+    Antigravity)
+        json=${2:-$(cat)}
+        event=$(printf %s "$json" | {{ $jq }} -r '.hookEventName // ""')
+        if [ "$event" = PreToolUse ]; then
+            printf '{"decision":"allow"}\n'
+            agent="$agent needs input"
+        else
+            printf '{"decision":"stop"}\n'
+            [ "$(printf %s "$json" | {{ $jq }} -r '.terminationReason // ""')" = USER_CANCELED ] && exit 0
+        fi
+        (
+            cd "$(printf %s "$json" | {{ $jq }} -r '.cwd // .workspacePaths[0] // "."')" 2>/dev/null
+            if [ "$event" = PreToolUse ]; then
+                raw=$(printf %s "$json" | {{ $jq }} -r '[.toolCall.args.questions[]?.question // empty] | join("\n")')
+                fallback="Needs input"
+            else
+                raw=$(printf %s "$json" | {{ $jq }} -r '.error // ""')
+                if [ -z "$raw" ]; then
+                    transcript=$(printf %s "$json" | {{ $jq }} -r '.transcriptPath // ""')
+                    [ -r "$transcript" ] && raw=$({{ $jq }} -rs '(to_entries | map(select(.value.type == "USER_INPUT")) | last | .key // -1) as $u | .[$u + 1:] | map(select(.type == "PLANNER_RESPONSE" and (.content // "") != "")) | last | .content // empty' "$transcript")
+                fi
+                fallback="Finished work"
+            fi
+            message=$(printf %s "${raw:-$fallback}" | plain)
+            [ -n "$message" ] || message=$fallback
+            send
+        ) </dev/null >/dev/null 2>&1 &
+        ;;
+    *)
+        message=${2:-Finished work}
+        sound=
+        send
+        ;;
+esac
