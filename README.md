@@ -293,8 +293,8 @@ the original shell and directory, just like `tempe`.
 
 ### Agent sessions
 
-`agent-session` searches Claude Code, Pi and Codex sessions across host and sandbox
-stores. Run it without arguments for the fzf picker, with a transcript preview,
+`agent-session` searches Claude Code, Pi, Codex and Antigravity CLI (`agy`)
+sessions across host and sandbox stores. Run it without arguments for the fzf picker, with a transcript preview,
 first prompt, latest reply and matching message. Enter opens the resume, preview,
 fork and copy actions. In the picker, Ctrl-D selects the current directory,
 Ctrl-G the repository (including worktrees), Ctrl-B the recorded branch and
@@ -354,7 +354,9 @@ cross-agent continuations record their source store/session and are grouped
 under their parent in listings and the picker.
 
 Host stores honor `CLAUDE_CONFIG_DIR`, `PI_CODING_AGENT_DIR`,
-`PI_CODING_AGENT_SESSION_DIR` and `CODEX_HOME`. Claude/Codex sandbox stores live
+`PI_CODING_AGENT_SESSION_DIR` and `CODEX_HOME`. Antigravity CLI sessions are
+read from `~/.gemini/antigravity-cli` (discover, search, show, resume and copy
+out to Claude/Pi/Codex; native forks stay inside `agy` via `/fork`). Claude/Codex sandbox stores live
 under `${XDG_DATA_HOME:-~/.local/share}/agent-sandbox`; Pi shares its host store.
 Use `claude:sandbox` or `codex:sandbox` as a destination to resume through
 `mise run agent:<agent>`. Plain `claude` and `codex` destinations select the host.

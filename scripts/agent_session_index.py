@@ -274,6 +274,7 @@ class Index:
             "pi": app.read_pi,
             "claude": app.read_claude,
             "codex": app.read_codex,
+            "agy": app.read_agy,
         }[store.agent]
         for row in rows:
             position = meta.get("_lines", 0)

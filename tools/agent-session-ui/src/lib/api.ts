@@ -1,7 +1,7 @@
 export type Session = {
 	ref: string;
 	id: string;
-	agent: 'claude' | 'codex' | 'pi';
+	agent: 'claude' | 'codex' | 'pi' | 'agy';
 	store: string;
 	title: string;
 	cwd: string;

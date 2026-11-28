@@ -190,7 +190,7 @@
 				value={agent}
 				onValueChange={(value) => nav({ agent: value || null, s: null, line: null })}
 			>
-				{#each ['claude', 'codex', 'pi'] as name (name)}
+				{#each ['claude', 'codex', 'pi', 'agy'] as name (name)}
 					<ToggleGroup.Item value={name}>{name}</ToggleGroup.Item>
 				{/each}
 			</ToggleGroup.Root>

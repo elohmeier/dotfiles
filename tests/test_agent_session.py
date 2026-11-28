@@ -527,6 +527,157 @@ def test_copy_rejects_agent_arguments_without_resume(monkeypatch):
     copy.assert_not_called()
 
 
+def test_agy_discovery_reading_resume_copy_and_fork(tmp_path, monkeypatch):
+    from scripts.agent_session_index import Index
+
+    cwd = (tmp_path / "work tree").resolve()
+    cwd.mkdir()
+    agy = app.Store("agy", tmp_path / "agy")
+    pi = app.Store("pi", tmp_path / "pi")
+    agy.root.mkdir()
+    with sqlite3.connect(agy.root / "conversation_summaries.db") as db:
+        db.executescript("""
+            CREATE TABLE conversation_summaries (
+                conversation_id TEXT PRIMARY KEY, title TEXT, preview TEXT,
+                workspace_uris TEXT, last_modified_time TEXT,
+                parent_conversation_id TEXT, nesting_depth INTEGER
+            );
+            CREATE TABLE conversations_fts (conversation_id TEXT, archived INTEGER);
+        """)
+        uri = json.dumps([cwd.as_uri()])
+        db.executemany(
+            "INSERT INTO conversation_summaries VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [
+                (
+                    "conv-1",
+                    "AGY Session",
+                    "preview",
+                    uri,
+                    "2026-11-28 08:35:12.393616693+00:00",
+                    "",
+                    0,
+                ),
+                (
+                    "sub-1",
+                    "",
+                    "",
+                    uri,
+                    "2026-11-28 08:35:12.000000000+00:00",
+                    "conv-1",
+                    1,
+                ),
+                (
+                    "arch-1",
+                    "Archived",
+                    "",
+                    uri,
+                    "2026-11-28 08:35:12.000000000+00:00",
+                    "",
+                    0,
+                ),
+            ],
+        )
+        db.execute("INSERT INTO conversations_fts VALUES ('arch-1', 1)")
+    transcript = agy.root / "brain/conv-1/.system_generated/logs/transcript_full.jsonl"
+    app.write_jsonl(
+        transcript,
+        [
+            {
+                "step_index": 0,
+                "source": "USER_EXPLICIT",
+                "type": "USER_INPUT",
+                "status": "DONE",
+                "created_at": STAMP,
+                "content": "<USER_REQUEST>\ncheck needle\n</USER_REQUEST>\n<ADDITIONAL_METADATA>\nlocal time\n</ADDITIONAL_METADATA>",
+            },
+            {
+                "step_index": 1,
+                "source": "MODEL",
+                "type": "PLANNER_RESPONSE",
+                "status": "DONE",
+                "created_at": STAMP,
+                "model": "gemini-4-neon-high",
+                "thinking": "hidden thought",
+                "tool_calls": [
+                    {"name": "read_file", "args": {"Path": "needle.py"}},
+                    {"name": "run_command", "args": {"CommandLine": "false"}},
+                ],
+            },
+            {
+                "step_index": 2,
+                "source": "MODEL",
+                "type": "GENERIC",
+                "status": "DONE",
+                "created_at": STAMP,
+                "content": "secret_output_body",
+            },
+            {
+                "step_index": 3,
+                "source": "MODEL",
+                "type": "GENERIC",
+                "status": "ERROR",
+                "created_at": STAMP,
+                "content": "exit 1",
+            },
+            {
+                "step_index": 4,
+                "source": "SYSTEM",
+                "type": "SYSTEM_MESSAGE",
+                "status": "DONE",
+                "created_at": STAMP,
+                "content": "internal reminder",
+            },
+            {
+                "step_index": 5,
+                "source": "MODEL",
+                "type": "PLANNER_RESPONSE",
+                "status": "DONE",
+                "created_at": STAMP,
+                "model": "gemini-4-neon-high",
+                "content": "All checked.",
+            },
+        ],
+    )
+    monkeypatch.setattr(app, "stores", lambda: [agy, pi])
+
+    [session] = app.discover(cwd)
+    assert session.ref == "agy:conv-1"
+    assert session.title == "AGY Session"
+    assert session.model == "gemini-4-neon-high"
+    assert session.first_prompt == "check needle"
+    assert session.last_reply == "All checked."
+    assert app.render_resume(session) == f"cd -- '{cwd}' && agy --resume conv-1"
+
+    messages = app.conversation(session, context=False)
+    assert [m.role for m in messages] == [
+        "user",
+        "assistant",
+        "assistant",
+        "assistant",
+        "assistant",
+    ]
+    assert messages[0].text == "check needle"
+    assert messages[1].content[0]["id"] == messages[2].content[0]["id"] == "agy:1:0"
+    assert messages[1].content[1]["id"] == messages[3].content[0]["id"] == "agy:1:1"
+    assert messages[2].content[0]["name"] == "read_file"
+    assert messages[3].content[0]["error"] is True
+    assert messages[4].text == "All checked."
+
+    with Index() as index:
+        sessions = index.sessions()
+        assert index.search("needle.py", sessions)[0]["ref"] == "agy:conv-1"
+        assert index.search("secret_output_body", sessions) == []
+        assert index.search("internal reminder", sessions) == []
+
+    copied = app.copy_session(session, pi)
+    assert copied.parent == "agy:conv-1"
+    assert copied.kind == "continuation"
+    assert "All checked." in [m.text for m in app.conversation(copied)]
+
+    with pytest.raises(app.click.ClickException, match="/fork"):
+        app.fork_session(session)
+
+
 @pytest.mark.skipif(
     not os.environ.get("AGENT_SESSION_NATIVE_TESTS"),
     reason="opt-in installed Codex integration",

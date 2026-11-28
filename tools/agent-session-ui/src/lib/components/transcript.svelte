@@ -32,7 +32,19 @@
 	function summary(tool: Tool) {
 		try {
 			const input = JSON.parse(tool.input);
-			const value = ['command', 'cmd', 'file_path', 'path', 'pattern', 'query', 'url', 'description']
+			const value = [
+				'command',
+				'CommandLine',
+				'cmd',
+				'file_path',
+				'path',
+				'Path',
+				'pattern',
+				'query',
+				'url',
+				'description',
+				'toolSummary'
+			]
 				.map((key) => input?.[key])
 				.find((value) => value);
 			return String(Array.isArray(value) ? value.join(' ') : (value ?? '')).split('\n')[0];

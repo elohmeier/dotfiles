@@ -1,4 +1,4 @@
-"""Browse and copy Claude Code, Pi and Codex conversations between local stores."""
+"""Browse and copy Claude Code, Pi, Codex and Antigravity CLI conversations."""
 
 import json
 import os
@@ -17,6 +17,7 @@ from datetime import UTC, datetime
 from io import BufferedReader
 from pathlib import Path
 from typing import Any, BinaryIO
+from urllib.parse import unquote, urlparse
 from uuid import uuid4
 
 import questionary
@@ -51,7 +52,7 @@ class Store:
 
     def environment(self) -> dict[str, str]:
         # Claude's unset default uses ~/.claude.json; an explicit directory moves it.
-        if (
+        if not self.variable or (
             self.agent == "claude"
             and self.root == Path.home() / ".claude"
             and self.variable not in os.environ
@@ -65,6 +66,7 @@ class Store:
             "claude": "CLAUDE_CONFIG_DIR",
             "pi": "PI_CODING_AGENT_DIR",
             "codex": "CODEX_HOME",
+            "agy": "",
         }[self.agent]
 
     def runtime_path(self, path: Path) -> str:
@@ -97,6 +99,7 @@ def stores() -> list[Store]:
         ),
         Store("claude:sandbox", sandbox / "claude/.claude"),
         Store("codex:sandbox", sandbox / "codex/.codex"),
+        Store("agy", home / ".gemini/antigravity-cli"),
     ]
 
 
@@ -175,8 +178,69 @@ def records(path: Path) -> Iterator[Record]:
                 continue
 
 
+def parse_timestamp(value: str) -> float:
+    return datetime.fromisoformat(re.sub(r"\.(\d{6})\d+", r".\1", value)).timestamp()
+
+
 def candidates() -> Iterator[tuple[Store, Path, Record]]:
     for store in stores():
+        if store.agent == "agy":
+            summary_db = store.root / "conversation_summaries.db"
+            if not summary_db.exists():
+                continue
+            with sqlite3.connect(f"{summary_db.as_uri()}?mode=ro", uri=True) as db:
+                db.row_factory = sqlite3.Row
+                archived = (
+                    {
+                        r[0]
+                        for r in db.execute(
+                            "SELECT conversation_id FROM conversations_fts WHERE archived != 0"
+                        )
+                    }
+                    if db.execute(
+                        "SELECT 1 FROM sqlite_master WHERE name='conversations_fts'"
+                    ).fetchone()
+                    else set()
+                )
+                for row in db.execute(
+                    "SELECT conversation_id, title, preview, workspace_uris, last_modified_time "
+                    "FROM conversation_summaries "
+                    "WHERE parent_conversation_id = '' AND nesting_depth = 0"
+                ):
+                    cid = row["conversation_id"]
+                    if cid in archived:
+                        continue
+                    uris = json.loads(row["workspace_uris"] or "[]")
+                    cwd = next(
+                        (
+                            unquote(urlparse(u).path)
+                            for u in uris
+                            if u.startswith("file://")
+                        ),
+                        "",
+                    )
+                    if not cwd:
+                        continue
+                    logs = store.root / "brain" / cid / ".system_generated/logs"
+                    full, compact = (
+                        logs / "transcript_full.jsonl",
+                        logs / "transcript.jsonl",
+                    )
+                    yield (
+                        store,
+                        full if full.exists() else compact,
+                        {
+                            "id": cid,
+                            "cwd": cwd,
+                            "title": row["title"] or row["preview"] or "",
+                            **(
+                                {"updated": parse_timestamp(row["last_modified_time"])}
+                                if row["last_modified_time"]
+                                else {}
+                            ),
+                        },
+                    )
+            continue
         databases = sorted(
             store.root.glob("state_*.sqlite"), key=lambda p: int(p.stem.split("_")[-1])
         )
@@ -634,10 +698,66 @@ def read_codex(
     return result
 
 
+def read_agy(rows: list[Record], *, context: bool = True) -> list[Message]:
+    result: list[Message] = []
+    pending: list[tuple[str, str]] = []
+    for row in rows:
+        kind = row.get("type")
+        timestamp = str(row.get("created_at", ""))
+        step = str(row.get("step_index", ""))
+        line = row.get("_line", -1)
+        if kind == "USER_INPUT":
+            pending.clear()
+            raw = row.get("content", "")
+            match = re.search(
+                r"<USER_REQUEST>\s*(.*?)\s*</USER_REQUEST>", raw, re.DOTALL
+            )
+            text = match.group(1) if match else raw
+            if text:
+                result.append(
+                    Message("user", [text_block(text)], timestamp, step, line)
+                )
+        elif kind == "PLANNER_RESPONSE":
+            blocks: list[Record] = []
+            if row.get("content"):
+                blocks.append(text_block(row["content"]))
+            for i, call in enumerate(row.get("tool_calls") or ()):
+                call_id = f"agy:{step or line}:{i}"
+                name = call.get("name", "tool")
+                pending.append((call_id, name))
+                blocks.append(
+                    {
+                        "type": "tool_call",
+                        "id": call_id,
+                        "name": name,
+                        "input": call.get("args", {}),
+                    }
+                )
+            if blocks:
+                result.append(Message("assistant", blocks, timestamp, step, line))
+        elif kind == "GENERIC":
+            call_id, name = pending.pop(0) if pending else ("", "")
+            block: Record = {
+                "type": "tool_result",
+                "id": call_id,
+                "output": row.get("content", ""),
+                "error": row.get("status") == "ERROR",
+            }
+            if name:
+                block["name"] = name
+            result.append(Message("assistant", [block], timestamp, step, line))
+    return result
+
+
 def conversation(
     session: Session, *, context: bool = True, allow_partial: bool = False
 ) -> list[Message]:
-    readers = {"pi": read_pi, "claude": read_claude, "codex": read_codex}
+    readers = {
+        "pi": read_pi,
+        "claude": read_claude,
+        "codex": read_codex,
+        "agy": read_agy,
+    }
     rows = [{**r, "_line": i} for i, r in enumerate(records(session.path))]
     return [
         m
@@ -1104,6 +1224,10 @@ def tag_session(session: Session, source: Session, kind: str) -> Session:
 
 def fork_session(source: Session, target: Store | None = None) -> Session:
     target = target or source.store
+    if target.agent == "agy":
+        raise click.ClickException(
+            "Antigravity CLI sessions cannot be forked non-interactively; use /fork inside agy."
+        )
     id_, timestamp = str(uuid4()), now()
     if target.agent == "codex":
         target.root.mkdir(parents=True, exist_ok=True)
@@ -1206,7 +1330,7 @@ def resume_command(session: Session, agent_args: tuple[str, ...] = ()) -> list[s
         ["--session", session.store.runtime_path(session.path)]
         if session.store.agent == "pi"
         else ["--resume", session.id]
-        if session.store.agent == "claude"
+        if session.store.agent in {"claude", "agy"}
         else ["resume", session.id]
     )
     return session.store.command(*args, *agent_args)
@@ -1214,14 +1338,17 @@ def resume_command(session: Session, agent_args: tuple[str, ...] = ()) -> list[s
 
 def render_resume(session: Session, agent_args: tuple[str, ...] = ()) -> str:
     variable = session.store.variable
-    value = session.store.environment().get(variable)
-    env = [f"{variable}={value}"] if value is not None else ["-u", variable]
+    env = []
+    if variable:
+        value = session.store.environment().get(variable)
+        env = [f"{variable}={value}"] if value is not None else ["-u", variable]
     if session.store.agent == "pi" and "PI_CODING_AGENT_SESSION_DIR" in os.environ:
         env.append(
             f"PI_CODING_AGENT_SESSION_DIR={os.environ['PI_CODING_AGENT_SESSION_DIR']}"
         )
+    prefix = ["env", *env] if env else []
     return f"cd -- {shlex.quote(str(session.cwd))} && " + shlex.join(
-        ["env", *env, *resume_command(session, agent_args)]
+        [*prefix, *resume_command(session, agent_args)]
     )
 
 
@@ -1243,7 +1370,7 @@ def browse_options(function: Any) -> Any:
             default="directory",
             show_default=True,
         ),
-        click.option("--agent", type=click.Choice(["claude", "pi", "codex"])),
+        click.option("--agent", type=click.Choice(["claude", "pi", "codex", "agy"])),
         click.option("--store", type=click.Choice([s.name for s in stores()])),
     ]:
         function = option(function)
@@ -1403,10 +1530,11 @@ def main(
     if print_command:
         click.echo(render_resume(chosen))
         return
+    actions = ["Resume", "Preview", "Copy", "Copy and resume"]
+    if chosen.store.agent != "agy":
+        actions.insert(2, "Fork")
     while True:
-        action = questionary.select(
-            "Action", choices=["Resume", "Preview", "Fork", "Copy", "Copy and resume"]
-        ).ask()
+        action = questionary.select("Action", choices=actions).ask()
         if action is None:
             return
         if action == "Preview":
@@ -1421,7 +1549,11 @@ def main(
         else:
             target = questionary.select(
                 "Copy to",
-                choices=[questionary.Choice(s.name, value=s) for s in stores()],
+                choices=[
+                    questionary.Choice(s.name, value=s)
+                    for s in stores()
+                    if s.agent != "agy"
+                ],
             ).ask()
             if target:
                 copied = copy_session(chosen, target)

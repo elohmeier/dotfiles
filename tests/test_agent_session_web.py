@@ -97,3 +97,61 @@ def test_search_sorts_by_recency(client, monkeypatch):
 
     assert refs(sort="recent") == [newer.ref, session.ref]
     assert refs(sort="recent", limit=1) == [newer.ref]
+
+
+def test_agy_session_web_transcript_and_filter(tmp_path, monkeypatch):
+    import sqlite3
+
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    monkeypatch.setattr(web, "refreshed", 0.0)
+    cwd = tmp_path.resolve()
+    agy = app.Store("agy", tmp_path / "agy")
+    agy.root.mkdir()
+    with sqlite3.connect(agy.root / "conversation_summaries.db") as db:
+        db.execute(
+            "CREATE TABLE conversation_summaries ("
+            "conversation_id TEXT PRIMARY KEY, title TEXT, preview TEXT, "
+            "workspace_uris TEXT, last_modified_time TEXT, "
+            "parent_conversation_id TEXT, nesting_depth INTEGER)"
+        )
+        db.execute(
+            "INSERT INTO conversation_summaries VALUES (?, ?, ?, ?, ?, '', 0)",
+            ("a1", "AGY Web", "", json.dumps([cwd.as_uri()]), "2026-11-28T08:00:00Z"),
+        )
+    app.write_jsonl(
+        agy.root / "brain/a1/.system_generated/logs/transcript_full.jsonl",
+        [
+            {
+                "step_index": 0,
+                "type": "USER_INPUT",
+                "content": "<USER_REQUEST>\nhi\n</USER_REQUEST>",
+            },
+            {
+                "step_index": 1,
+                "type": "PLANNER_RESPONSE",
+                "tool_calls": [{"name": "read_file", "args": {"Path": "a.py"}}],
+            },
+            {"step_index": 2, "type": "GENERIC", "status": "DONE", "content": "ok"},
+            {"step_index": 3, "type": "PLANNER_RESPONSE", "content": "done"},
+        ],
+    )
+    monkeypatch.setattr(app, "stores", lambda: [agy])
+    http = web.create().test_client()
+    rows = http.get("/api/sessions", query_string={"agent": "agy"}).json
+    assert rows is not None
+    [listed] = rows
+    assert listed["ref"] == "agy:a1"
+    assert listed["resume"] == f"cd -- {cwd} && agy --resume a1"
+    detail = http.get("/api/session", query_string={"ref": "agy:a1"}).json
+    assert detail is not None
+    assert [m["role"] for m in detail["messages"]] == ["user", "assistant"]
+    assert detail["messages"][1]["blocks"] == [
+        {
+            "type": "tool",
+            "name": "read_file",
+            "input": '{"Path": "a.py"}',
+            "output": "ok",
+            "error": False,
+        },
+        {"type": "text", "text": "done"},
+    ]
